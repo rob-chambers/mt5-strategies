@@ -26,7 +26,7 @@ Determine pin type to look out for by checking 21 period MA
 Another rule perhaps?  Once trade entered, if not in profit by 5 periods, exit?
 
 
-Use input variables UseStopLoss / UseTakeProfit
+Use input variables UseStopLoss / _useTakeProfit
 
 If (PositionSelect(symbol) == false)…
 Check current direction of position: if (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY)…
@@ -42,7 +42,7 @@ Exits:
 - 30 pips hard stop (30pips from initial entry price)
 
 Position Sizing
-   - Enter 1 lot at a time
+   - Enter 1 _lots at a time
    - Maximum number of open positions = 1
 
 Notes (for the more advanced MQL5 traders):
@@ -54,36 +54,38 @@ Notes (for the more advanced MQL5 traders):
 
 //--- Input Variables (Accessible from MetaTrader 5)
 
-input double   lot = 2;
-input int      slippage = 3;
-input double   stopLossPips = 25;
-input bool     useTakeProfit = true;
-input double   takeProfitPips = 40;
+input double   _lots = 2;
+input int      _slippage = 3;
+input double   _stopLossPips = 25;
+input bool     _useTakeProfit = true;
+input double   _takeProfitPips = 40;
 input double   _pinBarLengthPercent = 20;
 
 //--- Service Variables (Only accessible from the MetaEditor)
 
-CTrade myTradingControlPanel;
-MqlRates PriceDataTable[];
-int numberOfPriceDataPoints;
-int P;
+CTrade _trade;
+MqlRates _prices[];
+int _adjustedPoints;
 double _currentBid, _currentAsk;
-double takeProfitPipsFinal, stopLevelPips;
-double stopLossLevel, takeProfitLevel;
 
 //+------------------------------------------------------------------+
 //| Expert initialisation function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
 {
-    ArraySetAsSeries(PriceDataTable, true); // Setting up table/array for time series data
+    ArraySetAsSeries(_prices, true); // Setting up table/array for time series data
     //ArraySetAsSeries(shortSmaData, true);   // Setting up table/array for time series data
     //ArraySetAsSeries(longSmaData, true);    // Setting up table/array for time series data
 
     //shortSmaControlPanel = iMA(_Symbol, _Period, shortSmaPeriods, 0, MODE_SMA, PRICE_CLOSE); // Getting the Control Panel/Handle for short SMA
     //longSmaControlPanel = iMA(_Symbol, _Period, longSmaPeriods, 0, MODE_SMA, PRICE_CLOSE); // Getting the Control Panel/Handle for long SMA
 
-    if (_Digits == 5 || _Digits == 3 || _Digits == 1) P = 10; else P = 1; // To account for 5 digit brokers
+    if (_Digits == 5 || _Digits == 3 || _Digits == 1) {
+        _adjustedPoints = 10;
+    }
+    else {
+        _adjustedPoints = 1; // To account for 5 digit brokers
+    }
 
     return(INIT_SUCCEEDED);
 }
@@ -102,13 +104,17 @@ void OnDeinit(const int reason)
 void OnTick()
 {
     double stopLossPipsFinal;
+    double takeProfitPipsFinal;
+    double stopLossLevel;
+    double takeProfitLevel;
+    double stopLevelPips;
 
     // -------------------- Collect most current data --------------------
 
     _currentBid = SymbolInfoDouble(_Symbol, SYMBOL_BID); // Get latest Bid Price
     _currentAsk = SymbolInfoDouble(_Symbol, SYMBOL_ASK); // Get latest Ask Price
 
-    numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, PriceDataTable); // Collects data from shift 0 to shift 9
+    int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
     //numberOfShortSmaData = CopyBuffer(shortSmaControlPanel, 0, 0, 3, shortSmaData); // Collect most current SMA(10) Data and store it in the datatable/array shortSmaData[]
     //numberOfLongSmaData = CopyBuffer(longSmaControlPanel, 0, 0, 3, longSmaData); // Collect most current SMA(40) Data and store it in the datatable/array longSmaData[]
 
@@ -119,49 +125,30 @@ void OnTick()
     // Explanation: Stop Loss and Take Profit levels can't be too close to our order execution price. We will talk about this again in a later lecture.
     // Resources for learning more: https://book.mql4.com/trading/orders (ctrl-f search "stoplevel"); https://book.mql4.com/appendix/limits
 
-    stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / P; // Defining minimum StopLevel
-
-    if (stopLossPips < stopLevelPips)
+    stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _adjustedPoints; // Defining minimum StopLevel
+    if (_stopLossPips < stopLevelPips)
     {
         stopLossPipsFinal = stopLevelPips;
     }
     else
     {
-        stopLossPipsFinal = stopLossPips;
+        stopLossPipsFinal = _stopLossPips;
     }
 
-    if (takeProfitPips < stopLevelPips)
+    if (_takeProfitPips < stopLevelPips)
     {
         takeProfitPipsFinal = stopLevelPips;
     }
     else
     {
-        takeProfitPipsFinal = takeProfitPips;
+        takeProfitPipsFinal = _takeProfitPips;
     }
 
     // -------------------- EXITS --------------------
 
     if (PositionSelect(_Symbol) == true) // We have an open position
     {
-        // --- Exit Rules (Long Trades) ---        
-        //if () // Rule to exit long trades
-        //{
-        //    if (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) // If it is Buy position
-        //    {
-        //        myTradingControlPanel.PositionClose(_Symbol);
-
-        //        if (myTradingControlPanel.ResultRetcode() == 10008 || myTradingControlPanel.ResultRetcode() == 10009) //Request is completed or order placed
-        //        {
-        //            Print("Exit rules: A close order has been successfully placed with Ticket#: ", myTradingControlPanel.ResultOrder());
-        //        }
-        //        else
-        //        {
-        //            Print("Exit rules: The close order request could not be completed. Error: ", GetLastError());
-        //            ResetLastError();
-        //            return;
-        //        }
-        //    }
-        //}
+        ManageExistingPositions();        
     }
 
     // -------------------- ENTRIES --------------------  
@@ -171,44 +158,32 @@ void OnTick()
         1) Pin Bar
         2) 
         */
-
-        if (IsBullishPinBar(PriceDataTable[1].open, PriceDataTable[1].high, PriceDataTable[1].low, PriceDataTable[1].close))
+        if (HasBullishSignal())
         {
-            stopLossLevel = _currentAsk - stopLossPipsFinal * _Point * P;
-            if (useTakeProfit) {
-                takeProfitLevel = _currentAsk + takeProfitPipsFinal * _Point * P;
+            stopLossLevel = _currentAsk - stopLossPipsFinal * _Point * _adjustedPoints;
+            if (_useTakeProfit) {
+                takeProfitLevel = _currentAsk + takeProfitPipsFinal * _Point * _adjustedPoints;
             }
             else {
                 takeProfitLevel = 0.0;
             }
 
-            myTradingControlPanel.PositionOpen(_Symbol, ORDER_TYPE_BUY, lot, _currentAsk, stopLossLevel, takeProfitLevel, "Buy Trade. Magic Number #" + (string)myTradingControlPanel.RequestMagic()); // Open a Buy position
-
-            if (myTradingControlPanel.ResultRetcode() == 10008 || myTradingControlPanel.ResultRetcode() == 10009) //Request is completed or order placed
-            {
-                Print("Entry rules: A Buy order has been successfully placed with Ticket#: ", myTradingControlPanel.ResultOrder());
-            }
-            else
-            {
-                Print("Entry rules: The Buy order request could not be completed. Error: ", GetLastError());
-                ResetLastError();
-                return;
-            }
+            OpenPosition(_Symbol, ORDER_TYPE_BUY, _lots, _currentAsk, stopLossLevel, takeProfitLevel);            
         }
 
         //// Entry rule for short trades
-        //else if (PriceDataTable[1].high - PriceDataTable[1].low > PriceDataTable[2].high - PriceDataTable[2].low &&
+        //else if (_prices[1].high - _prices[1].low > _prices[2].high - _prices[2].low &&
         //    shortSma2 > longSma2 && shortSma1 <= longSma1)
         //{
 
-        //    if (useStopLoss) stopLossLevel = _currentBid + stopLossPipsFinal * _Point * P; else stopLossLevel = 0.0;
-        //    if (useTakeProfit) takeProfitLevel = _currentBid - takeProfitPipsFinal * _Point * P; else takeProfitLevel = 0.0;
+        //    if (useStopLoss) stopLossLevel = _currentBid + stopLossPipsFinal * _Point * _adjustedPoints; else stopLossLevel = 0.0;
+        //    if (_useTakeProfit) takeProfitLevel = _currentBid - takeProfitPipsFinal * _Point * _adjustedPoints; else takeProfitLevel = 0.0;
 
-        //    myTradingControlPanel.PositionOpen(_Symbol, ORDER_TYPE_SELL, lot, _currentBid, stopLossLevel, takeProfitLevel, "Sell Trade. Magic Number #" + (string)myTradingControlPanel.RequestMagic()); // Open a Sell position
+        //    _trade.PositionOpen(_Symbol, ORDER_TYPE_SELL, _lots, _currentBid, stopLossLevel, takeProfitLevel, "Sell Trade. Magic Number #" + (string)_trade.RequestMagic()); // Open a Sell position
 
-        //    if (myTradingControlPanel.ResultRetcode() == 10008 || myTradingControlPanel.ResultRetcode() == 10009) //Request is completed or order placed
+        //    if (_trade.ResultRetcode() == 10008 || _trade.ResultRetcode() == 10009) //Request is completed or order placed
         //    {
-        //        Print("Entry rules: A Sell order has been successfully placed with Ticket#: ", myTradingControlPanel.ResultOrder());
+        //        Print("Entry rules: A Sell order has been successfully placed with Ticket#: ", _trade.ResultOrder());
         //    }
         //    else
         //    {
@@ -220,24 +195,82 @@ void OnTick()
     }
 }
 
+bool HasBullishSignal()
+{
+    return IsBullishPinBar(_prices[1].open, _prices[1].high, _prices[1].low, _prices[1].close);
+}
+
 bool IsBullishPinBar(double open, double high, double low, double close)
 {
     double range = high - low;
     double closeOpenRange = MathAbs(open - close);
-    double _pinBarPct = _pinBarLengthPercent / 100;
-    Print("Pin bar pct = ", _pinBarPct);
+    double pinBarPct = _pinBarLengthPercent / 100;
 
-    if (range * _pinBarPct >= closeOpenRange) {
+    if (range * pinBarPct >= closeOpenRange) {
         Print("Pin bar found. OHLC = ", (string)open + ",", (string)high, ",", (string)low, ",", (string)close);
 
         double x = (high - close) / range;
-        Print("x = ", (string)x, ", pinBarPct = ", (string)_pinBarPct);
-        if (x < _pinBarPct) {
+        Print("x = ", (string)x, ", pinBarPct = ", (string)pinBarPct);
+        if (x < pinBarPct) {
             return true;
         }
     }
 
     return false;
+}
+
+void ManageExistingPositions()
+{
+    // --- Exit Rules (Long Trades) ---        
+    //if () // Rule to exit long trades
+    //{
+    //    if (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) // If it is Buy position
+    //    {
+    //        _trade.PositionClose(_Symbol);
+
+    //        if (_trade.ResultRetcode() == 10008 || _trade.ResultRetcode() == 10009) //Request is completed or order placed
+    //        {
+    //            Print("Exit rules: A close order has been successfully placed with Ticket#: ", _trade.ResultOrder());
+    //        }
+    //        else
+    //        {
+    //            Print("Exit rules: The close order request could not be completed. Error: ", GetLastError());
+    //            ResetLastError();
+    //            return;
+    //        }
+    //    }
+    //}
+}
+
+void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit)
+{
+    string message;
+    string orderTypeMsg;
+
+    switch (orderType) {
+        case ORDER_TYPE_BUY:
+            orderTypeMsg = "Buy";
+            message = "Buy Trade. Magic Number #" + (string)_trade.RequestMagic();
+            break;
+
+        case ORDER_TYPE_SELL:
+            orderTypeMsg = "Sell";
+            message = "Sell Trade. Magic Number #" + (string)_trade.RequestMagic();
+            break;
+    }
+
+    _trade.PositionOpen(symbol, orderType, volume, price, stopLoss, takeProfit, message);
+    if (_trade.ResultRetcode() == 10008 || _trade.ResultRetcode() == 10009)
+    {
+        // Request is completed or order placed
+        Print("Entry rules: A ", orderTypeMsg, " order has been successfully placed with Ticket#: ", _trade.ResultOrder());
+    }
+    else
+    {
+        Print("Entry rules: The ", orderTypeMsg, " order request could not be completed. Error: ", GetLastError());
+        ResetLastError();
+        return;
+    }
 }
 
 //+------------------------------------------------------------------+
