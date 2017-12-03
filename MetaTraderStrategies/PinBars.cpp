@@ -21,9 +21,10 @@ For going long, ensure RSI < x
 For going short, ensure RSI > x
 
 Colour of pin head does not matter!
-Pin size = 1.5x?
+Pin candle length must be at least the same as the Average True Range (configure using _pinCandleBodyLengthMinimumMultiple parameter)
 
-Determine pin type to look out for by checking 21 period MA
+Only go long when price is higher than the 21 HOUR MA
+Only go short when price is lower than the 21 HOUR MA
 
 Another rule perhaps?  Once trade entered, if not in profit by 5 periods, exit?
 
@@ -67,6 +68,8 @@ input int      _rsiLongThreshold = 45;
 input int      _rsiShortThreshold = 55;
 input int      _atrPeriod = 14;
 input double   _pinCandleBodyLengthMinimumMultiple = 1;
+input ENUM_TIMEFRAMES _movingAveragePeriodType = PERIOD_H1;
+input int      _movingAveragePeriodAmount = 21;
 
 //--- Service Variables (Only accessible from the MetaEditor)
 
@@ -74,9 +77,8 @@ CTrade _trade;
 MqlRates _prices[];
 int _adjustedPoints;
 double _currentBid, _currentAsk;
-int _rsiHandle, _atrHandle;
-double _rsiData[];
-double _atrData[];
+int _rsiHandle, _atrHandle, _maHandle;
+double _rsiData[], _atrData[], _maData[];
 
 //+------------------------------------------------------------------+
 //| Expert initialisation function                                   |
@@ -86,6 +88,7 @@ int OnInit()
     ArraySetAsSeries(_prices, true);
     ArraySetAsSeries(_rsiData, true);
     ArraySetAsSeries(_atrData, true);
+    ArraySetAsSeries(_maData, true);
 
     //ArraySetAsSeries(longSmaData, true);    // Setting up table/array for time series data
 
@@ -93,6 +96,7 @@ int OnInit()
     //longSmaControlPanel = iMA(_Symbol, _Period, longSmaPeriods, 0, MODE_SMA, PRICE_CLOSE); // Getting the Control Panel/Handle for long SMA
     _rsiHandle = iRSI(_Symbol, _Period, _rsiPeriod, PRICE_CLOSE);
     _atrHandle = iATR(_Symbol, 0, _atrPeriod);
+    _maHandle = iMA(_Symbol, _movingAveragePeriodType, _movingAveragePeriodAmount, 0, MODE_SMA, PRICE_CLOSE);
 
     if (_Digits == 5 || _Digits == 3 || _Digits == 1) {
         _adjustedPoints = 10;
@@ -108,25 +112,22 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-    Print("In OnDeinit");
+    Print("In OnDeinit for reason: ", reason);
+    
+    ReleaseIndicator(_rsiHandle);
+    ReleaseIndicator(_atrHandle);
+    ReleaseIndicator(_maHandle);    
+}
 
-    //---
-    /*IndicatorRelease(shortSmaControlPanel);
-    IndicatorRelease(longSmaControlPanel);*/
-    if (_rsiHandle != INVALID_HANDLE && IndicatorRelease(_rsiHandle)) {
-        _rsiHandle = INVALID_HANDLE;
-    }
-    else {
-        Print("IndicatorRelease() failed. Error ", GetLastError());
-    }
-
-    if (_atrHandle != INVALID_HANDLE && IndicatorRelease(_atrHandle)) {
-        _atrHandle = INVALID_HANDLE;
+void ReleaseIndicator(int& handle) {
+    if (handle != INVALID_HANDLE && IndicatorRelease(handle)) {
+        handle = INVALID_HANDLE;
     }
     else {
         Print("IndicatorRelease() failed. Error ", GetLastError());
     }
 }
+
 //+------------------------------------------------------------------+
 //| Expert tick function                                             |
 //+------------------------------------------------------------------+
@@ -148,6 +149,7 @@ void OnTick()
     //numberOfLongSmaData = CopyBuffer(longSmaControlPanel, 0, 0, 3, longSmaData); // Collect most current SMA(40) Data and store it in the datatable/array longSmaData[]
     int rsiDataCount = CopyBuffer(_rsiHandle, 0, 0, 3, _rsiData);
     int atrDataCount = CopyBuffer(_atrHandle, 0, 0, 3, _atrData);
+    int maDataCount = CopyBuffer(_maHandle, 0, 0, 3, _maData);
 
     // TODO: Check for errors from above calls   
 
@@ -237,7 +239,14 @@ bool HasBullishSignal()
     bool isBar = IsBullishPinBar(_prices[1].open, _prices[1].high, _prices[1].low, _prices[1].close);
 
     if (isBar) {
-        return _rsiData[1] < _rsiLongThreshold;
+        if (_rsiData[1] < _rsiLongThreshold) {            
+            if (_prices[1].close > _maData[0]) {
+                return true;
+            }
+            else {
+                Print("LONG trade rejected due to MA...Price: ", _prices[1].close, ", MA: ", _maData[0]);
+            }
+        }
     }
     
     return false;
@@ -248,7 +257,14 @@ bool HasBearishSignal()
     bool isBar = IsBearishPinBar(_prices[1].open, _prices[1].high, _prices[1].low, _prices[1].close);
 
     if (isBar) {
-        return _rsiData[1] > _rsiShortThreshold;
+        if (_rsiData[1] > _rsiShortThreshold) {
+            if (_prices[1].close < _maData[0]) {
+                return true;
+            }
+            else {
+                Print("SHORT trade rejected due to MA...Price: ", _prices[1].close, ", MA: ", _maData[0]);
+            }
+        }
     }
 
     return false;
