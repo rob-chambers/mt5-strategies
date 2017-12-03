@@ -8,8 +8,10 @@
 Rules:
 
 Look for a pin bar
+Only go long when the RSI < 45
+Only go short when RSI > 55
 Enter trade on the open of the very next bar.  Set stop to risk amount
-Set target profit as a multiple of risk amount (default to 1.5)
+Set target profit to hard value (default of 40 pips)
 Default risk of 25 pips (hard stop)
 
 For going long, ensure price > 200 day MA
@@ -59,7 +61,12 @@ input int      _slippage = 3;
 input double   _stopLossPips = 25;
 input bool     _useTakeProfit = true;
 input double   _takeProfitPips = 40;
-input double   _pinBarLengthPercent = 20;
+input double   _pinBarLengthPercent = 33;
+input int      _rsiPeriod = 14;
+input int      _rsiLongThreshold = 45;
+input int      _rsiShortThreshold = 55;
+input int      _atrPeriod = 14;
+input double   _pinCandleBodyLengthMinimumMultiple = 1;
 
 //--- Service Variables (Only accessible from the MetaEditor)
 
@@ -67,18 +74,25 @@ CTrade _trade;
 MqlRates _prices[];
 int _adjustedPoints;
 double _currentBid, _currentAsk;
+int _rsiHandle, _atrHandle;
+double _rsiData[];
+double _atrData[];
 
 //+------------------------------------------------------------------+
 //| Expert initialisation function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
 {
-    ArraySetAsSeries(_prices, true); // Setting up table/array for time series data
-    //ArraySetAsSeries(shortSmaData, true);   // Setting up table/array for time series data
+    ArraySetAsSeries(_prices, true);
+    ArraySetAsSeries(_rsiData, true);
+    ArraySetAsSeries(_atrData, true);
+
     //ArraySetAsSeries(longSmaData, true);    // Setting up table/array for time series data
 
     //shortSmaControlPanel = iMA(_Symbol, _Period, shortSmaPeriods, 0, MODE_SMA, PRICE_CLOSE); // Getting the Control Panel/Handle for short SMA
     //longSmaControlPanel = iMA(_Symbol, _Period, longSmaPeriods, 0, MODE_SMA, PRICE_CLOSE); // Getting the Control Panel/Handle for long SMA
+    _rsiHandle = iRSI(_Symbol, _Period, _rsiPeriod, PRICE_CLOSE);
+    _atrHandle = iATR(_Symbol, 0, _atrPeriod);
 
     if (_Digits == 5 || _Digits == 3 || _Digits == 1) {
         _adjustedPoints = 10;
@@ -94,9 +108,24 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
+    Print("In OnDeinit");
+
     //---
     /*IndicatorRelease(shortSmaControlPanel);
     IndicatorRelease(longSmaControlPanel);*/
+    if (_rsiHandle != INVALID_HANDLE && IndicatorRelease(_rsiHandle)) {
+        _rsiHandle = INVALID_HANDLE;
+    }
+    else {
+        Print("IndicatorRelease() failed. Error ", GetLastError());
+    }
+
+    if (_atrHandle != INVALID_HANDLE && IndicatorRelease(_atrHandle)) {
+        _atrHandle = INVALID_HANDLE;
+    }
+    else {
+        Print("IndicatorRelease() failed. Error ", GetLastError());
+    }
 }
 //+------------------------------------------------------------------+
 //| Expert tick function                                             |
@@ -117,6 +146,8 @@ void OnTick()
     int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
     //numberOfShortSmaData = CopyBuffer(shortSmaControlPanel, 0, 0, 3, shortSmaData); // Collect most current SMA(10) Data and store it in the datatable/array shortSmaData[]
     //numberOfLongSmaData = CopyBuffer(longSmaControlPanel, 0, 0, 3, longSmaData); // Collect most current SMA(40) Data and store it in the datatable/array longSmaData[]
+    int rsiDataCount = CopyBuffer(_rsiHandle, 0, 0, 3, _rsiData);
+    int atrDataCount = CopyBuffer(_atrHandle, 0, 0, 3, _atrData);
 
     // TODO: Check for errors from above calls   
 
@@ -126,21 +157,17 @@ void OnTick()
     // Resources for learning more: https://book.mql4.com/trading/orders (ctrl-f search "stoplevel"); https://book.mql4.com/appendix/limits
 
     stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _adjustedPoints; // Defining minimum StopLevel
-    if (_stopLossPips < stopLevelPips)
-    {
+    if (_stopLossPips < stopLevelPips) {
         stopLossPipsFinal = stopLevelPips;
     }
-    else
-    {
+    else {
         stopLossPipsFinal = _stopLossPips;
     }
 
-    if (_takeProfitPips < stopLevelPips)
-    {
+    if (_takeProfitPips < stopLevelPips) {
         takeProfitPipsFinal = stopLevelPips;
     }
-    else
-    {
+    else {
         takeProfitPipsFinal = _takeProfitPips;
     }
 
@@ -158,8 +185,7 @@ void OnTick()
         1) Pin Bar
         2) 
         */
-        if (HasBullishSignal())
-        {
+        if (HasBullishSignal()) {
             stopLossLevel = _currentAsk - stopLossPipsFinal * _Point * _adjustedPoints;
             if (_useTakeProfit) {
                 takeProfitLevel = _currentAsk + takeProfitPipsFinal * _Point * _adjustedPoints;
@@ -169,6 +195,17 @@ void OnTick()
             }
 
             OpenPosition(_Symbol, ORDER_TYPE_BUY, _lots, _currentAsk, stopLossLevel, takeProfitLevel);            
+        }
+        else if (HasBearishSignal()) {
+            stopLossLevel = _currentAsk + stopLossPipsFinal * _Point * _adjustedPoints;
+            if (_useTakeProfit) {
+                takeProfitLevel = _currentAsk - takeProfitPipsFinal * _Point * _adjustedPoints;
+            }
+            else {
+                takeProfitLevel = 0.0;
+            }
+
+            OpenPosition(_Symbol, ORDER_TYPE_SELL, _lots, _currentAsk, stopLossLevel, takeProfitLevel);
         }
 
         //// Entry rule for short trades
@@ -197,22 +234,62 @@ void OnTick()
 
 bool HasBullishSignal()
 {
-    return IsBullishPinBar(_prices[1].open, _prices[1].high, _prices[1].low, _prices[1].close);
+    bool isBar = IsBullishPinBar(_prices[1].open, _prices[1].high, _prices[1].low, _prices[1].close);
+
+    if (isBar) {
+        return _rsiData[1] < _rsiLongThreshold;
+    }
+    
+    return false;
+}
+
+bool HasBearishSignal()
+{
+    bool isBar = IsBearishPinBar(_prices[1].open, _prices[1].high, _prices[1].low, _prices[1].close);
+
+    if (isBar) {
+        return _rsiData[1] > _rsiShortThreshold;
+    }
+
+    return false;
 }
 
 bool IsBullishPinBar(double open, double high, double low, double close)
 {
     double range = high - low;
-    double closeOpenRange = MathAbs(open - close);
+    double headSize = MathAbs(open - close);
     double pinBarPct = _pinBarLengthPercent / 100;
 
-    if (range * pinBarPct >= closeOpenRange) {
-        Print("Pin bar found. OHLC = ", (string)open + ",", (string)high, ",", (string)low, ",", (string)close);
+    if (range * pinBarPct >= headSize) {
+        //Print("Pin bar found. OHLC = ", (string)open + ",", (string)high, ",", (string)low, ",", (string)close);
 
-        double x = (high - close) / range;
-        Print("x = ", (string)x, ", pinBarPct = ", (string)pinBarPct);
-        if (x < pinBarPct) {
-            return true;
+        //Print("x = ", (string)x, ", pinBarPct = ", (string)pinBarPct);
+
+        // Ensure length of candle shadow is sufficiently small
+        if ((high - close) <= headSize / 2) {
+            // Now ensure candle wick is of a sufficient length
+            if (range >= _pinCandleBodyLengthMinimumMultiple * _atrData[0]) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool IsBearishPinBar(double open, double high, double low, double close)
+{
+    double range = high - low;
+    double headSize = MathAbs(open - close);
+    double pinBarPct = _pinBarLengthPercent / 100;
+
+    if (range * pinBarPct >= headSize) {
+        // Ensure length of candle shadow is sufficiently small
+        if ((close - low) <= headSize / 2) {
+            // Now ensure candle wick is of a sufficient length
+            if (range >= _pinCandleBodyLengthMinimumMultiple * _atrData[0]) {
+                return true;
+            }
         }
     }
 
@@ -242,7 +319,7 @@ void ManageExistingPositions()
     //}
 }
 
-void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit)
+void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit)
 {
     string message;
     string orderTypeMsg;
@@ -250,26 +327,25 @@ void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, doubl
     switch (orderType) {
         case ORDER_TYPE_BUY:
             orderTypeMsg = "Buy";
-            message = "Buy Trade. Magic Number #" + (string)_trade.RequestMagic();
+            message = "Going long. Magic Number #" + (string)_trade.RequestMagic();
             break;
 
         case ORDER_TYPE_SELL:
             orderTypeMsg = "Sell";
-            message = "Sell Trade. Magic Number #" + (string)_trade.RequestMagic();
+            message = "Going short. Magic Number #" + (string)_trade.RequestMagic();
             break;
     }
 
-    _trade.PositionOpen(symbol, orderType, volume, price, stopLoss, takeProfit, message);
-    if (_trade.ResultRetcode() == 10008 || _trade.ResultRetcode() == 10009)
-    {
-        // Request is completed or order placed
-        Print("Entry rules: A ", orderTypeMsg, " order has been successfully placed with Ticket#: ", _trade.ResultOrder());
-    }
-    else
-    {
-        Print("Entry rules: The ", orderTypeMsg, " order request could not be completed. Error: ", GetLastError());
-        ResetLastError();
-        return;
+    if (_trade.PositionOpen(symbol, orderType, volume, price, stopLoss, takeProfit, message)) {
+        uint resultCode = _trade.ResultRetcode();
+        if (resultCode == TRADE_RETCODE_PLACED || resultCode == TRADE_RETCODE_DONE) {
+            Print("Entry rules: A ", orderTypeMsg, " order has been successfully placed with Ticket#: ", _trade.ResultOrder());
+        }
+        else {
+            Print("Entry rules: The ", orderTypeMsg, " order request could not be completed.  Result code: ", resultCode, ", Error: ", GetLastError());
+            ResetLastError();
+            return;
+        }
     }
 }
 
