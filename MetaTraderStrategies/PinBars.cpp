@@ -57,17 +57,26 @@ Notes (for the more advanced MQL5 traders):
 
 //--- Input Variables (Accessible from MetaTrader 5)
 
+// Money management / risk parameters
 input double   _lots = 2;
 input int      _slippage = 3;
-input double   _stopLossPips = 25;
+input double   _stopLossPips = 30;
 input bool     _useTakeProfit = true;
-input double   _takeProfitPips = 40;
-input double   _pinBarLengthPercent = 33;
+input double   _takeProfitPips = 30;
+
+// RSI parameters
+input bool     _useRSI = false;
 input int      _rsiPeriod = 14;
 input int      _rsiLongThreshold = 45;
 input int      _rsiShortThreshold = 55;
+
+// Candle pattern parameters
 input int      _atrPeriod = 14;
 input double   _pinCandleBodyLengthMinimumMultiple = 1;
+input double   _pinBarLengthPercent = 33;
+
+// MA parameters
+input bool     _useMA = false;
 input ENUM_TIMEFRAMES _movingAveragePeriodType = PERIOD_H1;
 input int      _movingAveragePeriodAmount = 21;
 
@@ -238,18 +247,34 @@ bool HasBullishSignal()
 {
     bool isBar = IsBullishPinBar(_prices[1].open, _prices[1].high, _prices[1].low, _prices[1].close);
 
-    if (isBar) {
-        if (_rsiData[1] < _rsiLongThreshold) {            
-            if (_prices[1].close > _maData[0]) {
-                return true;
-            }
-            else {
-                Print("LONG trade rejected due to MA...Price: ", _prices[1].close, ", MA: ", _maData[0]);
-            }
-        }
+    if (!isBar) {
+        return false;
     }
-    
-    return false;
+
+    // Look for a shooting star - this low must be lower than previous low
+    if (!_prices[1].low < _prices[2].low) {
+        // Print("Bullish Pin bar rejected because low wasn't lower than prior low ", _prices[0].low, " ", _prices[1].low, " ", _prices[2].low);
+        return false;
+    }
+
+    bool rsiSignal = false;
+
+    if (!_useRSI) {
+        // Ignore if we don't care
+        rsiSignal = true;
+    } else if (_useRSI && _rsiData[1] < _rsiLongThreshold) {
+        rsiSignal = true;
+    }
+
+    bool maSignal = false;
+    if (!_useMA) {
+        // Ignore if we don't care
+        maSignal = true;
+    } else {
+        maSignal = _prices[1].close > _maData[0];
+    }
+
+    return rsiSignal && maSignal;    
 }
 
 bool HasBearishSignal()
@@ -257,14 +282,29 @@ bool HasBearishSignal()
     bool isBar = IsBearishPinBar(_prices[1].open, _prices[1].high, _prices[1].low, _prices[1].close);
 
     if (isBar) {
-        if (_rsiData[1] > _rsiShortThreshold) {
-            if (_prices[1].close < _maData[0]) {
-                return true;
-            }
-            else {
-                Print("SHORT trade rejected due to MA...Price: ", _prices[1].close, ", MA: ", _maData[0]);
-            }
+        // Look for a shooting star - this high must be higher than previous high
+        if (!_prices[1].high > _prices[2].high) {
+            // Print("Bearish Pin bar rejected because high wasn't higher than prior high");
+            return false;
         }
+
+        bool rsiSignal = false;
+        if (!_useRSI) {
+            // Ignore if we don't care
+            rsiSignal = true;
+        } else {
+            rsiSignal = _rsiData[1] > _rsiShortThreshold;
+        }
+
+        bool maSignal = false;
+        if (!_useMA) {
+            // Ignore if we don't care
+            maSignal = true;
+        } else {
+            maSignal = _prices[1].close < _maData[0];
+        }
+
+        return rsiSignal && maSignal;
     }
 
     return false;
