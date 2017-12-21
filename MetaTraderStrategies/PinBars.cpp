@@ -54,6 +54,7 @@ Notes (for the more advanced MQL5 traders):
 */
 
 #include <Trade\Trade.mqh>
+#include <Trade\SymbolInfo.mqh> 
 
 //--- Input Variables (Accessible from MetaTrader 5)
 
@@ -82,6 +83,7 @@ input int      _movingAveragePeriodAmount = 21;
 
 //--- Service Variables (Only accessible from the MetaEditor)
 
+CSymbolInfo    m_symbol;                     // symbol info object
 CTrade _trade;
 MqlRates _prices[];
 int _adjustedPoints;
@@ -94,6 +96,11 @@ double _rsiData[], _atrData[], _maData[];
 //+------------------------------------------------------------------+
 int OnInit()
 {
+    if (!m_symbol.Name(Symbol())) // sets symbol name
+        return(INIT_FAILED);
+    
+    RefreshRates();
+
     ArraySetAsSeries(_prices, true);
     ArraySetAsSeries(_rsiData, true);
     ArraySetAsSeries(_atrData, true);
@@ -148,10 +155,17 @@ void OnTick()
     double takeProfitLevel;
     double stopLevelPips;
 
-    // -------------------- Collect most current data --------------------
+    //--- we work only at the time of the birth of new bar
+    //datetime time_0 = iTime(0);
+    //if (time_0 == PrevBars)
+    //    return;
+    //PrevBars = time_0;
+    //---
 
-    _currentBid = SymbolInfoDouble(_Symbol, SYMBOL_BID); // Get latest Bid Price
-    _currentAsk = SymbolInfoDouble(_Symbol, SYMBOL_ASK); // Get latest Ask Price
+    // -------------------- Collect most current data --------------------
+    if (!RefreshRates()) {
+        return;
+    }
 
     int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
     //numberOfShortSmaData = CopyBuffer(shortSmaControlPanel, 0, 0, 3, shortSmaData); // Collect most current SMA(10) Data and store it in the datatable/array shortSmaData[]
@@ -192,31 +206,31 @@ void OnTick()
     // -------------------- ENTRIES --------------------  
     if (PositionSelect(_Symbol) == false) // We have no open positions
     {
-        /* --- Entry Rules (Long Trades)
-        1) Pin Bar
-        2) 
-        */
+        double limitPrice;
         if (HasBullishSignal()) {
-            stopLossLevel = _currentAsk - stopLossPipsFinal * _Point * _adjustedPoints;
+            limitPrice = _currentAsk;
+            stopLossLevel = limitPrice - stopLossPipsFinal * _Point * _adjustedPoints;
             if (_useTakeProfit) {
-                takeProfitLevel = _currentAsk + takeProfitPipsFinal * _Point * _adjustedPoints;
+                takeProfitLevel = limitPrice + takeProfitPipsFinal * _Point * _adjustedPoints;
             }
             else {
                 takeProfitLevel = 0.0;
             }
 
-            OpenPosition(_Symbol, ORDER_TYPE_BUY, _lots, _currentAsk, stopLossLevel, takeProfitLevel);            
+            OpenPosition(_Symbol, ORDER_TYPE_BUY, _lots, limitPrice, stopLossLevel, takeProfitLevel);
         }
         else if (HasBearishSignal()) {
-            stopLossLevel = _currentAsk + stopLossPipsFinal * _Point * _adjustedPoints;
+            limitPrice = _currentBid;
+
+            stopLossLevel = limitPrice + stopLossPipsFinal * _Point * _adjustedPoints;
             if (_useTakeProfit) {
-                takeProfitLevel = _currentAsk - takeProfitPipsFinal * _Point * _adjustedPoints;
+                takeProfitLevel = limitPrice - takeProfitPipsFinal * _Point * _adjustedPoints;
             }
             else {
                 takeProfitLevel = 0.0;
             }
 
-            OpenPosition(_Symbol, ORDER_TYPE_SELL, _lots, _currentAsk, stopLossLevel, takeProfitLevel);
+            OpenPosition(_Symbol, ORDER_TYPE_SELL, _lots, limitPrice, stopLossLevel, takeProfitLevel);
         }
 
         //// Entry rule for short trades
@@ -243,6 +257,27 @@ void OnTick()
     }
 }
 
+//+------------------------------------------------------------------+
+//| Refreshes the symbol quotes data                                 |
+//+------------------------------------------------------------------+
+bool RefreshRates()
+{
+    //--- refresh rates
+    if (!m_symbol.RefreshRates())
+        return(false);
+    //--- protection against the return value of "zero"
+    if (m_symbol.Ask() == 0 || m_symbol.Bid() == 0)
+        return(false);
+    //---
+
+//    _currentBid = SymbolInfoDouble(_Symbol, SYMBOL_BID); // Get latest Bid Price
+//    _currentAsk = SymbolInfoDouble(_Symbol, SYMBOL_ASK); // Get latest Ask Price
+    _currentBid = m_symbol.Bid();
+    _currentAsk = m_symbol.Ask();
+
+    return(true);
+}
+
 bool HasBullishSignal()
 {
     bool isBar = IsBullishPinBar(_prices[1].open, _prices[1].high, _prices[1].low, _prices[1].close);
@@ -252,8 +287,14 @@ bool HasBullishSignal()
     }
 
     // Look for a shooting star - this low must be lower than previous low
-    if (!_prices[1].low < _prices[2].low) {
-        // Print("Bullish Pin bar rejected because low wasn't lower than prior low ", _prices[0].low, " ", _prices[1].low, " ", _prices[2].low);
+    if (_prices[1].low >= _prices[2].low) {
+        Print("Bullish Pin bar rejected because low wasn't lower than prior low ", _prices[0].low, " ", _prices[1].low, " ", _prices[2].low);
+        return false;
+    }
+
+    // Close must be higher than previous low
+    if (_prices[1].close < _prices[2].low) {
+        Print("Bullish Pin bar rejected because close wasn't higher than prior low");
         return false;
     }
 
@@ -283,8 +324,14 @@ bool HasBearishSignal()
 
     if (isBar) {
         // Look for a shooting star - this high must be higher than previous high
-        if (!_prices[1].high > _prices[2].high) {
-            // Print("Bearish Pin bar rejected because high wasn't higher than prior high");
+        if (_prices[1].high <= _prices[2].high) {
+             Print("Bearish Pin bar rejected because high wasn't higher than prior high: ", _prices[0].high, " ", _prices[1].high, " ", _prices[2].high);
+            return false;
+        }
+
+        // Close must be less than previous high
+        if (_prices[1].close >= _prices[2].high) {
+            Print("Bearish Pin bar rejected because close wasn't lower than prior high");
             return false;
         }
 
@@ -339,6 +386,11 @@ bool IsBearishPinBar(double open, double high, double low, double close)
     double headSize = MathAbs(open - close);
     double pinBarPct = _pinBarLengthPercent / 100;
 
+    // 1) Range should be sufficently long
+
+
+
+
     if (range * pinBarPct >= headSize) {
         // Ensure length of candle shadow is sufficiently small
         if ((close - low) <= headSize / 2) {
@@ -389,6 +441,16 @@ void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, doubl
         case ORDER_TYPE_SELL:
             orderTypeMsg = "Sell";
             message = "Going short. Magic Number #" + (string)_trade.RequestMagic();
+            break;
+
+        case ORDER_TYPE_BUY_LIMIT:
+            orderTypeMsg = "Buy limit";
+            message = "Going long at " + (string)price + ". Magic Number #" + (string)_trade.RequestMagic();
+            break;
+
+        case ORDER_TYPE_SELL_LIMIT:
+            orderTypeMsg = "Sell limit";
+            message = "Going short at " + (string)price + ". Magic Number #" + (string)_trade.RequestMagic();
             break;
     }
 
