@@ -4,13 +4,6 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2017, Robert Chambers"
 #property version   "1.00"
-/*
-Rules:
-Current candle high > previous candle high
-Current candle close < previous candle high
-Current (high-close) / (high-low) > 0.6 and (high - open) / (high-low) > 0.6
-Current low > previous low
-*/
 
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh> 
@@ -20,11 +13,10 @@ Current low > previous low
 // Money management / risk parameters
 input double   _lots = 1;
 input int      _slippage = 2;
-input double   _stopLossPips = 10;
+input double   _stopLossPips = 30;
 input bool     _useTakeProfit = true;
-input double   _takeProfitPips = 15;
+input double   _takeProfitPips = 40;
 input double   _pinbarThreshhold = 0.6;
-input int       _timeout = 10;
 
 //--- Service Variables (Only accessible from the MetaEditor)
 
@@ -33,8 +25,6 @@ CTrade _trade;
 MqlRates _prices[];
 int _adjustedPoints;
 double _currentBid, _currentAsk;
-int _lastTradeTime;
-static datetime _limit_time = 0;
 
 //+------------------------------------------------------------------+
 //| Expert initialisation function                                   |
@@ -79,7 +69,6 @@ void OnTick()
     if (time_0 == PrevBars)
         return;
 
-    Print("New bar");
     PrevBars = time_0;
 
     double stopLossPipsFinal;
@@ -87,13 +76,6 @@ void OnTick()
     double stopLossLevel;
     double takeProfitLevel;
     double stopLevelPips;
-
-    //--- we work only at the time of the birth of new bar
-    //datetime time_0 = iTime(0);
-    //if (time_0 == PrevBars)
-    //    return;
-    //PrevBars = time_0;
-    //---
 
     // -------------------- Collect most current data --------------------
     if (!RefreshRates()) {
@@ -112,29 +94,25 @@ void OnTick()
     // -------------------- ENTRIES --------------------  
     if (PositionSelect(_Symbol) == false) // We have no open positions
     {
-        if (!HasMoney()) {
-            return;
+        int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
+
+        stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _adjustedPoints; // Defining minimum StopLevel
+        if (_stopLossPips < stopLevelPips) {
+            stopLossPipsFinal = stopLevelPips;
+        }
+        else {
+            stopLossPipsFinal = _stopLossPips;
+        }
+
+        if (_takeProfitPips < stopLevelPips) {
+            takeProfitPipsFinal = stopLevelPips;
+        }
+        else {
+            takeProfitPipsFinal = _takeProfitPips;
         }
 
         double limitPrice;
         if (HasBullishSignal()) {
-            int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
-
-            stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _adjustedPoints; // Defining minimum StopLevel
-            if (_stopLossPips < stopLevelPips) {
-                stopLossPipsFinal = stopLevelPips;
-            }
-            else {
-                stopLossPipsFinal = _stopLossPips;
-            }
-
-            if (_takeProfitPips < stopLevelPips) {
-                takeProfitPipsFinal = stopLevelPips;
-            }
-            else {
-                takeProfitPipsFinal = _takeProfitPips;
-            }
-
             limitPrice = _currentAsk;
             stopLossLevel = limitPrice - stopLossPipsFinal * _Point * _adjustedPoints;
             if (_useTakeProfit) {
@@ -178,24 +156,6 @@ datetime iTime(const int index, string symbol = NULL, ENUM_TIMEFRAMES timeframe 
     return(time);
 }
 
-// Check if we have enough money to make a trade
-bool HasMoney()
-{
-    // TODO: I guess AccountFreeMargin is an MT4 function
-    // Program equivalent in MT5
-
-    /*
-    double freeMargin = AccountFreeMargin();
-    if (freeMargin < (1000 * _lots))
-    {
-        Print("We have no money. Free Margin = ", freeMargin);
-        return false;
-    }
-    */
-
-    return true;
-}
-
 //+------------------------------------------------------------------+
 //| Refreshes the symbol quotes data                                 |
 //+------------------------------------------------------------------+
@@ -217,12 +177,11 @@ bool RefreshRates()
 
 bool HasBullishSignal()
 {
-    /*
-    Rules:
+    /* Rules:
     Current candle high > previous candle high
     Current candle close < previous candle high
     Current (high-close) / (high-low) > 0.6 and (high - open) / (high-low) > 0.6
-    Current low > previous low
+    Current low > previous low 
     */
     if (_prices[1].high <= _prices[2].high) return false;
     if (_prices[1].close >= _prices[2].high) return false;
@@ -240,7 +199,22 @@ bool HasBullishSignal()
 
 bool HasBearishSignal()
 {   
-    return false;
+    /* Rules:
+    Current candle low < previous candle low
+    Current candle close < previous candle low
+    Current (high-close) / (high-low) > 0.6 and (high - open) / (high-low) > 0.6
+    Current high < previous high
+    */
+    if (_prices[1].close >= _prices[1].open) return false;
+    if (_prices[1].low >= _prices[2].low) return false;
+    if (_prices[1].close >= _prices[2].low) return false;
+
+    double currentRange = _prices[1].high - _prices[1].low;
+    if (!((_prices[1].close - _prices[1].low) / currentRange > _pinbarThreshhold)) return false;
+
+    if (_prices[1].high > _prices[2].high) return false;
+
+    return true;
 }
 
 void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit)
@@ -274,8 +248,6 @@ void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, doubl
         uint resultCode = _trade.ResultRetcode();
         if (resultCode == TRADE_RETCODE_PLACED || resultCode == TRADE_RETCODE_DONE) {
             Print("Entry rules: A ", orderTypeMsg, " order has been successfully placed with Ticket#: ", _trade.ResultOrder());
-            //_lastTradeTime = Now();
-            //Print("Trade placed at ", (string)_lastTradeTime);
         }
         else {
             Print("Entry rules: The ", orderTypeMsg, " order request could not be completed.  Result code: ", resultCode, ", Error: ", GetLastError());
