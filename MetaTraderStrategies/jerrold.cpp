@@ -16,7 +16,14 @@ input int      _slippage = 2;
 input double   _stopLossPips = 30;
 input bool     _useTakeProfit = true;
 input double   _takeProfitPips = 40;
+
+// Pin Bar parameters
 input double   _pinbarThreshhold = 0.6;
+
+// MA parameters
+input bool     _useMA = false;
+input ENUM_TIMEFRAMES _movingAveragePeriodType = PERIOD_M15;
+input int      _movingAveragePeriodAmount = 200;
 
 //--- Service Variables (Only accessible from the MetaEditor)
 
@@ -25,6 +32,8 @@ CTrade _trade;
 MqlRates _prices[];
 int _adjustedPoints;
 double _currentBid, _currentAsk;
+int _maHandle;
+double _maData[];
 
 //+------------------------------------------------------------------+
 //| Expert initialisation function                                   |
@@ -40,6 +49,8 @@ int OnInit()
     }
 
     ArraySetAsSeries(_prices, true);
+    ArraySetAsSeries(_maData, true);
+    _maHandle = iMA(Symbol(), _movingAveragePeriodType, _movingAveragePeriodAmount, 0, MODE_SMA, PRICE_CLOSE);
 
     if (_Digits == 5 || _Digits == 3 || _Digits == 1) {
         _adjustedPoints = 10;
@@ -56,6 +67,16 @@ int OnInit()
 void OnDeinit(const int reason)
 {
     Print("In OnDeinit for reason: ", reason);   
+    ReleaseIndicator(_maHandle);
+}
+
+void ReleaseIndicator(int& handle) {
+    if (handle != INVALID_HANDLE && IndicatorRelease(handle)) {
+        handle = INVALID_HANDLE;
+    }
+    else {
+        Print("IndicatorRelease() failed. Error ", GetLastError());
+    }
 }
 
 //+------------------------------------------------------------------+
@@ -83,6 +104,7 @@ void OnTick()
     }
 
     int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
+    int maDataCount = CopyBuffer(_maHandle, 0, 0, 3, _maData);
 
     // -------------------- EXITS --------------------
 
@@ -182,6 +204,8 @@ bool HasBullishSignal()
     Current candle close < previous candle high
     Current (high-close) / (high-low) > 0.6 and (high - open) / (high-low) > 0.6
     Current low > previous low 
+
+    Close must be above moving average (200 period by default)
     */
     if (_prices[1].high <= _prices[2].high) return false;
     if (_prices[1].close >= _prices[2].high) return false;
@@ -194,7 +218,16 @@ bool HasBullishSignal()
 
     if (_prices[1].low <= _prices[2].low) return false;
 
-    return true;
+    bool maSignal = false;
+    if (!_useMA) {
+        // Ignore if we don't care
+        maSignal = true;
+    }
+    else {
+        maSignal = _prices[1].close > _maData[0];
+    }
+
+    return maSignal;
 }
 
 bool HasBearishSignal()
@@ -204,6 +237,8 @@ bool HasBearishSignal()
     Current candle close < previous candle low
     Current (high-close) / (high-low) > 0.6 and (high - open) / (high-low) > 0.6
     Current high < previous high
+    
+    Price must be below moving average (200 period by default)
     */
     if (_prices[1].close >= _prices[1].open) return false;
     if (_prices[1].low >= _prices[2].low) return false;
@@ -214,7 +249,16 @@ bool HasBearishSignal()
 
     if (_prices[1].high > _prices[2].high) return false;
 
-    return true;
+    bool maSignal = false;
+    if (!_useMA) {
+        // Ignore if we don't care
+        maSignal = true;
+    }
+    else {
+        maSignal = _prices[1].close < _maData[0];
+    }
+
+    return maSignal;
 }
 
 void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit)
