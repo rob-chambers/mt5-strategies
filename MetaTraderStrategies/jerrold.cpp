@@ -40,6 +40,7 @@ double _currentBid, _currentAsk;
 int _maHandle;
 double _maData[];
 double _trailing_stop;
+double _recentHigh;
 
 //+------------------------------------------------------------------+
 //| Expert initialisation function                                   |
@@ -129,6 +130,8 @@ void OnTick()
     // -------------------- ENTRIES --------------------  
     if (PositionSelect(_Symbol) == false) // We have no open positions
     {
+        _recentHigh = 0;
+
         numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
 
         stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
@@ -339,11 +342,12 @@ bool CheckToModifyPositions()
 
 bool LongModified()
 {
-    bool res = false;
     if (_inpTrailingStopPips <= 0) return false;
-    
-    if (_symbol.Bid() - _position.PriceOpen() > _trailing_stop) {
-        double sl = NormalizeDouble(_symbol.Bid() - _trailing_stop, _symbol.Digits());
+
+    bool res = false;
+    if (_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh) {
+        _recentHigh = _prices[1].high;
+        double sl = NormalizeDouble(_recentHigh - _trailing_stop, _symbol.Digits());
         double tp = _position.TakeProfit();
         if (_position.StopLoss() < sl || _position.StopLoss() == 0.0) {
             //--- modify position
