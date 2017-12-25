@@ -41,6 +41,7 @@ int _maHandle;
 double _maData[];
 double _trailing_stop;
 double _recentHigh;
+double _recentLow;
 
 //+------------------------------------------------------------------+
 //| Expert initialisation function                                   |
@@ -131,6 +132,7 @@ void OnTick()
     if (PositionSelect(_Symbol) == false) // We have no open positions
     {
         _recentHigh = 0;
+        _recentLow = 999999;
 
         numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
 
@@ -332,8 +334,8 @@ bool CheckToModifyPositions()
             //--- try to close or modify short position
             /*if (ShortClosed())
                 return(true);*/
-            /*if (ShortModified())
-                return(true);*/
+            if (ShortModified())
+                return(true);
         }
     }
 
@@ -353,6 +355,34 @@ bool LongModified()
             //--- modify position
             if (_trade.PositionModify(Symbol(), sl, tp)) {
                 printf("Long position by %s to be modified", Symbol());
+            }
+            else {
+                printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
+                printf("Modify parameters : SL=%f,TP=%f", sl, tp);
+            }
+
+            //--- modified and must exit from expert
+            res = true;
+        }
+    }
+
+    return (res);
+}
+
+bool ShortModified()
+{
+    if (_inpTrailingStopPips <= 0) return false;
+
+    bool res = false;
+    if (_prices[1].low < _prices[2].low && _prices[1].low < _recentLow) {
+        _recentLow = _prices[1].low;
+
+        double sl = NormalizeDouble(_recentLow + _trailing_stop, _symbol.Digits());
+        double tp = _position.TakeProfit();
+        if (_position.StopLoss() > sl || _position.StopLoss() == 0.0) {
+            //--- modify position
+            if (_trade.PositionModify(Symbol(), sl, tp)) {
+                printf("Short position by %s to be modified", Symbol());
             }
             else {
                 printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
