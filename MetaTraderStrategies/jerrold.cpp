@@ -7,40 +7,48 @@
 
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh> 
-
-//--- Input Variables (Accessible from MetaTrader 5)
+#include <Trade\PositionInfo.mqh>
 
 // Money management / risk parameters
-input double   _lots = 1;
-input int      _slippage = 2;
-input double   _stopLossPips = 30;
-input bool     _useTakeProfit = true;
-input double   _takeProfitPips = 40;
+input double   _inpLots = 1;                // Number of lots to trade
+input double   _inpStopLossPips = 30;       // Initial stop loss in pips
+input bool     _inpUseTakeProfit = true;    // Whether to use a take profit order or not
+input double   _inpTakeProfitPips = 40;     // Take profit level in pips
+input int      _inpTrailingStopPips = 30;   // Trailing stop in pips (0 to not use a trailing stop)
 
 // Pin Bar parameters
-input double   _pinbarThreshhold = 0.6;
+input double   _inpPinbarThreshhold = 0.6;  // Length of candle wick vs range 
 
 // MA parameters
-input bool     _useMA = false;
-input ENUM_TIMEFRAMES _movingAveragePeriodType = PERIOD_M15;
-input int      _movingAveragePeriodAmount = 200;
+input bool     _inpUseMA = false;                                 // Whether to only trade based on moving average rules or not
+input ENUM_TIMEFRAMES _inpMovingAveragePeriodType = PERIOD_M15;   // Moving average period
+input int      _inpMovingAveragePeriodAmount = 200;               // Moving average timeframe
+
+// Go Long / short parameters
+input bool      _inpGoLong = true;          // Whether to enter long trades or not
+input bool      _inpGoShort = true;         // Whether to enter short trades or not
 
 //--- Service Variables (Only accessible from the MetaEditor)
 
-CSymbolInfo    m_symbol;                     // symbol info object
+CSymbolInfo    _symbol;                     // symbol info object
+CPositionInfo  _position;                   // trade position object
 CTrade _trade;
 MqlRates _prices[];
-int _adjustedPoints;
+double _adjustedPoints;
+int _digits_adjust;
 double _currentBid, _currentAsk;
 int _maHandle;
 double _maData[];
+double _trailing_stop;
 
 //+------------------------------------------------------------------+
 //| Expert initialisation function                                   |
 //+------------------------------------------------------------------+
 int OnInit()
 {
-    if (!m_symbol.Name(Symbol())) // sets symbol name
+    Print("In OnInit");
+
+    if (!_symbol.Name(Symbol())) // sets symbol name
         return(INIT_FAILED);
     
     if (!RefreshRates()) {
@@ -50,14 +58,18 @@ int OnInit()
 
     ArraySetAsSeries(_prices, true);
     ArraySetAsSeries(_maData, true);
-    _maHandle = iMA(Symbol(), _movingAveragePeriodType, _movingAveragePeriodAmount, 0, MODE_SMA, PRICE_CLOSE);
+    _maHandle = iMA(Symbol(), _inpMovingAveragePeriodType, _inpMovingAveragePeriodAmount, 0, MODE_SMA, PRICE_CLOSE);
 
+    _digits_adjust = 1;
     if (_Digits == 5 || _Digits == 3 || _Digits == 1) {
-        _adjustedPoints = 10;
+        _digits_adjust = 10;
     }
-    else {
-        _adjustedPoints = 1; // To account for 5 digit brokers
-    }
+
+    _adjustedPoints = _symbol.Point() * _digits_adjust;
+
+    printf("DA=%f, adjusted points = %f", _digits_adjust, _adjustedPoints);
+
+    _trailing_stop = _inpTrailingStopPips * _adjustedPoints;
 
     return(INIT_SUCCEEDED);
 }
@@ -110,54 +122,55 @@ void OnTick()
 
     if (PositionSelect(_Symbol) == true) // We have an open position
     {
+        CheckToModifyPositions();
         return;
     }
 
     // -------------------- ENTRIES --------------------  
     if (PositionSelect(_Symbol) == false) // We have no open positions
     {
-        int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
+        numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
 
-        stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _adjustedPoints; // Defining minimum StopLevel
-        if (_stopLossPips < stopLevelPips) {
+        stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+        if (_inpStopLossPips < stopLevelPips) {
             stopLossPipsFinal = stopLevelPips;
         }
         else {
-            stopLossPipsFinal = _stopLossPips;
+            stopLossPipsFinal = _inpStopLossPips;
         }
 
-        if (_takeProfitPips < stopLevelPips) {
+        if (_inpTakeProfitPips < stopLevelPips) {
             takeProfitPipsFinal = stopLevelPips;
         }
         else {
-            takeProfitPipsFinal = _takeProfitPips;
+            takeProfitPipsFinal = _inpTakeProfitPips;
         }
 
         double limitPrice;
-        if (HasBullishSignal()) {
+        if (_inpGoLong && HasBullishSignal()) {
             limitPrice = _currentAsk;
-            stopLossLevel = limitPrice - stopLossPipsFinal * _Point * _adjustedPoints;
-            if (_useTakeProfit) {
-                takeProfitLevel = limitPrice + takeProfitPipsFinal * _Point * _adjustedPoints;
+            stopLossLevel = limitPrice - stopLossPipsFinal * _Point * _digits_adjust;
+            if (_inpUseTakeProfit) {
+                takeProfitLevel = limitPrice + takeProfitPipsFinal * _Point * _digits_adjust;
             }
             else {
                 takeProfitLevel = 0.0;
             }
 
-            OpenPosition(_Symbol, ORDER_TYPE_BUY, _lots, limitPrice, stopLossLevel, takeProfitLevel);
+            OpenPosition(_Symbol, ORDER_TYPE_BUY, _inpLots, limitPrice, stopLossLevel, takeProfitLevel);
         }
-        else if (HasBearishSignal()) {
+        else if (_inpGoShort && HasBearishSignal()) {
             limitPrice = _currentBid;
 
-            stopLossLevel = limitPrice + stopLossPipsFinal * _Point * _adjustedPoints;
-            if (_useTakeProfit) {
-                takeProfitLevel = limitPrice - takeProfitPipsFinal * _Point * _adjustedPoints;
+            stopLossLevel = limitPrice + stopLossPipsFinal * _Point * _digits_adjust;
+            if (_inpUseTakeProfit) {
+                takeProfitLevel = limitPrice - takeProfitPipsFinal * _Point * _digits_adjust;
             }
             else {
                 takeProfitLevel = 0.0;
             }
 
-            OpenPosition(_Symbol, ORDER_TYPE_SELL, _lots, limitPrice, stopLossLevel, takeProfitLevel);
+            OpenPosition(_Symbol, ORDER_TYPE_SELL, _inpLots, limitPrice, stopLossLevel, takeProfitLevel);
         }
     }
 }
@@ -168,7 +181,7 @@ void OnTick()
 datetime iTime(const int index, string symbol = NULL, ENUM_TIMEFRAMES timeframe = PERIOD_CURRENT)
 {
     if (symbol == NULL)
-        symbol = m_symbol.Name();
+        symbol = _symbol.Name();
     if (timeframe == 0)
         timeframe = Period();
     datetime Time[1];
@@ -184,15 +197,15 @@ datetime iTime(const int index, string symbol = NULL, ENUM_TIMEFRAMES timeframe 
 bool RefreshRates()
 {
     //--- refresh rates
-    if (!m_symbol.RefreshRates())
+    if (!_symbol.RefreshRates())
         return(false);
     //--- protection against the return value of "zero"
-    if (m_symbol.Ask() == 0 || m_symbol.Bid() == 0)
+    if (_symbol.Ask() == 0 || _symbol.Bid() == 0)
         return(false);
     //---
 
-    _currentBid = m_symbol.Bid();
-    _currentAsk = m_symbol.Ask();
+    _currentBid = _symbol.Bid();
+    _currentAsk = _symbol.Ask();
 
     return(true);
 }
@@ -211,15 +224,15 @@ bool HasBullishSignal()
     if (_prices[1].close >= _prices[2].high) return false;
 
     double currentRange = _prices[1].high - _prices[1].low;
-    if (!((_prices[1].high - _prices[1].close) / currentRange > _pinbarThreshhold &&
-        (_prices[1].high - _prices[1].open) / currentRange > _pinbarThreshhold)) {
+    if (!((_prices[1].high - _prices[1].close) / currentRange > _inpPinbarThreshhold &&
+        (_prices[1].high - _prices[1].open) / currentRange > _inpPinbarThreshhold)) {
         return false;
     }
 
     if (_prices[1].low <= _prices[2].low) return false;
 
     bool maSignal = false;
-    if (!_useMA) {
+    if (!_inpUseMA) {
         // Ignore if we don't care
         maSignal = true;
     }
@@ -245,12 +258,12 @@ bool HasBearishSignal()
     if (_prices[1].close >= _prices[2].low) return false;
 
     double currentRange = _prices[1].high - _prices[1].low;
-    if (!((_prices[1].close - _prices[1].low) / currentRange > _pinbarThreshhold)) return false;
+    if (!((_prices[1].close - _prices[1].low) / currentRange > _inpPinbarThreshhold)) return false;
 
     if (_prices[1].high > _prices[2].high) return false;
 
     bool maSignal = false;
-    if (!_useMA) {
+    if (!_inpUseMA) {
         // Ignore if we don't care
         maSignal = true;
     }
@@ -299,5 +312,54 @@ void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, doubl
             return;
         }
     }
+}
+
+bool CheckToModifyPositions()
+{
+    if (_inpTrailingStopPips == 0) return false;
+    if (_position.Select(Symbol())) {
+        if (_position.PositionType() == POSITION_TYPE_BUY) {
+            //--- try to close or modify long position
+            /*if (LongClosed())
+                return(true);*/
+            if (LongModified())
+                return(true);
+        }
+        else {
+            //--- try to close or modify short position
+            /*if (ShortClosed())
+                return(true);*/
+            /*if (ShortModified())
+                return(true);*/
+        }
+    }
+
+    return false;
+}
+
+bool LongModified()
+{
+    bool res = false;
+    if (_inpTrailingStopPips <= 0) return false;
+    
+    if (_symbol.Bid() - _position.PriceOpen() > _trailing_stop) {
+        double sl = NormalizeDouble(_symbol.Bid() - _trailing_stop, _symbol.Digits());
+        double tp = _position.TakeProfit();
+        if (_position.StopLoss() < sl || _position.StopLoss() == 0.0) {
+            //--- modify position
+            if (_trade.PositionModify(Symbol(), sl, tp)) {
+                printf("Long position by %s to be modified", Symbol());
+            }
+            else {
+                printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
+                printf("Modify parameters : SL=%f,TP=%f", sl, tp);
+            }
+
+            //--- modified and must exit from expert
+            res = true;
+        }
+    }
+
+    return (res);
 }
 //+------------------------------------------------------------------+
