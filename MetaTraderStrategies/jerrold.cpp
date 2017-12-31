@@ -17,7 +17,8 @@ input double   _inpTakeProfitPips = 40;     // Take profit level in pips
 input int      _inpTrailingStopPips = 30;   // Trailing stop in pips (0 to not use a trailing stop)
 
 // Pin Bar parameters
-input double   _inpPinbarThreshhold = 0.6;  // Length of candle wick vs range 
+input double   _inpPinbarThreshhold = 0.6;  // Length of candle wick vs range
+input double   _inpPinbarRangeThreshhold = 2;
 
 // MA parameters
 input bool     _inpUseMA = false;                                 // Whether to only trade based on moving average rules or not
@@ -215,7 +216,7 @@ bool RefreshRates()
     return(true);
 }
 
-bool HasBullishSignal()
+bool HasBearishSignal()
 {
     /* Rules:
     Current candle high > previous candle high
@@ -224,6 +225,9 @@ bool HasBullishSignal()
     Current low > previous low 
 
     Close must be above moving average (200 period by default)
+
+    For significant bars, check range of last 3 bars.  Current bar range > 2x
+
     */
     if (_prices[1].high <= _prices[2].high) return false;
     if (_prices[1].close >= _prices[2].high) return false;
@@ -245,10 +249,17 @@ bool HasBullishSignal()
         maSignal = _prices[1].close > _maData[0];
     }
 
+    if (maSignal) {
+        double avg = (_prices[2].high - _prices[2].low + _prices[3].high - _prices[3].low + _prices[4].high - _prices[4].low) / 3;
+        if (currentRange / _inpPinbarRangeThreshhold < avg) {
+            return false;
+        }
+    }
+
     return maSignal;
 }
 
-bool HasBearishSignal()
+bool HasBullishSignal()
 {   
     /* Rules:
     Current candle low < previous candle low
@@ -274,6 +285,11 @@ bool HasBearishSignal()
     }
     else {
         maSignal = _prices[1].close < _maData[0];
+    }
+
+    double avg = (_prices[2].high - _prices[2].low + _prices[3].high - _prices[3].low + _prices[4].high - _prices[4].low) / 3;
+    if (currentRange / _inpPinbarRangeThreshhold < avg) {
+        return false;
     }
 
     return maSignal;

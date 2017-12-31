@@ -1,0 +1,3 @@
+copy "CDerived.cpp" "C:\Users\rob\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\Advisors\rob\CDerived.mqh"
+copy "CExpertBase.cpp" "C:\Users\rob\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\Advisors\rob\CExpertBase.mqh"
+copy "main.cpp" "C:\Users\rob\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075\MQL5\Experts\Advisors\rob\main.mq5"
