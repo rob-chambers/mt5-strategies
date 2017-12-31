@@ -14,13 +14,19 @@ public:
         double   inpStopLossPips,
         bool     inpUseTakeProfit,
         double   inpTakeProfitPips,
-        int      inpTrailingStopPips
+        int      inpTrailingStopPips,
+        bool     inpGoLong,
+        bool     inpGoShort
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
+    virtual bool              HasBullishSignal();
+    virtual bool              HasBearishSignal();
 
 protected:
-    CSymbolInfo    _symbol;                     // symbol info object
+    CSymbolInfo _symbol;
+    CPositionInfo _position;
+    CTrade _trade;
     MqlRates _prices[];
     int _digits_adjust;
     double _adjustedPoints;
@@ -31,11 +37,19 @@ protected:
     bool     _inpUseTakeProfit;
     double   _inpTakeProfitPips;
     int      _inpTrailingStopPips;
+    bool     _inpGoLong;
+    bool     _inpGoShort;
 
 private:
     bool RefreshRates();
     datetime iTime(const int index, string symbol = NULL, ENUM_TIMEFRAMES timeframe = PERIOD_CURRENT);
     bool CheckToModifyPositions();
+    void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit);
+    bool LongModified();
+    bool ShortModified();
+
+    double _recentHigh;
+    double _recentLow;
 };
 
 CExpertBase::CExpertBase(void)
@@ -51,10 +65,11 @@ int CExpertBase::Init(
     double   stopLossPips,
     bool     useTakeProfit,
     double   takeProfitPips,
-    int      trailingStopPips
+    int      trailingStopPips,
+    bool     inpGoLong,
+    bool     inpGoShort
 )
 {
-    Print("In base class OnInit");
     if (!_symbol.Name(Symbol())) // sets symbol name
         return(INIT_FAILED);
 
@@ -79,6 +94,8 @@ int CExpertBase::Init(
     _inpUseTakeProfit = useTakeProfit;
     _inpTakeProfitPips = takeProfitPips;
     _inpTrailingStopPips = trailingStopPips;
+    _inpGoLong = inpGoLong;
+    _inpGoShort = inpGoShort;
 
     _trailing_stop = trailingStopPips * _adjustedPoints;
 
@@ -99,7 +116,6 @@ void CExpertBase::Processing(void)
     datetime time_0 = iTime(0);
     if (time_0 == PrevBars) return;
 
-    Print("New bar found");
     PrevBars = time_0;
 
     double stopLossPipsFinal;
@@ -126,6 +142,9 @@ void CExpertBase::Processing(void)
     // -------------------- ENTRIES --------------------  
     if (PositionSelect(_Symbol) == false) // We have no open positions
     {
+        _recentHigh = 0;
+        _recentLow = 999999;
+
         numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
 
         stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
@@ -145,7 +164,6 @@ void CExpertBase::Processing(void)
 
         double limitPrice;
 
-        /*
         if (_inpGoLong && HasBullishSignal()) {
             limitPrice = _currentAsk;
             stopLossLevel = limitPrice - stopLossPipsFinal * _Point * _digits_adjust;
@@ -171,8 +189,6 @@ void CExpertBase::Processing(void)
 
             OpenPosition(_Symbol, ORDER_TYPE_SELL, _inpLots, limitPrice, stopLossLevel, takeProfitLevel);
         }
-
-        */
     }
 }
 
@@ -213,5 +229,128 @@ bool CExpertBase::RefreshRates()
 
 bool CExpertBase::CheckToModifyPositions()
 {
+    if (_inpTrailingStopPips == 0) return false;
+    if (_position.Select(Symbol())) {
+        if (_position.PositionType() == POSITION_TYPE_BUY) {
+            //--- try to close or modify long position
+            /*if (LongClosed())
+            return(true);*/
+            if (LongModified())
+                return true;
+        }
+        else {
+            //--- try to close or modify short position
+            /*if (ShortClosed())
+            return(true);*/
+            if (ShortModified())
+                return true;
+        }
+    }
+
     return false;
+}
+
+bool CExpertBase::LongModified()
+{
+    if (_inpTrailingStopPips <= 0) return false;
+
+    bool res = false;
+    if (_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh) {
+        _recentHigh = _prices[1].high;
+        double sl = NormalizeDouble(_recentHigh - _trailing_stop, _symbol.Digits());
+        double tp = _position.TakeProfit();
+        if (_position.StopLoss() < sl || _position.StopLoss() == 0.0) {
+            //--- modify position
+            if (_trade.PositionModify(Symbol(), sl, tp)) {
+                printf("Long position by %s to be modified", Symbol());
+            }
+            else {
+                printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
+                printf("Modify parameters : SL=%f,TP=%f", sl, tp);
+            }
+
+            //--- modified and must exit from expert
+            res = true;
+        }
+    }
+
+    return res;
+}
+
+bool CExpertBase::ShortModified()
+{
+    if (_inpTrailingStopPips <= 0) return false;
+
+    bool res = false;
+    if (_prices[1].low < _prices[2].low && _prices[1].low < _recentLow) {
+        _recentLow = _prices[1].low;
+
+        double sl = NormalizeDouble(_recentLow + _trailing_stop, _symbol.Digits());
+        double tp = _position.TakeProfit();
+        if (_position.StopLoss() > sl || _position.StopLoss() == 0.0) {
+            //--- modify position
+            if (_trade.PositionModify(Symbol(), sl, tp)) {
+                printf("Short position by %s to be modified", Symbol());
+            }
+            else {
+                printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
+                printf("Modify parameters : SL=%f,TP=%f", sl, tp);
+            }
+
+            //--- modified and must exit from expert
+            res = true;
+        }
+    }
+
+    return res;
+}
+
+bool CExpertBase::HasBullishSignal()
+{
+    return false;
+}
+
+bool CExpertBase::HasBearishSignal()
+{
+    return false;
+}
+
+void CExpertBase::OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit)
+{
+    string message;
+    string orderTypeMsg;
+
+    switch (orderType) {
+        case ORDER_TYPE_BUY:
+            orderTypeMsg = "Buy";
+            message = "Going long. Magic Number #" + (string)_trade.RequestMagic();
+            break;
+
+        case ORDER_TYPE_SELL:
+            orderTypeMsg = "Sell";
+            message = "Going short. Magic Number #" + (string)_trade.RequestMagic();
+            break;
+
+        case ORDER_TYPE_BUY_LIMIT:
+            orderTypeMsg = "Buy limit";
+            message = "Going long at " + (string)price + ". Magic Number #" + (string)_trade.RequestMagic();
+            break;
+
+        case ORDER_TYPE_SELL_LIMIT:
+            orderTypeMsg = "Sell limit";
+            message = "Going short at " + (string)price + ". Magic Number #" + (string)_trade.RequestMagic();
+            break;
+    }
+
+    if (_trade.PositionOpen(symbol, orderType, volume, price, stopLoss, takeProfit, message)) {
+        uint resultCode = _trade.ResultRetcode();
+        if (resultCode == TRADE_RETCODE_PLACED || resultCode == TRADE_RETCODE_DONE) {
+            Print("Entry rules: A ", orderTypeMsg, " order has been successfully placed with Ticket#: ", _trade.ResultOrder());
+        }
+        else {
+            Print("Entry rules: The ", orderTypeMsg, " order request could not be completed.  Result code: ", resultCode, ", Error: ", GetLastError());
+            ResetLastError();
+            return;
+        }
+    }
 }
