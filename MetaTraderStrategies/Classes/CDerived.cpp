@@ -15,7 +15,9 @@ public:
         bool     inpGoLong = true,
         bool     inpGoShort = true,
         double   inpPinbarThreshhold = 0.6,
-        double   inpPinbarRangeThreshhold = 1
+        double   inpPinbarRangeThreshhold = 1,
+        bool     inpAlertTerminalEnabled = true,
+        bool     inpAlertEmailEnabled = false
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -44,7 +46,9 @@ int CDerived::Init(
     bool     inpGoLong,
     bool     inpGoShort,
     double   inpPinbarThreshhold,
-    double   inpPinbarRangeThreshhold
+    double   inpPinbarRangeThreshhold,
+    bool     inpAlertTerminalEnabled,
+    bool     inpAlertEmailEnabled
     )
 {
     Print("In derived class OnInit");
@@ -53,7 +57,7 @@ int CDerived::Init(
     _inpPinbarThreshhold = inpPinbarThreshhold;
     _inpPinbarRangeThreshhold = inpPinbarRangeThreshhold;
 
-    return CExpertBase::Init(inpLots, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort);
+    return CExpertBase::Init(inpLots, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled);
 }
 
 void CDerived::Deinit(void)

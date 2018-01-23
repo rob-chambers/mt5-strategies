@@ -16,7 +16,9 @@ public:
         double   inpTakeProfitPips,
         int      inpTrailingStopPips,
         bool     inpGoLong,
-        bool     inpGoShort
+        bool     inpGoShort,
+        bool     inpAlertTerminalEnabled,
+        bool     inpAlertEmailEnabled
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -39,6 +41,8 @@ protected:
     int      _inpTrailingStopPips;
     bool     _inpGoLong;
     bool     _inpGoShort;
+    bool     _inpAlertTerminalEnabled;
+    bool     _inpAlertEmailEnabled;
 
 private:
     bool RefreshRates();
@@ -67,7 +71,9 @@ int CExpertBase::Init(
     double   takeProfitPips,
     int      trailingStopPips,
     bool     inpGoLong,
-    bool     inpGoShort
+    bool     inpGoShort,
+    bool     inpAlertTerminalEnabled,
+    bool     inpAlertEmailEnabled
 )
 {
     if (!_symbol.Name(Symbol())) // sets symbol name
@@ -98,6 +104,9 @@ int CExpertBase::Init(
     _inpGoShort = inpGoShort;
 
     _trailing_stop = trailingStopPips * _adjustedPoints;
+
+    _inpAlertTerminalEnabled = inpAlertTerminalEnabled;
+    _inpAlertEmailEnabled = inpAlertEmailEnabled;
 
     printf("DA=%f, adjusted points = %f", _digits_adjust, _adjustedPoints);
 
@@ -340,6 +349,10 @@ void CExpertBase::OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double 
             orderTypeMsg = "Sell limit";
             message = "Going short at " + (string)price + ". Magic Number #" + (string)_trade.RequestMagic();
             break;
+    }
+
+    if (_inpAlertTerminalEnabled) {
+        Alert(message);
     }
 
     if (_trade.PositionOpen(symbol, orderType, volume, price, stopLoss, takeProfit, message)) {

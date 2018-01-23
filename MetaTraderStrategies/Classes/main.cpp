@@ -20,6 +20,10 @@ input int      _inpTrailingStopPips = 0;   // Trailing stop in pips (0 to not us
 input bool      _inpGoLong = true;          // Whether to enter long trades or not
 input bool      _inpGoShort = true;         // Whether to enter short trades or not
 
+// Alert parameters
+input bool      _inpAlertTerminalEnabled = true;  // Whether to show terminal alerts or not
+input bool      _inpAlertEmailEnabled = false;  // Whether to alert via email or not
+
 // Pin Bar parameters
 input double   _inpPinbarThreshhold = 0.6;  // Length of candle wick vs range
 input double   _inpPinbarRangeThreshhold = 2; // Range of pin bar compared to historical range
@@ -40,7 +44,9 @@ int OnInit()
         _inpGoLong,
         _inpGoShort,
         _inpPinbarThreshhold,
-        _inpPinbarRangeThreshhold);
+        _inpPinbarRangeThreshhold,
+        _inpAlertTerminalEnabled,
+        _inpAlertEmailEnabled);
 }
 //+------------------------------------------------------------------+
 //| Expert deinitialization function                                 |
