@@ -75,20 +75,24 @@ bool CDerived::HasBullishSignal()
 {
     /* Rules:
     Current candle low < previous candle low
-    Current candle close < previous candle low
-    Current (high-close) / (high-low) > 0.6 and (high - open) / (high-low) > 0.6
-    Current high < previous high
+    Current candle close > previous candle low
+    Not a higher high (Current high <= previous high)
+    Current candle has a long wick pointing down
 
-    Price must be below moving average (200 period by default)
+    Close must be above moving average (200 period by default)
     */
-    if (_prices[1].close >= _prices[1].open) return false;
-    if (_prices[1].low >= _prices[2].low) return false;
-    if (_prices[1].close >= _prices[2].low) return false;
+    if (!(_prices[1].low < _prices[2].low)) return false;
+    if (!(_prices[1].close > _prices[2].low)) return false;
+    if (_prices[1].high > _prices[2].high) return false;
+
+    double closeFromHigh = _prices[1].high - _prices[1].close;
+    double openFromHigh = _prices[1].high - _prices[1].open;
 
     double currentRange = _prices[1].high - _prices[1].low;
-    if (!((_prices[1].close - _prices[1].low) / currentRange > _inpPinbarThreshhold)) return false;
-
-    if (_prices[1].high > _prices[2].high) return false;
+    if (!((closeFromHigh / currentRange <= (1 - _inpPinbarThreshhold)) &&
+        (openFromHigh / currentRange <= (1 - _inpPinbarThreshhold)))) {
+        return false;
+    }
 
     /*
     bool maSignal = false;
@@ -114,24 +118,26 @@ bool CDerived::HasBearishSignal()
     /* Rules:
     Current candle high > previous candle high
     Current candle close < previous candle high
-    Current (high-close) / (high-low) > 0.6 and (high - open) / (high-low) > 0.6
-    Current low > previous low
+    Not a lower low (Current low >= previous low)
+    Current candle has a long wick pointing up
 
-    Close must be above moving average (200 period by default)
+    Close must be below moving average (200 period by default)
 
     For significant bars, check range of last 3 bars.  Current bar range > 2x
 
     */
-    if (_prices[1].high <= _prices[2].high) return false;
-    if (_prices[1].close >= _prices[2].high) return false;
+    if (!(_prices[1].high > _prices[2].high)) return false;
+    if (!(_prices[1].close < _prices[2].high)) return false;
+    if (_prices[1].low < _prices[2].low) return false;
+
+    double closeFromHigh = _prices[1].high - _prices[1].close;
+    double openFromHigh = _prices[1].high - _prices[1].open;
 
     double currentRange = _prices[1].high - _prices[1].low;
-    if (!((_prices[1].high - _prices[1].close) / currentRange > _inpPinbarThreshhold &&
-        (_prices[1].high - _prices[1].open) / currentRange > _inpPinbarThreshhold)) {
+    if (!((closeFromHigh / currentRange >= _inpPinbarThreshhold) &&
+        (openFromHigh / currentRange >= _inpPinbarThreshhold))) {
         return false;
     }
-
-    if (_prices[1].low <= _prices[2].low) return false;
 
     /*
     bool maSignal = false;
@@ -144,10 +150,12 @@ bool CDerived::HasBearishSignal()
     }
     */
 
+    /*
     double avg = (_prices[2].high - _prices[2].low + _prices[3].high - _prices[3].low + _prices[4].high - _prices[4].low) / 3;
     if (currentRange / _inpPinbarRangeThreshhold < avg) {
         return false;
     }
+    */
 
     return true;
 }

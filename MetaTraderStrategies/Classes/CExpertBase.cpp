@@ -44,6 +44,9 @@ protected:
     bool     _inpAlertTerminalEnabled;
     bool     _inpAlertEmailEnabled;
 
+    virtual void NewBarAndNoCurrentPositions();
+    virtual bool RecentlyClosedTrade();
+
 private:
     bool RefreshRates();
     datetime iTime(const int index, string symbol = NULL, ENUM_TIMEFRAMES timeframe = PERIOD_CURRENT);
@@ -122,6 +125,7 @@ void CExpertBase::Processing(void)
 {
     //--- we work only at the time of the birth of new bar
     static datetime PrevBars = 0;
+
     datetime time_0 = iTime(0);
     if (time_0 == PrevBars) return;
 
@@ -138,7 +142,7 @@ void CExpertBase::Processing(void)
         return;
     }
 
-    int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
+    int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 40, _prices);
 
     // -------------------- EXITS --------------------
 
@@ -151,10 +155,14 @@ void CExpertBase::Processing(void)
     // -------------------- ENTRIES --------------------  
     if (PositionSelect(_Symbol) == false) // We have no open positions
     {
+        if (RecentlyClosedTrade()) {
+            return;
+        }
+
         _recentHigh = 0;
         _recentLow = 999999;
 
-        numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 10, _prices); // Collects data from shift 0 to shift 9
+        numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 40, _prices);
 
         stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
         if (_inpStopLossPips < stopLevelPips) {
@@ -172,6 +180,8 @@ void CExpertBase::Processing(void)
         }
 
         double limitPrice;
+
+        NewBarAndNoCurrentPositions();
 
         if (_inpGoLong && HasBullishSignal()) {
             limitPrice = _currentAsk;
@@ -199,6 +209,40 @@ void CExpertBase::Processing(void)
             OpenPosition(_Symbol, ORDER_TYPE_SELL, _inpLots, limitPrice, stopLossLevel, takeProfitLevel);
         }
     }
+}
+
+void CExpertBase::NewBarAndNoCurrentPositions()
+{
+    Print("In base class NewBarAndNoCurrentPositions");
+}
+
+bool CExpertBase::RecentlyClosedTrade()
+{
+    datetime to = TimeCurrent();
+
+    // Request last 15 minutes of order history
+    datetime from = to - 60 * 15;
+
+    if (!HistorySelect(from, to)) {
+        Print("Failed to retrieve order history");
+        return false;
+    }
+
+    uint orderCount = HistoryOrdersTotal();
+    if (orderCount <= 0) return false;
+
+    ulong ticket;
+    //--- return order ticket by its position in the list 
+    if ((ticket = HistoryOrderGetTicket(orderCount - 1)) > 0) {
+        if (HistoryOrderGetString(ticket, ORDER_SYMBOL) == _symbol.Name()) {
+            if (HistoryOrderGetInteger(ticket, ORDER_TYPE) == ORDER_TYPE_SELL) {
+                Print("We had a recent sell order so we'll wait a bit");
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 ////+------------------------------------------------------------------+ 
@@ -239,21 +283,24 @@ bool CExpertBase::RefreshRates()
 bool CExpertBase::CheckToModifyPositions()
 {
     if (_inpTrailingStopPips == 0) return false;
-    if (_position.Select(Symbol())) {
-        if (_position.PositionType() == POSITION_TYPE_BUY) {
-            //--- try to close or modify long position
-            /*if (LongClosed())
-            return(true);*/
-            if (LongModified())
-                return true;
-        }
-        else {
-            //--- try to close or modify short position
-            /*if (ShortClosed())
-            return(true);*/
-            if (ShortModified())
-                return true;
-        }
+
+    if (!_position.Select(Symbol())) {
+        return false;
+    }
+
+    if (_position.PositionType() == POSITION_TYPE_BUY) {
+        //--- try to close or modify long position
+        /*if (LongClosed())
+        return(true);*/
+        if (LongModified())
+            return true;
+    }
+    else {
+        //--- try to close or modify short position
+        /*if (ShortClosed())
+        return(true);*/
+        if (ShortModified())
+            return true;
     }
 
     return false;
