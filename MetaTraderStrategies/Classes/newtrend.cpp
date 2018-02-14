@@ -39,6 +39,10 @@ input int       _inpADXPeriod = 14;         // The number of bars used to calcul
 input int       _inpBarCountInRange = 10;   // The number of bars that must have an ADX value lower than the threshold
 input int       _inpADXThreshold = 30;      // The ADX threshold value used to determine whether we are in a range or not
 
+input bool      _inpFilterByMA = true;              // Whether to take into account the Moving Average rule
+input ENUM_TIMEFRAMES _inpMAPeriodType = PERIOD_H1; // The time frame of the moving average
+input int _inpMAPeriodAmount = 21;
+
 CNewTrend derived;
 
 //+------------------------------------------------------------------+
@@ -62,7 +66,10 @@ int OnInit()
         _inpFilterByADX,
         _inpADXPeriod,
         _inpBarCountInRange,
-        _inpADXThreshold
+        _inpADXThreshold,
+        _inpFilterByMA,
+        _inpMAPeriodType,
+        _inpMAPeriodAmount
         );
 }
 //+------------------------------------------------------------------+

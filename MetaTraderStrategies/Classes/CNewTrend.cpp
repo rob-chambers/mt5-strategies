@@ -22,7 +22,10 @@ public:
         bool     inpFilterByADX = true,
         int      inpADXPeriod = 14,
         int      inpBarCountInRange = 10,
-        int      inpADXThreshold = 30
+        int      inpADXThreshold = 30,
+        bool     inpFilterByMA = true,
+        ENUM_TIMEFRAMES inpMAPeriodType = PERIOD_H1,
+        int inpMAPeriodAmount = 21
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -38,10 +41,17 @@ private:
     int _highsHandle;
     double _highsData[];
     double _adxData[];
+
     bool _inpFilterByADX;
     int _adxHandle;
     int _inpBarCountInRange;
     int _inpADXThreshold;
+
+    bool _inpFilterByMA;
+    ENUM_TIMEFRAMES _inpMAPeriodType;
+    int _inpMAPeriodAmount;
+    int _maHandle;
+    double _maData[];
 
     bool IsHighestHigh();
     bool InRange();
@@ -71,7 +81,10 @@ int CNewTrend::Init(
     bool     inpFilterByADX,
     int      inpADXPeriod,
     int      inpBarCountInRange,
-    int      inpADXThreshold
+    int      inpADXThreshold,
+    bool     inpFilterByMA,
+    ENUM_TIMEFRAMES inpMAPeriodType,
+    int      inpMAPeriodAmount
     )
 {
     Print("In derived class CNewTrend OnInit");
@@ -83,13 +96,22 @@ int CNewTrend::Init(
         Print("Custom initialisation for new trend EA");
         ArraySetAsSeries(_adxData, true);
 
+        _inpFilterByADX = inpFilterByADX;
+        _inpBarCountInRange = inpBarCountInRange;
+        _inpADXThreshold = inpADXThreshold;
+
+        _inpFilterByMA = inpFilterByMA;
+        _inpMAPeriodType = inpMAPeriodType;
+        _inpMAPeriodAmount = inpMAPeriodAmount;
+
         if (inpFilterByADX) {
             _adxHandle = iADX(Symbol(), PERIOD_CURRENT, inpADXPeriod);
         }
 
-        _inpFilterByADX = inpFilterByADX;
-        _inpBarCountInRange = inpBarCountInRange;
-        _inpADXThreshold = inpADXThreshold;
+        if (inpFilterByMA) {
+            ArraySetAsSeries(_maData, true);
+            _maHandle = iMA(_Symbol, inpMAPeriodType, _inpMAPeriodAmount, 0, MODE_SMA, PRICE_CLOSE);
+        }
     }
 
     return retCode;
@@ -103,6 +125,11 @@ void CNewTrend::Deinit(void)
         Print("Releasing ADX indicator handle");
         ReleaseIndicator(_adxHandle);
     }
+
+    if (_inpFilterByMA) {
+        Print("Releasing MA indicator handle");
+        ReleaseIndicator(_maHandle);
+    }
 }
 
 void CNewTrend::Processing(void)
@@ -115,6 +142,10 @@ void CNewTrend::NewBarAndNoCurrentPositions(void)
     int highsDataCount = CopyBuffer(_highsHandle, 0, 0, 40, _highsData);
     if (_adxHandle > 0) {
         int adxDataCount = CopyBuffer(_adxHandle, 0, 0, _inpBarCountInRange, _adxData);
+    }
+
+    if (_inpFilterByMA) {
+        int maDataCount = CopyBuffer(_maHandle, 0, 0, _inpMAPeriodAmount, _maData);
     }
 }
 
@@ -143,6 +174,10 @@ bool CNewTrend::HasBullishSignal()
         return false;
     }
     */
+
+    if (_inpFilterByMA && _prices[1].close < _maData[0]) {
+        return false;
+    }
 
     /*
     bool maSignal = false;
