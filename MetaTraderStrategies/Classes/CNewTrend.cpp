@@ -15,7 +15,8 @@ public:
         bool     inpGoLong = true,
         bool     inpGoShort = true,
         bool     inpAlertTerminalEnabled = true,
-        bool     inpAlertEmailEnabled = false
+        bool     inpAlertEmailEnabled = false,
+        int      inpMinutesToWaitAfterPositionClosed = 60
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -51,13 +52,14 @@ int CNewTrend::Init(
     bool     inpGoLong,
     bool     inpGoShort,
     bool     inpAlertTerminalEnabled,
-    bool     inpAlertEmailEnabled
+    bool     inpAlertEmailEnabled,
+    int      inpMinutesToWaitAfterPositionClosed
     )
 {
     Print("In derived class CNewTrend OnInit");
 
     // Non-base variables initialised here
-    return CExpertBase::Init(inpLots, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled);
+    return CExpertBase::Init(inpLots, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed);
 }
 
 void CNewTrend::Deinit(void)

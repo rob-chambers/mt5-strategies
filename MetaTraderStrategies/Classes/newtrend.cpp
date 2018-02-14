@@ -15,6 +15,7 @@ input double   _inpStopLossPips = 15;       // Initial stop loss in pips
 input bool     _inpUseTakeProfit = true;    // Whether to use a take profit order or not
 input double   _inpTakeProfitPips = 30;     // Take profit level in pips
 input int      _inpTrailingStopPips = 20;   // Trailing stop in pips (0 to not use a trailing stop)
+input int      _inpMinutesToWaitAfterPositionClosed = 60;   // Number of minutes to wait before a new signal is raised after the last position was closed
 
 // Go Long / short parameters
 input bool      _inpGoLong = true;          // Whether to enter long trades or not
@@ -44,7 +45,8 @@ int OnInit()
         _inpGoLong,
         _inpGoShort,
         _inpAlertTerminalEnabled,
-        _inpAlertEmailEnabled);
+        _inpAlertEmailEnabled,
+        _inpMinutesToWaitAfterPositionClosed);
 }
 //+------------------------------------------------------------------+
 //| Expert deinitialization function                                 |

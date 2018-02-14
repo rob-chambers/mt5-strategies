@@ -18,7 +18,8 @@ public:
         bool     inpGoLong,
         bool     inpGoShort,
         bool     inpAlertTerminalEnabled,
-        bool     inpAlertEmailEnabled
+        bool     inpAlertEmailEnabled,
+        int      inpMinutesToWaitAfterPositionClosed
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -43,6 +44,7 @@ protected:
     bool     _inpGoShort;
     bool     _inpAlertTerminalEnabled;
     bool     _inpAlertEmailEnabled;
+    int      _inpMinutesToWaitAfterPositionClosed;
 
     virtual void NewBarAndNoCurrentPositions();
     virtual bool RecentlyClosedTrade();
@@ -76,7 +78,8 @@ int CExpertBase::Init(
     bool     inpGoLong,
     bool     inpGoShort,
     bool     inpAlertTerminalEnabled,
-    bool     inpAlertEmailEnabled
+    bool     inpAlertEmailEnabled,
+    int      inpMinutesToWaitAfterPositionClosed
 )
 {
     if (!_symbol.Name(Symbol())) // sets symbol name
@@ -110,6 +113,7 @@ int CExpertBase::Init(
 
     _inpAlertTerminalEnabled = inpAlertTerminalEnabled;
     _inpAlertEmailEnabled = inpAlertEmailEnabled;
+    _inpMinutesToWaitAfterPositionClosed = inpMinutesToWaitAfterPositionClosed;
 
     printf("DA=%f, adjusted points = %f", _digits_adjust, _adjustedPoints);
 
@@ -219,9 +223,7 @@ void CExpertBase::NewBarAndNoCurrentPositions()
 bool CExpertBase::RecentlyClosedTrade()
 {
     datetime to = TimeCurrent();
-
-    // Request last 15 minutes of order history
-    datetime from = to - 60 * 15;
+    datetime from = to - 60 * _inpMinutesToWaitAfterPositionClosed;
 
     if (!HistorySelect(from, to)) {
         Print("Failed to retrieve order history");
@@ -236,7 +238,7 @@ bool CExpertBase::RecentlyClosedTrade()
     if ((ticket = HistoryOrderGetTicket(orderCount - 1)) > 0) {
         if (HistoryOrderGetString(ticket, ORDER_SYMBOL) == _symbol.Name()) {
             if (HistoryOrderGetInteger(ticket, ORDER_TYPE) == ORDER_TYPE_SELL) {
-                Print("We had a recent sell order so we'll wait a bit");
+                // Print("We had a recent sell order so we'll wait a bit");
                 return true;
             }
         }
