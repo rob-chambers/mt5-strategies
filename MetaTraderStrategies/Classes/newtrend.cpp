@@ -25,9 +25,19 @@ input bool      _inpGoShort = false;         // Whether to enter short trades or
 input bool      _inpAlertTerminalEnabled = true;  // Whether to show terminal alerts or not
 input bool      _inpAlertEmailEnabled = false;  // Whether to alert via email or not
 
+// Trading time parameters
+input int       _inpMinTradingHour = 7;     // The minimum hour of the day to trade (e.g. 7 for 7am)
+input int       _inpMaxTradingHour = 19;    // The maximum hour of the day to trade (e.g. 19 for 7pm)
+
 // Pin Bar parameters
 //input double   _inpPinbarThreshhold = 0.6;  // Length of candle wick vs range
 //input double   _inpPinbarRangeThreshhold = 2; // Range of pin bar compared to historical range
+
+// Technical parameters
+input bool      _inpFilterByADX = true;     // Whether to take into account the ADX indicator or not when providing signals
+input int       _inpADXPeriod = 14;         // The number of bars used to calculate the ADX
+input int       _inpBarCountInRange = 10;   // The number of bars that must have an ADX value lower than the threshold
+input int       _inpADXThreshold = 30;      // The ADX threshold value used to determine whether we are in a range or not
 
 CNewTrend derived;
 
@@ -46,7 +56,14 @@ int OnInit()
         _inpGoShort,
         _inpAlertTerminalEnabled,
         _inpAlertEmailEnabled,
-        _inpMinutesToWaitAfterPositionClosed);
+        _inpMinutesToWaitAfterPositionClosed,
+        _inpMinTradingHour,
+        _inpMaxTradingHour,
+        _inpFilterByADX,
+        _inpADXPeriod,
+        _inpBarCountInRange,
+        _inpADXThreshold
+        );
 }
 //+------------------------------------------------------------------+
 //| Expert deinitialization function                                 |

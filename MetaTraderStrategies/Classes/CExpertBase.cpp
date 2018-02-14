@@ -19,7 +19,9 @@ public:
         bool     inpGoShort,
         bool     inpAlertTerminalEnabled,
         bool     inpAlertEmailEnabled,
-        int      inpMinutesToWaitAfterPositionClosed
+        int      inpMinutesToWaitAfterPositionClosed,
+        int      inpMinTradingHour,
+        int      inpMaxTradingHour
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -45,7 +47,10 @@ protected:
     bool     _inpAlertTerminalEnabled;
     bool     _inpAlertEmailEnabled;
     int      _inpMinutesToWaitAfterPositionClosed;
+    int      _inpMinTradingHour;
+    int      _inpMaxTradingHour;
 
+    void ReleaseIndicator(int& handle);
     virtual void NewBarAndNoCurrentPositions();
     virtual bool RecentlyClosedTrade();
 
@@ -56,6 +61,7 @@ private:
     void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit);
     bool LongModified();
     bool ShortModified();
+    bool IsOutsideTradingHours();
 
     double _recentHigh;
     double _recentLow;
@@ -79,7 +85,9 @@ int CExpertBase::Init(
     bool     inpGoShort,
     bool     inpAlertTerminalEnabled,
     bool     inpAlertEmailEnabled,
-    int      inpMinutesToWaitAfterPositionClosed
+    int      inpMinutesToWaitAfterPositionClosed,
+    int      inpMinTradingHour,
+    int      inpMaxTradingHour
 )
 {
     if (!_symbol.Name(Symbol())) // sets symbol name
@@ -114,6 +122,8 @@ int CExpertBase::Init(
     _inpAlertTerminalEnabled = inpAlertTerminalEnabled;
     _inpAlertEmailEnabled = inpAlertEmailEnabled;
     _inpMinutesToWaitAfterPositionClosed = inpMinutesToWaitAfterPositionClosed;
+    _inpMinTradingHour = inpMinTradingHour;
+    _inpMaxTradingHour = inpMaxTradingHour;
 
     printf("DA=%f, adjusted points = %f", _digits_adjust, _adjustedPoints);
 
@@ -125,6 +135,15 @@ void CExpertBase::Deinit(void)
     Print("In base class OnDeInit");
 }
 
+void CExpertBase::ReleaseIndicator(int& handle) {
+    if (handle != INVALID_HANDLE && IndicatorRelease(handle)) {
+        handle = INVALID_HANDLE;
+    }
+    else {
+        Print("IndicatorRelease() failed. Error ", GetLastError());
+    }
+}
+
 void CExpertBase::Processing(void)
 {
     //--- we work only at the time of the birth of new bar
@@ -134,6 +153,10 @@ void CExpertBase::Processing(void)
     if (time_0 == PrevBars) return;
 
     PrevBars = time_0;
+
+    if (IsOutsideTradingHours()) {
+        return;
+    }
 
     double stopLossPipsFinal;
     double takeProfitPipsFinal;
@@ -415,4 +438,19 @@ void CExpertBase::OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double 
             return;
         }
     }
+}
+
+bool CExpertBase::IsOutsideTradingHours()
+{
+    MqlDateTime currentTime;
+    TimeToStruct(TimeCurrent(), currentTime);
+    if (_inpMinTradingHour > 0 && currentTime.hour < _inpMinTradingHour) {
+        return true;
+    }
+
+    if (_inpMaxTradingHour > 0 && currentTime.hour > _inpMaxTradingHour) {
+        return true;
+    }
+
+    return false;
 }
