@@ -2,6 +2,13 @@
 #include <Trade\SymbolInfo.mqh> 
 #include <Trade\PositionInfo.mqh>
 
+enum STOPLOSS_RULE
+{
+    StaticPipsValue,
+    CurrentBar5Pips,
+    CurrentBar2ATR
+};
+
 class CExpertBase
 {
 public:
@@ -10,19 +17,19 @@ public:
 
     virtual int Init
     (
-        double   inpLots,
-        bool     inpUseDynamicStops,
-        double   inpStopLossPips,
-        bool     inpUseTakeProfit,
-        double   inpTakeProfitPips,
-        int      inpTrailingStopPips,
-        bool     inpGoLong,
-        bool     inpGoShort,
-        bool     inpAlertTerminalEnabled,
-        bool     inpAlertEmailEnabled,
-        int      inpMinutesToWaitAfterPositionClosed,
-        int      inpMinTradingHour,
-        int      inpMaxTradingHour
+        double          inpLots,
+        STOPLOSS_RULE   inpStopLossRule,
+        double          inpStopLossPips,
+        bool            inpUseTakeProfit,
+        double          inpTakeProfitPips,
+        int             inpTrailingStopPips,
+        bool            inpGoLong,
+        bool            inpGoShort,
+        bool            inpAlertTerminalEnabled,
+        bool            inpAlertEmailEnabled,
+        int             inpMinutesToWaitAfterPositionClosed,
+        int             inpMinTradingHour,
+        int             inpMaxTradingHour
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -39,7 +46,7 @@ protected:
     double _trailing_stop;
     double _currentBid, _currentAsk;
     double   _inpLots;
-    bool     _inpUseDynamicStops;
+    STOPLOSS_RULE _inpStopLossRule;
     double   _inpStopLossPips;
     bool     _inpUseTakeProfit;
     double   _inpTakeProfitPips;
@@ -69,6 +76,8 @@ private:
 
     double _recentHigh;
     double _recentLow;
+    double _atrData[];
+    int _atrHandle;
 };
 
 CExpertBase::CExpertBase(void)
@@ -81,7 +90,7 @@ CExpertBase::~CExpertBase(void)
 
 int CExpertBase::Init(
     double   lots,
-    bool     inpUseDynamicStops,
+    STOPLOSS_RULE inpStopLossRule,
     double   stopLossPips,
     bool     useTakeProfit,
     double   takeProfitPips,
@@ -104,8 +113,9 @@ int CExpertBase::Init(
     }
 
     ArraySetAsSeries(_prices, true);
-    //ArraySetAsSeries(_maData, true);
+    ArraySetAsSeries(_atrData, true);
     //_maHandle = iMA(Symbol(), _inpMovingAveragePeriodType, _inpMovingAveragePeriodAmount, 0, MODE_SMA, PRICE_CLOSE);
+    _atrHandle = iATR(_Symbol, 0, 14);
 
     _digits_adjust = 1;
     if (_Digits == 5 || _Digits == 3 || _Digits == 1) {
@@ -115,7 +125,7 @@ int CExpertBase::Init(
     _adjustedPoints = _symbol.Point() * _digits_adjust;
 
     _inpLots = lots;
-    _inpUseDynamicStops = inpUseDynamicStops;
+    _inpStopLossRule = inpStopLossRule;
     _inpStopLossPips = stopLossPips;
     _inpUseTakeProfit = useTakeProfit;
     _inpTakeProfitPips = takeProfitPips;
@@ -139,6 +149,10 @@ int CExpertBase::Init(
 void CExpertBase::Deinit(void)
 {
     Print("In base class OnDeInit");
+    if (_atrHandle > 0) {
+        Print("Releasing ATR indicator handle");
+        ReleaseIndicator(_atrHandle);
+    }
 }
 
 void CExpertBase::ReleaseIndicator(int& handle) {
@@ -170,6 +184,7 @@ void CExpertBase::Processing(void)
     }
 
     int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 40, _prices);
+    int atrDataCount = CopyBuffer(_atrHandle, 0, 0, 3, _atrData);
 
     // -------------------- EXITS --------------------
 
@@ -451,20 +466,28 @@ double CExpertBase::CalculateStopLossLevelForBuyOrder()
 {
     double stopLossPipsFinal;
     double stopLossLevel;
+    double stopLevelPips;
 
-    if (_inpUseDynamicStops) {
-        stopLossLevel = _prices[1].low - _symbol.Point() * 5;
-    }
-    else {
-        double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
-        if (_inpStopLossPips < stopLevelPips) {
-            stopLossPipsFinal = stopLevelPips;
-        }
-        else {
-            stopLossPipsFinal = _inpStopLossPips;
-        }
+    switch (_inpStopLossRule) {
+        case StaticPipsValue:
+            stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+            if (_inpStopLossPips < stopLevelPips) {
+                stopLossPipsFinal = stopLevelPips;
+            }
+            else {
+                stopLossPipsFinal = _inpStopLossPips;
+            }
 
-        stopLossLevel = _currentAsk - stopLossPipsFinal * _Point * _digits_adjust;
+            stopLossLevel = _currentAsk - stopLossPipsFinal * _Point * _digits_adjust;
+            break;
+
+        case CurrentBar5Pips:
+            stopLossLevel = _prices[1].low - _symbol.Point() * 5;
+            break;
+
+        case CurrentBar2ATR:
+            stopLossLevel = _currentAsk - _atrData[0] * 2;
+            break;
     }
 
     double sl = NormalizeDouble(stopLossLevel, _symbol.Digits());
@@ -473,18 +496,33 @@ double CExpertBase::CalculateStopLossLevelForBuyOrder()
 
 double CExpertBase::CalculateStopLossLevelForSellOrder()
 {
-    double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
     double stopLossPipsFinal;
     double stopLossLevel;
+    double stopLevelPips;
 
-    if (_inpStopLossPips < stopLevelPips) {
-        stopLossPipsFinal = stopLevelPips;
+    switch (_inpStopLossRule) {
+        case StaticPipsValue:
+            stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+
+            if (_inpStopLossPips < stopLevelPips) {
+                stopLossPipsFinal = stopLevelPips;
+            }
+            else {
+                stopLossPipsFinal = _inpStopLossPips;
+            }
+
+            stopLossLevel = _currentBid + stopLossPipsFinal * _Point * _digits_adjust;
+            break;
+
+        case CurrentBar5Pips:
+            stopLossLevel = _prices[1].high + _symbol.Point() * 5;
+            break;
+
+        case CurrentBar2ATR:
+            stopLossLevel = _currentBid + _atrData[0] * 2;
+            break;
     }
-    else {
-        stopLossPipsFinal = _inpStopLossPips;
-    }
 
-    stopLossLevel = _currentBid + stopLossPipsFinal * _Point * _digits_adjust;
-
-    return stopLossLevel;
+    double sl = NormalizeDouble(stopLossLevel, _symbol.Digits());
+    return sl;
 }

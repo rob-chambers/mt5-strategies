@@ -11,7 +11,7 @@
 //| Input variables                                  |
 //+------------------------------------------------------------------+
 input double   _inpLots = 1;                // Number of lots to trade
-input bool     _inpUseDynamicStops = false; // Whether to use dynamic stops or not
+input STOPLOSS_RULE _inpStopLossRule = StaticPipsValue; // Stop Loss Rule
 input double   _inpStopLossPips = 15;       // Initial stop loss in pips
 input bool     _inpUseTakeProfit = true;    // Whether to use a take profit order or not
 input double   _inpTakeProfitPips = 30;     // Take profit level in pips
@@ -31,7 +31,9 @@ input int       _inpMinTradingHour = 7;     // The minimum hour of the day to tr
 input int       _inpMaxTradingHour = 19;    // The maximum hour of the day to trade (e.g. 19 for 7pm)
 
 // Technical parameters
-
+input bool      _inpFilterByMA = true;              // Whether to take into account the Moving Average rule
+input ENUM_TIMEFRAMES _inpMAPeriodType = PERIOD_D1; // The time frame of the moving average
+input int _inpMAPeriodAmount = 21;                  // The number of bars used for calculating the Moving Average
 
 COutsideBar derived;
 
@@ -42,7 +44,7 @@ int OnInit()
 {
     return derived.Init(
         _inpLots,
-        _inpUseDynamicStops,
+        _inpStopLossRule,
         _inpStopLossPips,
         _inpUseTakeProfit,
         _inpTakeProfitPips,
@@ -53,7 +55,10 @@ int OnInit()
         _inpAlertEmailEnabled,
         _inpMinutesToWaitAfterPositionClosed,
         _inpMinTradingHour,
-        _inpMaxTradingHour
+        _inpMaxTradingHour,
+        _inpFilterByMA,
+        _inpMAPeriodType,
+        _inpMAPeriodAmount
     );
 }
 //+------------------------------------------------------------------+
