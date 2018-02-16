@@ -8,6 +8,7 @@ public:
     virtual int Init
     (
         double   inpLots = 1,
+        bool     inpUseDynamicStops = false,
         double   inpStopLossPips = 30,
         bool     inpUseTakeProfit = true,
         double   inpTakeProfitPips = 40,
@@ -17,7 +18,10 @@ public:
         double   inpPinbarThreshhold = 0.6,
         double   inpPinbarRangeThreshhold = 1,
         bool     inpAlertTerminalEnabled = true,
-        bool     inpAlertEmailEnabled = false
+        bool     inpAlertEmailEnabled = false,
+        int      inpMinutesToWaitAfterPositionClosed = 60,
+        int      inpMinTradingHour = 7,
+        int      inpMaxTradingHour = 19
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -39,6 +43,7 @@ CDerived::~CDerived(void)
 
 int CDerived::Init(
     double   inpLots,
+    bool     inpUseDynamicStops,
     double   inpStopLossPips,
     bool     inpUseTakeProfit,
     double   inpTakeProfitPips,
@@ -48,7 +53,10 @@ int CDerived::Init(
     double   inpPinbarThreshhold,
     double   inpPinbarRangeThreshhold,
     bool     inpAlertTerminalEnabled,
-    bool     inpAlertEmailEnabled
+    bool     inpAlertEmailEnabled,
+    int      inpMinutesToWaitAfterPositionClosed,
+    int      inpMinTradingHour,
+    int      inpMaxTradingHour
     )
 {
     Print("In derived class OnInit");
@@ -57,7 +65,10 @@ int CDerived::Init(
     _inpPinbarThreshhold = inpPinbarThreshhold;
     _inpPinbarRangeThreshhold = inpPinbarRangeThreshhold;
 
-    return CExpertBase::Init(inpLots, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled);
+    return CExpertBase::Init(inpLots, inpUseDynamicStops, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips,
+        inpTrailingStopPips, inpGoLong, inpGoShort, 
+        inpAlertTerminalEnabled, inpAlertEmailEnabled,
+        inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
 }
 
 void CDerived::Deinit(void)

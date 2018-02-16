@@ -11,6 +11,7 @@
 //| Input variables                                  |
 //+------------------------------------------------------------------+
 input double   _inpLots = 1;                // Number of lots to trade
+input bool     _inpUseDynamicStops = false; // Whether to use dynamic stops or not
 input double   _inpStopLossPips = 15;       // Initial stop loss in pips
 input bool     _inpUseTakeProfit = true;    // Whether to use a take profit order or not
 input double   _inpTakeProfitPips = 30;     // Take profit level in pips
@@ -34,6 +35,7 @@ input int       _inpMaxTradingHour = 19;    // The maximum hour of the day to tr
 //input double   _inpPinbarRangeThreshhold = 2; // Range of pin bar compared to historical range
 
 // Technical parameters
+input int       _inpBarCountHighestHigh = 40; // The number of bars where the current high must be higher than
 input bool      _inpFilterByADX = true;     // Whether to take into account the ADX indicator or not when providing signals
 input int       _inpADXPeriod = 14;         // The number of bars used to calculate the ADX
 input int       _inpBarCountInRange = 10;   // The number of bars that must have an ADX value lower than the threshold
@@ -41,7 +43,7 @@ input int       _inpADXThreshold = 30;      // The ADX threshold value used to d
 
 input bool      _inpFilterByMA = true;              // Whether to take into account the Moving Average rule
 input ENUM_TIMEFRAMES _inpMAPeriodType = PERIOD_H1; // The time frame of the moving average
-input int _inpMAPeriodAmount = 21;
+input int _inpMAPeriodAmount = 21;                  // The number of bars used for calculating the Moving Average
 
 CNewTrend derived;
 
@@ -52,6 +54,7 @@ int OnInit()
 {
     return derived.Init(
         _inpLots,
+        _inpUseDynamicStops,
         _inpStopLossPips,
         _inpUseTakeProfit,
         _inpTakeProfitPips,
@@ -63,6 +66,7 @@ int OnInit()
         _inpMinutesToWaitAfterPositionClosed,
         _inpMinTradingHour,
         _inpMaxTradingHour,
+        _inpBarCountHighestHigh,
         _inpFilterByADX,
         _inpADXPeriod,
         _inpBarCountInRange,

@@ -8,6 +8,7 @@ public:
     virtual int Init
     (
         double   inpLots = 1,
+        bool     inpUseDynamicStops = false,
         double   inpStopLossPips = 15,
         bool     inpUseTakeProfit = true,
         double   inpTakeProfitPips = 30,
@@ -19,6 +20,7 @@ public:
         int      inpMinutesToWaitAfterPositionClosed = 60,
         int      inpMinTradingHour = 0,
         int      inpMaxTradingHour = 0,
+        int      inpBarCountHighestHigh = 40,
         bool     inpFilterByADX = true,
         int      inpADXPeriod = 14,
         int      inpBarCountInRange = 10,
@@ -42,6 +44,7 @@ private:
     double _highsData[];
     double _adxData[];
 
+    int _inpBarCountHighestHigh;
     bool _inpFilterByADX;
     int _adxHandle;
     int _inpBarCountInRange;
@@ -54,6 +57,8 @@ private:
     double _maData[];
 
     bool IsHighestHigh();
+    bool IsCloseNearHigh();
+    bool IsRangeIncreasing();
     bool InRange();
 };
 
@@ -67,6 +72,7 @@ CNewTrend::~CNewTrend(void)
 
 int CNewTrend::Init(
     double   inpLots,
+    bool     inpUseDynamicStops,
     double   inpStopLossPips,
     bool     inpUseTakeProfit,
     double   inpTakeProfitPips,
@@ -78,6 +84,7 @@ int CNewTrend::Init(
     int      inpMinutesToWaitAfterPositionClosed,
     int      inpMinTradingHour,
     int      inpMaxTradingHour,
+    int      inpBarCountHighestHigh,
     bool     inpFilterByADX,
     int      inpADXPeriod,
     int      inpBarCountInRange,
@@ -90,12 +97,13 @@ int CNewTrend::Init(
     Print("In derived class CNewTrend OnInit");
 
     // Non-base variables initialised here
-    int retCode = CExpertBase::Init(inpLots, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
+    int retCode = CExpertBase::Init(inpLots, inpUseDynamicStops, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
 
     if (retCode == INIT_SUCCEEDED) {
         Print("Custom initialisation for new trend EA");
         ArraySetAsSeries(_adxData, true);
 
+        _inpBarCountHighestHigh = inpBarCountHighestHigh;
         _inpFilterByADX = inpFilterByADX;
         _inpBarCountInRange = inpBarCountInRange;
         _inpADXThreshold = inpADXThreshold;
@@ -161,6 +169,9 @@ bool CNewTrend::HasBullishSignal()
 
     if (!IsHighestHigh()) return false;
 
+    if (!IsCloseNearHigh()) return false;
+    if (!IsRangeIncreasing()) return false;
+
     if (_inpFilterByADX && !InRange()) return false;
 
     //double closeFromHigh = _prices[1].high - _prices[1].close;
@@ -212,12 +223,35 @@ bool CNewTrend::HasBearishSignal()
 
 bool CNewTrend::IsHighestHigh()
 {
-    int bars = 40;
-    for (int bar = 2; bar < bars; bar++) {
+    for (int bar = 2; bar < _inpBarCountHighestHigh; bar++) {
         if (_prices[1].high <= _prices[bar].high) {
             return false;
-        }        
+        }
     }
+
+    return true;
+}
+
+bool CNewTrend::IsCloseNearHigh()
+{
+    double range = _prices[1].high - _prices[1].low;
+    return ((_prices[1].high - _prices[1].close) <= (range * 0.05));
+}
+
+bool CNewTrend::IsRangeIncreasing()
+{
+    double currentRange = _prices[1].high - _prices[1].low;
+    double prevRange;
+
+    for (int index = 2; index <= 4; index++) {
+        prevRange = _prices[index].high - _prices[index].low;
+        if (currentRange < prevRange * 2) {
+            return false;
+        }
+    }
+
+    /*prevRange = _prices[2].high - _prices[2].low;
+    return (currentRange >= prevRange * 2) && (currentRange < prevRange * 3);*/
 
     return true;
 }

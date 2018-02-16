@@ -11,6 +11,7 @@ public:
     virtual int Init
     (
         double   inpLots,
+        bool     inpUseDynamicStops,
         double   inpStopLossPips,
         bool     inpUseTakeProfit,
         double   inpTakeProfitPips,
@@ -38,6 +39,7 @@ protected:
     double _trailing_stop;
     double _currentBid, _currentAsk;
     double   _inpLots;
+    bool     _inpUseDynamicStops;
     double   _inpStopLossPips;
     bool     _inpUseTakeProfit;
     double   _inpTakeProfitPips;
@@ -62,6 +64,8 @@ private:
     bool LongModified();
     bool ShortModified();
     bool IsOutsideTradingHours();
+    double CalculateStopLossLevelForBuyOrder();
+    double CalculateStopLossLevelForSellOrder();
 
     double _recentHigh;
     double _recentLow;
@@ -77,6 +81,7 @@ CExpertBase::~CExpertBase(void)
 
 int CExpertBase::Init(
     double   lots,
+    bool     inpUseDynamicStops,
     double   stopLossPips,
     bool     useTakeProfit,
     double   takeProfitPips,
@@ -110,6 +115,7 @@ int CExpertBase::Init(
     _adjustedPoints = _symbol.Point() * _digits_adjust;
 
     _inpLots = lots;
+    _inpUseDynamicStops = inpUseDynamicStops;
     _inpStopLossPips = stopLossPips;
     _inpUseTakeProfit = useTakeProfit;
     _inpTakeProfitPips = takeProfitPips;
@@ -158,11 +164,9 @@ void CExpertBase::Processing(void)
         return;
     }
 
-    double stopLossPipsFinal;
     double takeProfitPipsFinal;
     double stopLossLevel;
     double takeProfitLevel;
-    double stopLevelPips;
 
     // -------------------- Collect most current data --------------------
     if (!RefreshRates()) {
@@ -191,20 +195,13 @@ void CExpertBase::Processing(void)
 
         numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 40, _prices);
 
-        stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
-        if (_inpStopLossPips < stopLevelPips) {
-            stopLossPipsFinal = stopLevelPips;
-        }
-        else {
-            stopLossPipsFinal = _inpStopLossPips;
-        }
-
-        if (_inpTakeProfitPips < stopLevelPips) {
+        /*if (_inpTakeProfitPips < stopLevelPips) {
             takeProfitPipsFinal = stopLevelPips;
         }
         else {
             takeProfitPipsFinal = _inpTakeProfitPips;
-        }
+        }*/
+        takeProfitPipsFinal = _inpTakeProfitPips;
 
         double limitPrice;
 
@@ -212,7 +209,8 @@ void CExpertBase::Processing(void)
 
         if (_inpGoLong && HasBullishSignal()) {
             limitPrice = _currentAsk;
-            stopLossLevel = limitPrice - stopLossPipsFinal * _Point * _digits_adjust;
+            stopLossLevel = CalculateStopLossLevelForBuyOrder();
+
             if (_inpUseTakeProfit) {
                 takeProfitLevel = limitPrice + takeProfitPipsFinal * _Point * _digits_adjust;
             }
@@ -224,8 +222,8 @@ void CExpertBase::Processing(void)
         }
         else if (_inpGoShort && HasBearishSignal()) {
             limitPrice = _currentBid;
+            stopLossLevel = CalculateStopLossLevelForSellOrder();
 
-            stopLossLevel = limitPrice + stopLossPipsFinal * _Point * _digits_adjust;
             if (_inpUseTakeProfit) {
                 takeProfitLevel = limitPrice - takeProfitPipsFinal * _Point * _digits_adjust;
             }
@@ -453,4 +451,46 @@ bool CExpertBase::IsOutsideTradingHours()
     }
 
     return false;
+}
+
+double CExpertBase::CalculateStopLossLevelForBuyOrder()
+{
+    double stopLossPipsFinal;
+    double stopLossLevel;
+
+    if (_inpUseDynamicStops) {
+        stopLossLevel = _prices[1].low - _symbol.Point() * 5;
+    }
+    else {
+        double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+        if (_inpStopLossPips < stopLevelPips) {
+            stopLossPipsFinal = stopLevelPips;
+        }
+        else {
+            stopLossPipsFinal = _inpStopLossPips;
+        }
+
+        stopLossLevel = _currentAsk - stopLossPipsFinal * _Point * _digits_adjust;
+    }
+
+    double sl = NormalizeDouble(stopLossLevel, _symbol.Digits());
+    return sl;
+}
+
+double CExpertBase::CalculateStopLossLevelForSellOrder()
+{
+    double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+    double stopLossPipsFinal;
+    double stopLossLevel;
+
+    if (_inpStopLossPips < stopLevelPips) {
+        stopLossPipsFinal = stopLevelPips;
+    }
+    else {
+        stopLossPipsFinal = _inpStopLossPips;
+    }
+
+    stopLossLevel = _currentBid + stopLossPipsFinal * _Point * _digits_adjust;
+
+    return stopLossLevel;
 }
