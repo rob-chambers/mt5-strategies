@@ -54,7 +54,6 @@ protected:
 
     void ReleaseIndicator(int& handle);
     virtual void NewBarAndNoCurrentPositions();
-    virtual bool RecentlyClosedTrade();
 
 private:
     bool RefreshRates();
@@ -66,6 +65,7 @@ private:
     bool IsOutsideTradingHours();
     double CalculateStopLossLevelForBuyOrder();
     double CalculateStopLossLevelForSellOrder();
+    bool RecentlyClosedTrade();
 
     double _recentHigh;
     double _recentLow;
@@ -160,10 +160,6 @@ void CExpertBase::Processing(void)
 
     PrevBars = time_0;
 
-    if (IsOutsideTradingHours()) {
-        return;
-    }
-
     double takeProfitPipsFinal;
     double stopLossLevel;
     double takeProfitLevel;
@@ -186,6 +182,10 @@ void CExpertBase::Processing(void)
     // -------------------- ENTRIES --------------------  
     if (PositionSelect(_Symbol) == false) // We have no open positions
     {
+        if (IsOutsideTradingHours()) {
+            return;
+        }
+
         if (RecentlyClosedTrade()) {
             return;
         }
@@ -340,10 +340,7 @@ bool CExpertBase::LongModified()
         double tp = _position.TakeProfit();
         if (_position.StopLoss() < sl || _position.StopLoss() == 0.0) {
             //--- modify position
-            if (_trade.PositionModify(Symbol(), sl, tp)) {
-                printf("Long position by %s to be modified", Symbol());
-            }
-            else {
+            if (!_trade.PositionModify(Symbol(), sl, tp)) {
                 printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
                 printf("Modify parameters : SL=%f,TP=%f", sl, tp);
             }
@@ -368,10 +365,7 @@ bool CExpertBase::ShortModified()
         double tp = _position.TakeProfit();
         if (_position.StopLoss() > sl || _position.StopLoss() == 0.0) {
             //--- modify position
-            if (_trade.PositionModify(Symbol(), sl, tp)) {
-                printf("Short position by %s to be modified", Symbol());
-            }
-            else {
+            if (!_trade.PositionModify(Symbol(), sl, tp)) {
                 printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
                 printf("Modify parameters : SL=%f,TP=%f", sl, tp);
             }

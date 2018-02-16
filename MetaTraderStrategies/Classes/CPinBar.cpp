@@ -1,10 +1,10 @@
 #include "CExpertBase.mqh"
 
-class CDerived : public CExpertBase
+class CPinBar : public CExpertBase
 {
 public:
-    CDerived(void);
-    ~CDerived(void);
+    CPinBar(void);
+    ~CPinBar(void);
     virtual int Init
     (
         double   inpLots = 1,
@@ -33,15 +33,15 @@ private:
     double _inpPinbarRangeThreshhold;
 };
 
-CDerived::CDerived(void)
+CPinBar::CPinBar(void)
 {
 }
 
-CDerived::~CDerived(void)
+CPinBar::~CPinBar(void)
 {
 }
 
-int CDerived::Init(
+int CPinBar::Init(
     double   inpLots,
     bool     inpUseDynamicStops,
     double   inpStopLossPips,
@@ -71,18 +71,18 @@ int CDerived::Init(
         inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
 }
 
-void CDerived::Deinit(void)
+void CPinBar::Deinit(void)
 {
     Print("In derived class OnDeInit");
     CExpertBase::Deinit();
 }
 
-void CDerived::Processing(void)
+void CPinBar::Processing(void)
 {
     CExpertBase::Processing();
 }
 
-bool CDerived::HasBullishSignal()
+bool CPinBar::HasBullishSignal()
 {
     /* Rules:
     Current candle low < previous candle low
@@ -124,7 +124,7 @@ bool CDerived::HasBullishSignal()
     return true;
 }
 
-bool CDerived::HasBearishSignal()
+bool CPinBar::HasBearishSignal()
 {
     /* Rules:
     Current candle high > previous candle high
