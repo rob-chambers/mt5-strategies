@@ -126,6 +126,7 @@ bool COutsideBar::HasBullishSignal()
     if (!(_prices[1].close > _prices[2].high)) return false;
 
     if (_inpFilterByMA && _prices[1].close < _maData[0]) {
+        Print("Avoiding as close is lower than MA");
         return false;
     }
 
@@ -148,6 +149,7 @@ bool COutsideBar::HasBearishSignal()
     if (!(_prices[1].close < _prices[2].low)) return false;
 
     if (_inpFilterByMA && _prices[1].close > _maData[0]) {
+        Print("Avoiding as close is higher than MA");
         return false;
     }
 
