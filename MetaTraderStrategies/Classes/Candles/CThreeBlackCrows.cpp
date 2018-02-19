@@ -7,20 +7,21 @@ public:
     ~CThreeBlackCrows(void);
     virtual int Init
     (
-        double   inpLots = 1,
-        STOPLOSS_RULE inpStopLossRule = StaticPipsValue,
-        double   inpStopLossPips = 15,
-        bool     inpUseTakeProfit = true,
-        double   inpTakeProfitPips = 30,
-        int      inpTrailingStopPips = 20,
-        bool     inpGoLong = false,
-        bool     inpGoShort = true,
-        bool     inpAlertTerminalEnabled = true,
-        bool     inpAlertEmailEnabled = false,
-        int      inpMinutesToWaitAfterPositionClosed = 60,
-        int      inpMinTradingHour = 0,
-        int      inpMaxTradingHour = 0,
-        int      inpMAPeriod = 12
+        double          inpLots = 1,
+        STOPLOSS_RULE   inpStopLossRule = StaticPipsValue,
+        double          inpStopLossPips = 15,
+        bool            inpUseTakeProfit = true,
+        double          inpTakeProfitPips = 30,
+        STOPLOSS_RULE   inpTrailingStopLossRule = StaticPipsValue,
+        int             inpTrailingStopPips = 20,
+        bool            inpGoLong = false,
+        bool            inpGoShort = true,
+        bool            inpAlertTerminalEnabled = true,
+        bool            inpAlertEmailEnabled = false,
+        int             inpMinutesToWaitAfterPositionClosed = 60,
+        int             inpMinTradingHour = 0,
+        int             inpMaxTradingHour = 0,
+        int             inpMAPeriod = 12
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -49,26 +50,30 @@ CThreeBlackCrows::~CThreeBlackCrows(void)
 }
 
 int CThreeBlackCrows::Init(
-    double   inpLots,
-    STOPLOSS_RULE inpStopLossRule,
-    double   inpStopLossPips,
-    bool     inpUseTakeProfit,
-    double   inpTakeProfitPips,
-    int      inpTrailingStopPips,
-    bool     inpGoLong,
-    bool     inpGoShort,
-    bool     inpAlertTerminalEnabled,
-    bool     inpAlertEmailEnabled,
-    int      inpMinutesToWaitAfterPositionClosed,
-    int      inpMinTradingHour,
-    int      inpMaxTradingHour,
-    int      inpMAPeriod
+    double          inpLots,
+    STOPLOSS_RULE   inpStopLossRule,
+    double          inpStopLossPips,
+    bool            inpUseTakeProfit,
+    double          inpTakeProfitPips,
+    STOPLOSS_RULE   inpTrailingStopLossRule,
+    int             inpTrailingStopPips,
+    bool            inpGoLong,
+    bool            inpGoShort,
+    bool            inpAlertTerminalEnabled,
+    bool            inpAlertEmailEnabled,
+    int             inpMinutesToWaitAfterPositionClosed,
+    int             inpMinTradingHour,
+    int             inpMaxTradingHour,
+    int             inpMAPeriod
     )
 {
     Print("In derived class CThreeBlackCrows OnInit");
 
     // Non-base variables initialised here
-    int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
+    int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit, 
+        inpTakeProfitPips, inpTrailingStopLossRule, inpTrailingStopPips, inpGoLong, inpGoShort, 
+        inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, 
+        inpMinTradingHour, inpMaxTradingHour);
 
     if (retCode == INIT_SUCCEEDED) {
         Print("Custom initialisation for three black crows EA");

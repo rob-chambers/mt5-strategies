@@ -11,10 +11,11 @@
 //| Input variables                                  |
 //+------------------------------------------------------------------+
 input double   _inpLots = 1;                // Number of lots to trade
-input STOPLOSS_RULE _inpStopLossRule = StaticPipsValue; // Stop Loss Rule
-input double   _inpStopLossPips = 15;       // Initial stop loss in pips
+input STOPLOSS_RULE _inpInitialStopLossRule = StaticPipsValue; // Initial Stop Loss Rule
+input double   _inpInitialStopLossPips = 15;       // Initial stop loss in pips
 input bool     _inpUseTakeProfit = true;    // Whether to use a take profit order or not
 input double   _inpTakeProfitPips = 30;     // Take profit level in pips
+input STOPLOSS_RULE _inpTrailingStopLossRule = StaticPipsValue; // Trailing Stop Loss Rule
 input int      _inpTrailingStopPips = 20;   // Trailing stop in pips (0 to not use a trailing stop)
 input int      _inpMinutesToWaitAfterPositionClosed = 60;   // Number of minutes to wait before a new signal is raised after the last position was closed
 
@@ -42,10 +43,11 @@ int OnInit()
 {
     return derived.Init(
         _inpLots,
-        _inpStopLossRule,
-        _inpStopLossPips,
+        _inpInitialStopLossRule,
+        _inpInitialStopLossPips,
         _inpUseTakeProfit,
         _inpTakeProfitPips,
+        _inpTrailingStopLossRule,
         _inpTrailingStopPips,
         _inpGoLong,
         _inpGoShort,

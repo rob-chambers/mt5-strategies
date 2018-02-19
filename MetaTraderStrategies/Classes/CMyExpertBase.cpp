@@ -6,7 +6,8 @@ enum STOPLOSS_RULE
 {
     StaticPipsValue,
     CurrentBar5Pips,
-    CurrentBar2ATR
+    CurrentBar2ATR,
+    PreviousBar5Pips
 };
 
 class CMyExpertBase
@@ -18,10 +19,11 @@ public:
     virtual int Init
     (
         double          inpLots,
-        STOPLOSS_RULE   inpStopLossRule,
-        double          inpStopLossPips,
+        STOPLOSS_RULE   inpInitialStopLossRule,
+        double          inpInitialStopLossPips,
         bool            inpUseTakeProfit,
         double          inpTakeProfitPips,
+        STOPLOSS_RULE   inpTrailingStopLossRule,
         int             inpTrailingStopPips,
         bool            inpGoLong,
         bool            inpGoShort,
@@ -45,19 +47,20 @@ protected:
     double _adjustedPoints;
     double _trailing_stop;
     double _currentBid, _currentAsk;
-    double   _inpLots;
-    STOPLOSS_RULE _inpStopLossRule;
-    double   _inpStopLossPips;
-    bool     _inpUseTakeProfit;
-    double   _inpTakeProfitPips;
-    int      _inpTrailingStopPips;
-    bool     _inpGoLong;
-    bool     _inpGoShort;
-    bool     _inpAlertTerminalEnabled;
-    bool     _inpAlertEmailEnabled;
-    int      _inpMinutesToWaitAfterPositionClosed;
-    int      _inpMinTradingHour;
-    int      _inpMaxTradingHour;
+    
+    double _inpLots;
+    STOPLOSS_RULE _inpInitialStopLossRule;
+    double _inpInitialStopLossPips;
+    bool _inpUseTakeProfit;
+    double _inpTakeProfitPips;
+    STOPLOSS_RULE _inpTrailingStopLossRule;
+    bool _inpGoLong;
+    bool _inpGoShort;
+    bool _inpAlertTerminalEnabled;
+    bool _inpAlertEmailEnabled;
+    int _inpMinutesToWaitAfterPositionClosed;
+    int _inpMinTradingHour;
+    int _inpMaxTradingHour;
 
     void ReleaseIndicator(int& handle);
     virtual void NewBarAndNoCurrentPositions();
@@ -89,19 +92,20 @@ CMyExpertBase::~CMyExpertBase(void)
 }
 
 int CMyExpertBase::Init(
-    double   lots,
-    STOPLOSS_RULE inpStopLossRule,
-    double   stopLossPips,
-    bool     useTakeProfit,
-    double   takeProfitPips,
-    int      trailingStopPips,
-    bool     inpGoLong,
-    bool     inpGoShort,
-    bool     inpAlertTerminalEnabled,
-    bool     inpAlertEmailEnabled,
-    int      inpMinutesToWaitAfterPositionClosed,
-    int      inpMinTradingHour,
-    int      inpMaxTradingHour
+    double          inpLots,
+    STOPLOSS_RULE   inpInitialStopLossRule,
+    double          inpInitialStopLossPips,
+    bool            inpUseTakeProfit,
+    double          inpTakeProfitPips,
+    STOPLOSS_RULE   inpTrailingStopLossRule,
+    int             inpTrailingStopPips,
+    bool            inpGoLong,
+    bool            inpGoShort,
+    bool            inpAlertTerminalEnabled,
+    bool            inpAlertEmailEnabled,
+    int             inpMinutesToWaitAfterPositionClosed,
+    int             inpMinTradingHour,
+    int             inpMaxTradingHour
 )
 {
     if (!_symbol.Name(Symbol())) // sets symbol name
@@ -124,16 +128,16 @@ int CMyExpertBase::Init(
 
     _adjustedPoints = _symbol.Point() * _digits_adjust;
 
-    _inpLots = lots;
-    _inpStopLossRule = inpStopLossRule;
-    _inpStopLossPips = stopLossPips;
-    _inpUseTakeProfit = useTakeProfit;
-    _inpTakeProfitPips = takeProfitPips;
-    _inpTrailingStopPips = trailingStopPips;
+    _inpLots = inpLots;
+    _inpInitialStopLossRule = inpInitialStopLossRule;
+    _inpInitialStopLossPips = inpInitialStopLossPips;
+    _inpUseTakeProfit = inpUseTakeProfit;
+    _inpTakeProfitPips = inpTakeProfitPips;
+    _inpTrailingStopLossRule = inpTrailingStopLossRule;
     _inpGoLong = inpGoLong;
     _inpGoShort = inpGoShort;
 
-    _trailing_stop = trailingStopPips * _adjustedPoints;
+    _trailing_stop = inpTrailingStopPips * _adjustedPoints;
 
     _inpAlertTerminalEnabled = inpAlertTerminalEnabled;
     _inpAlertEmailEnabled = inpAlertEmailEnabled;
@@ -320,23 +324,17 @@ bool CMyExpertBase::RefreshRates()
 
 bool CMyExpertBase::CheckToModifyPositions()
 {
-    if (_inpTrailingStopPips == 0) return false;
+    if (_inpTrailingStopLossRule == StaticPipsValue && _trailing_stop == 0) return false;
 
     if (!_position.Select(Symbol())) {
         return false;
     }
 
     if (_position.PositionType() == POSITION_TYPE_BUY) {
-        //--- try to close or modify long position
-        /*if (LongClosed())
-        return(true);*/
         if (LongModified())
             return true;
     }
     else {
-        //--- try to close or modify short position
-        /*if (ShortClosed())
-        return(true);*/
         if (ShortModified())
             return true;
     }
@@ -346,12 +344,31 @@ bool CMyExpertBase::CheckToModifyPositions()
 
 bool CMyExpertBase::LongModified()
 {
-    if (_inpTrailingStopPips <= 0) return false;
+    double newStop = 0;
 
-    bool res = false;
     if (_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh) {
         _recentHigh = _prices[1].high;
-        double sl = NormalizeDouble(_recentHigh - _trailing_stop, _symbol.Digits());
+
+        switch (_inpTrailingStopLossRule) {
+            case StaticPipsValue:
+                if (_trailing_stop <= 0) return false;
+                newStop = _recentHigh - _trailing_stop;
+                break;
+
+            case CurrentBar5Pips:
+                newStop = _prices[1].low - _symbol.Point() * 5;
+                break;
+
+            case CurrentBar2ATR:
+                newStop = _currentAsk - _atrData[0] * 2;
+                break;
+
+            case PreviousBar5Pips:
+                newStop = _prices[2].low - _symbol.Point() * 5;
+                break;
+        }
+
+        double sl = NormalizeDouble(newStop, _symbol.Digits());
         double tp = _position.TakeProfit();
         if (_position.StopLoss() < sl || _position.StopLoss() == 0.0) {
             //--- modify position
@@ -360,37 +377,65 @@ bool CMyExpertBase::LongModified()
                 printf("Modify parameters : SL=%f,TP=%f", sl, tp);
             }
 
-            //--- modified and must exit from expert
-            res = true;
+            return true;
         }
     }
 
-    return res;
+    return false;
 }
 
 bool CMyExpertBase::ShortModified()
 {
-    if (_inpTrailingStopPips <= 0) return false;
+    double newStop = 0;
 
-    bool res = false;
     if (_prices[1].low < _prices[2].low && _prices[1].low < _recentLow) {
+        printf("A new low found (%f). Prev low: %f and recent low: %f", _prices[1].low, _prices[2].low, _recentLow);
         _recentLow = _prices[1].low;
 
-        double sl = NormalizeDouble(_recentLow + _trailing_stop, _symbol.Digits());
+        switch (_inpTrailingStopLossRule) {
+            case StaticPipsValue:
+                if (_trailing_stop <= 0) return false;
+                newStop = _recentLow + _trailing_stop;
+                break;
+
+            case CurrentBar5Pips:
+                newStop = _prices[1].high +_symbol.Point() * 5;
+                break;
+
+            case CurrentBar2ATR:
+                newStop = _currentBid + _atrData[0] * 2;
+                break;
+
+            case PreviousBar5Pips:
+                newStop = _prices[2].high + _symbol.Point() * 5;
+                break;
+        }
+
+        double sl = NormalizeDouble(newStop, _symbol.Digits());
+        double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+
         double tp = _position.TakeProfit();
         if (_position.StopLoss() > sl || _position.StopLoss() == 0.0) {
+
+            double diff = (sl - _currentBid) / _adjustedPoints;
+            if (diff < stopLevelPips) {
+                printf("Can't set new stop that close to the current price.  Bid = %f, new stop = %f, stop level = %f, diff = %f",
+                    _currentBid, sl, stopLevelPips, diff);
+
+                sl = _currentBid + stopLevelPips * _adjustedPoints;
+            }
+
             //--- modify position
             if (!_trade.PositionModify(Symbol(), sl, tp)) {
                 printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
                 printf("Modify parameters : SL=%f,TP=%f", sl, tp);
             }
 
-            //--- modified and must exit from expert
-            res = true;
+            return true;
         }
     }
 
-    return res;
+    return false;
 }
 
 bool CMyExpertBase::HasBullishSignal()
@@ -465,17 +510,18 @@ bool CMyExpertBase::IsOutsideTradingHours()
 double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
 {
     double stopLossPipsFinal;
-    double stopLossLevel;
+    double stopLossLevel = 0;
     double stopLevelPips;
+    double low;
 
-    switch (_inpStopLossRule) {
+    switch (_inpInitialStopLossRule) {
         case StaticPipsValue:
             stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
-            if (_inpStopLossPips < stopLevelPips) {
+            if (_inpInitialStopLossPips < stopLevelPips) {
                 stopLossPipsFinal = stopLevelPips;
             }
             else {
-                stopLossPipsFinal = _inpStopLossPips;
+                stopLossPipsFinal = _inpInitialStopLossPips;
             }
 
             stopLossLevel = _currentAsk - stopLossPipsFinal * _Point * _digits_adjust;
@@ -488,6 +534,15 @@ double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
         case CurrentBar2ATR:
             stopLossLevel = _currentAsk - _atrData[0] * 2;
             break;
+
+        case PreviousBar5Pips:
+            low = _prices[1].low;
+            if (_prices[2].low < low) {
+                low = _prices[2].low;
+            }
+
+            stopLossLevel = low - _symbol.Point() * 5;
+            break;
     }
 
     double sl = NormalizeDouble(stopLossLevel, _symbol.Digits());
@@ -497,18 +552,19 @@ double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
 double CMyExpertBase::CalculateStopLossLevelForSellOrder()
 {
     double stopLossPipsFinal;
-    double stopLossLevel;
+    double stopLossLevel = 0;
     double stopLevelPips;
+    double high;
 
-    switch (_inpStopLossRule) {
+    switch (_inpInitialStopLossRule) {
         case StaticPipsValue:
             stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
 
-            if (_inpStopLossPips < stopLevelPips) {
+            if (_inpInitialStopLossPips < stopLevelPips) {
                 stopLossPipsFinal = stopLevelPips;
             }
             else {
-                stopLossPipsFinal = _inpStopLossPips;
+                stopLossPipsFinal = _inpInitialStopLossPips;
             }
 
             stopLossLevel = _currentBid + stopLossPipsFinal * _Point * _digits_adjust;
@@ -520,6 +576,15 @@ double CMyExpertBase::CalculateStopLossLevelForSellOrder()
 
         case CurrentBar2ATR:
             stopLossLevel = _currentBid + _atrData[0] * 2;
+            break;
+
+        case PreviousBar5Pips:
+            high = _prices[1].high;
+            if (_prices[2].high > high) {
+                high = _prices[2].high;
+            }
+
+            stopLossLevel = high + _symbol.Point() * 5;
             break;
     }
 
