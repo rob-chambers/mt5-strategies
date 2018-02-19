@@ -9,11 +9,11 @@ enum STOPLOSS_RULE
     CurrentBar2ATR
 };
 
-class CExpertBase
+class CMyExpertBase
 {
 public:
-    CExpertBase(void);
-    ~CExpertBase(void);
+    CMyExpertBase(void);
+    ~CMyExpertBase(void);
 
     virtual int Init
     (
@@ -80,15 +80,15 @@ private:
     int _atrHandle;
 };
 
-CExpertBase::CExpertBase(void)
+CMyExpertBase::CMyExpertBase(void)
 {
 }
 
-CExpertBase::~CExpertBase(void)
+CMyExpertBase::~CMyExpertBase(void)
 {
 }
 
-int CExpertBase::Init(
+int CMyExpertBase::Init(
     double   lots,
     STOPLOSS_RULE inpStopLossRule,
     double   stopLossPips,
@@ -146,7 +146,7 @@ int CExpertBase::Init(
     return(INIT_SUCCEEDED);
 }
 
-void CExpertBase::Deinit(void)
+void CMyExpertBase::Deinit(void)
 {
     Print("In base class OnDeInit");
     if (_atrHandle > 0) {
@@ -155,7 +155,7 @@ void CExpertBase::Deinit(void)
     }
 }
 
-void CExpertBase::ReleaseIndicator(int& handle) {
+void CMyExpertBase::ReleaseIndicator(int& handle) {
     if (handle != INVALID_HANDLE && IndicatorRelease(handle)) {
         handle = INVALID_HANDLE;
     }
@@ -164,7 +164,7 @@ void CExpertBase::ReleaseIndicator(int& handle) {
     }
 }
 
-void CExpertBase::Processing(void)
+void CMyExpertBase::Processing(void)
 {
     //--- we work only at the time of the birth of new bar
     static datetime PrevBars = 0;
@@ -251,12 +251,12 @@ void CExpertBase::Processing(void)
     }
 }
 
-void CExpertBase::NewBarAndNoCurrentPositions()
+void CMyExpertBase::NewBarAndNoCurrentPositions()
 {
     Print("In base class NewBarAndNoCurrentPositions");
 }
 
-bool CExpertBase::RecentlyClosedTrade()
+bool CMyExpertBase::RecentlyClosedTrade()
 {
     datetime to = TimeCurrent();
     datetime from = to - 60 * _inpMinutesToWaitAfterPositionClosed;
@@ -286,7 +286,7 @@ bool CExpertBase::RecentlyClosedTrade()
 ////+------------------------------------------------------------------+ 
 ////| Get Time for specified bar index                                 | 
 ////+------------------------------------------------------------------+ 
-datetime CExpertBase::iTime(const int index, string symbol = NULL, ENUM_TIMEFRAMES timeframe = PERIOD_CURRENT)
+datetime CMyExpertBase::iTime(const int index, string symbol = NULL, ENUM_TIMEFRAMES timeframe = PERIOD_CURRENT)
 {
     if (symbol == NULL)
         symbol = _symbol.Name();
@@ -302,7 +302,7 @@ datetime CExpertBase::iTime(const int index, string symbol = NULL, ENUM_TIMEFRAM
 //+------------------------------------------------------------------+
 //| Refreshes the symbol quotes data                                 |
 //+------------------------------------------------------------------+
-bool CExpertBase::RefreshRates()
+bool CMyExpertBase::RefreshRates()
 {
     //--- refresh rates
     if (!_symbol.RefreshRates())
@@ -318,7 +318,7 @@ bool CExpertBase::RefreshRates()
     return(true);
 }
 
-bool CExpertBase::CheckToModifyPositions()
+bool CMyExpertBase::CheckToModifyPositions()
 {
     if (_inpTrailingStopPips == 0) return false;
 
@@ -344,7 +344,7 @@ bool CExpertBase::CheckToModifyPositions()
     return false;
 }
 
-bool CExpertBase::LongModified()
+bool CMyExpertBase::LongModified()
 {
     if (_inpTrailingStopPips <= 0) return false;
 
@@ -368,7 +368,7 @@ bool CExpertBase::LongModified()
     return res;
 }
 
-bool CExpertBase::ShortModified()
+bool CMyExpertBase::ShortModified()
 {
     if (_inpTrailingStopPips <= 0) return false;
 
@@ -393,17 +393,17 @@ bool CExpertBase::ShortModified()
     return res;
 }
 
-bool CExpertBase::HasBullishSignal()
+bool CMyExpertBase::HasBullishSignal()
 {
     return false;
 }
 
-bool CExpertBase::HasBearishSignal()
+bool CMyExpertBase::HasBearishSignal()
 {
     return false;
 }
 
-void CExpertBase::OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit)
+void CMyExpertBase::OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit)
 {
     string message;
     string orderTypeMsg;
@@ -447,7 +447,7 @@ void CExpertBase::OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double 
     }
 }
 
-bool CExpertBase::IsOutsideTradingHours()
+bool CMyExpertBase::IsOutsideTradingHours()
 {
     MqlDateTime currentTime;
     TimeToStruct(TimeCurrent(), currentTime);
@@ -462,7 +462,7 @@ bool CExpertBase::IsOutsideTradingHours()
     return false;
 }
 
-double CExpertBase::CalculateStopLossLevelForBuyOrder()
+double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
 {
     double stopLossPipsFinal;
     double stopLossLevel;
@@ -494,7 +494,7 @@ double CExpertBase::CalculateStopLossLevelForBuyOrder()
     return sl;
 }
 
-double CExpertBase::CalculateStopLossLevelForSellOrder()
+double CMyExpertBase::CalculateStopLossLevelForSellOrder()
 {
     double stopLossPipsFinal;
     double stopLossLevel;
