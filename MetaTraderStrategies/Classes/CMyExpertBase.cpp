@@ -64,6 +64,7 @@ protected:
 
     void ReleaseIndicator(int& handle);
     virtual void NewBarAndNoCurrentPositions();
+    virtual void OnRecentlyClosedTrade();
 
 private:
     bool RefreshRates();
@@ -206,6 +207,7 @@ void CMyExpertBase::Processing(void)
         }
 
         if (RecentlyClosedTrade()) {
+            OnRecentlyClosedTrade();
             return;
         }
 
@@ -260,6 +262,10 @@ void CMyExpertBase::NewBarAndNoCurrentPositions()
     Print("In base class NewBarAndNoCurrentPositions");
 }
 
+void CMyExpertBase::OnRecentlyClosedTrade()
+{
+}
+
 bool CMyExpertBase::RecentlyClosedTrade()
 {
     datetime to = TimeCurrent();
@@ -277,8 +283,22 @@ bool CMyExpertBase::RecentlyClosedTrade()
     //--- return order ticket by its position in the list 
     if ((ticket = HistoryOrderGetTicket(orderCount - 1)) > 0) {
         if (HistoryOrderGetString(ticket, ORDER_SYMBOL) == _symbol.Name()) {
-            if (HistoryOrderGetInteger(ticket, ORDER_TYPE) == ORDER_TYPE_SELL) {
+            long orderType = HistoryOrderGetInteger(ticket, ORDER_TYPE);
+            printf("We had a recent order of type %d", orderType);
+            if (orderType == ORDER_TYPE_SELL) {
                 // Print("We had a recent sell order so we'll wait a bit");
+
+                /*
+                case (ORDER_TYPE_BUY):            return("buy"); 
+      case (ORDER_TYPE_SELL):           return("sell"); 
+      case (ORDER_TYPE_BUY_LIMIT):      return("buy limit"); 
+      case (ORDER_TYPE_SELL_LIMIT):     return("sell limit"); 
+      case (ORDER_TYPE_BUY_STOP):       return("buy stop"); 
+      case (ORDER_TYPE_SELL_STOP):      return("sell stop"); 
+      case (ORDER_TYPE_BUY_STOP_LIMIT): return("buy stop limit"); 
+      case (ORDER_TYPE_SELL_STOP_LIMIT):return("sell stop limit"); 
+                */
+
                 return true;
             }
         }
@@ -513,10 +533,11 @@ double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
     double stopLossLevel = 0;
     double stopLevelPips;
     double low;
+    double priceFromStop;
 
+    stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
     switch (_inpInitialStopLossRule) {
-        case StaticPipsValue:
-            stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+        case StaticPipsValue:           
             if (_inpInitialStopLossPips < stopLevelPips) {
                 stopLossPipsFinal = stopLevelPips;
             }
@@ -529,6 +550,18 @@ double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
 
         case CurrentBar5Pips:
             stopLossLevel = _prices[1].low - _symbol.Point() * 5;
+            priceFromStop = (_currentAsk - stopLossLevel) / (_Point * _digits_adjust);
+
+            Print("Price from stop: ", priceFromStop);
+            if (priceFromStop < stopLevelPips) {
+                printf("calculated stop too close to price.  adjusting from %f to %f", priceFromStop, stopLevelPips);
+                stopLossPipsFinal = stopLevelPips;
+            }
+            else {
+                stopLossPipsFinal = priceFromStop;
+            }
+
+            stopLossLevel = _currentAsk - stopLossPipsFinal * _Point * _digits_adjust;
             break;
 
         case CurrentBar2ATR:
