@@ -1,6 +1,6 @@
-#include "CExpertBase.mqh"
+#include "CMyExpertBase.mqh"
 
-class CPinBar : public CExpertBase
+class CPinBar : public CMyExpertBase
 {
 public:
     CPinBar(void);
@@ -65,7 +65,7 @@ int CPinBar::Init(
     _inpPinbarThreshhold = inpPinbarThreshhold;
     _inpPinbarRangeThreshhold = inpPinbarRangeThreshhold;
 
-    return CExpertBase::Init(inpLots, inpUseDynamicStops, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips,
+    return CMyExpertBase::Init(inpLots, inpUseDynamicStops, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips,
         inpTrailingStopPips, inpGoLong, inpGoShort, 
         inpAlertTerminalEnabled, inpAlertEmailEnabled,
         inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
@@ -74,12 +74,12 @@ int CPinBar::Init(
 void CPinBar::Deinit(void)
 {
     Print("In derived class OnDeInit");
-    CExpertBase::Deinit();
+    CMyExpertBase::Deinit();
 }
 
 void CPinBar::Processing(void)
 {
-    CExpertBase::Processing();
+    CMyExpertBase::Processing();
 }
 
 bool CPinBar::HasBullishSignal()

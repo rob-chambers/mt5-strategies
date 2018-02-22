@@ -33,7 +33,7 @@ input int       _inpMaxTradingHour = 19;    // The maximum hour of the day to tr
 // Technical parameters
 input bool      _inpFilterByMA = true;              // Whether to take into account the Moving Average rule
 input ENUM_TIMEFRAMES _inpMAPeriodType = PERIOD_D1; // The time frame of the moving average
-input int _inpMAPeriodAmount = 21;                  // The number of bars used for calculating the Moving Average
+input int _inpMAPeriodAmount = 8;                   // The number of bars used for calculating the Moving Average
 
 COutsideBar derived;
 

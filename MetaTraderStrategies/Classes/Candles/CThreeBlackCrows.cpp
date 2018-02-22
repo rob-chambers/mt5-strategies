@@ -9,9 +9,9 @@ public:
     (
         double          inpLots = 1,
         STOPLOSS_RULE   inpStopLossRule = StaticPipsValue,
-        double          inpStopLossPips = 15,
+        int             inpStopLossPips = 15,
         bool            inpUseTakeProfit = true,
-        double          inpTakeProfitPips = 30,
+        int             inpTakeProfitPips = 30,
         STOPLOSS_RULE   inpTrailingStopLossRule = StaticPipsValue,
         int             inpTrailingStopPips = 20,
         bool            inpGoLong = false,
@@ -52,9 +52,9 @@ CThreeBlackCrows::~CThreeBlackCrows(void)
 int CThreeBlackCrows::Init(
     double          inpLots,
     STOPLOSS_RULE   inpStopLossRule,
-    double          inpStopLossPips,
+    int             inpStopLossPips,
     bool            inpUseTakeProfit,
-    double          inpTakeProfitPips,
+    int             inpTakeProfitPips,
     STOPLOSS_RULE   inpTrailingStopLossRule,
     int             inpTrailingStopPips,
     bool            inpGoLong,

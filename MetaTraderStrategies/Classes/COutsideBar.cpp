@@ -1,6 +1,6 @@
-#include "CExpertBase.mqh"
+#include "CMyExpertBase.mqh"
 
-class COutsideBar : public CExpertBase
+class COutsideBar : public CMyExpertBase
 {
 public:
     COutsideBar(void);
@@ -9,9 +9,9 @@ public:
     (
         double   inpLots = 1,
         STOPLOSS_RULE inpStopLossRule = StaticPipsValue,
-        double   inpStopLossPips = 15,
+        int      inpStopLossPips = 15,
         bool     inpUseTakeProfit = true,
-        double   inpTakeProfitPips = 30,
+        int      inpTakeProfitPips = 30,
         int      inpTrailingStopPips = 20,
         bool     inpGoLong = true,
         bool     inpGoShort = true,
@@ -22,7 +22,7 @@ public:
         int      inpMaxTradingHour = 0,
         bool     inpFilterByMA = true,
         ENUM_TIMEFRAMES inpMAPeriodType = PERIOD_D1,
-        int inpMAPeriodAmount = 21
+        int inpMAPeriodAmount = 8
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -70,7 +70,7 @@ int COutsideBar::Init(
     Print("In derived class COutsideBar OnInit");
 
     // Non-base variables initialised here
-    int retCode = CExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
+    int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
 
     if (retCode == INIT_SUCCEEDED) {
         Print("Custom initialisation for outside bar EA");
@@ -90,7 +90,7 @@ int COutsideBar::Init(
 void COutsideBar::Deinit(void)
 {
     Print("In derived class COutsideBar OnDeInit");
-    CExpertBase::Deinit();
+    CMyExpertBase::Deinit();
 
     if (_inpFilterByMA) {
         Print("Releasing MA indicator handle");
@@ -100,7 +100,7 @@ void COutsideBar::Deinit(void)
 
 void COutsideBar::Processing(void)
 {
-    CExpertBase::Processing();
+    CMyExpertBase::Processing();
 }
 
 void COutsideBar::NewBarAndNoCurrentPositions(void)

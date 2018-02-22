@@ -1,6 +1,6 @@
-#include "CExpertBase.mqh"
+#include "CMyExpertBase.mqh"
 
-class CNewTrend : public CExpertBase
+class CNewTrend : public CMyExpertBase
 {
 public:
     CNewTrend(void);
@@ -9,9 +9,9 @@ public:
     (
         double   inpLots = 1,
         bool     inpUseDynamicStops = false,
-        double   inpStopLossPips = 15,
+        int      inpStopLossPips = 15,
         bool     inpUseTakeProfit = true,
-        double   inpTakeProfitPips = 30,
+        int      inpTakeProfitPips = 30,
         int      inpTrailingStopPips = 20,
         bool     inpGoLong = true,
         bool     inpGoShort = true,
@@ -73,9 +73,9 @@ CNewTrend::~CNewTrend(void)
 int CNewTrend::Init(
     double   inpLots,
     bool     inpUseDynamicStops,
-    double   inpStopLossPips,
+    int      inpStopLossPips,
     bool     inpUseTakeProfit,
-    double   inpTakeProfitPips,
+    int      inpTakeProfitPips,
     int      inpTrailingStopPips,
     bool     inpGoLong,
     bool     inpGoShort,
@@ -97,7 +97,7 @@ int CNewTrend::Init(
     Print("In derived class CNewTrend OnInit");
 
     // Non-base variables initialised here
-    int retCode = CExpertBase::Init(inpLots, inpUseDynamicStops, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
+    int retCode = CMyExpertBase::Init(inpLots, inpUseDynamicStops, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
 
     if (retCode == INIT_SUCCEEDED) {
         Print("Custom initialisation for new trend EA");
@@ -128,7 +128,7 @@ int CNewTrend::Init(
 void CNewTrend::Deinit(void)
 {
     Print("In derived class CNewTrend OnDeInit");
-    CExpertBase::Deinit();
+    CMyExpertBase::Deinit();
     if (_adxHandle > 0) {
         Print("Releasing ADX indicator handle");
         ReleaseIndicator(_adxHandle);
@@ -142,7 +142,7 @@ void CNewTrend::Deinit(void)
 
 void CNewTrend::Processing(void)
 {
-    CExpertBase::Processing();
+    CMyExpertBase::Processing();
 }
 
 void CNewTrend::NewBarAndNoCurrentPositions(void)

@@ -4,6 +4,7 @@
 
 enum STOPLOSS_RULE
 {
+    None,
     StaticPipsValue,
     CurrentBar5Pips,
     CurrentBar2ATR,
@@ -20,9 +21,9 @@ public:
     (
         double          inpLots,
         STOPLOSS_RULE   inpInitialStopLossRule,
-        double          inpInitialStopLossPips,
+        int             inpInitialStopLossPips,
         bool            inpUseTakeProfit,
-        double          inpTakeProfitPips,
+        int             inpTakeProfitPips,
         STOPLOSS_RULE   inpTrailingStopLossRule,
         int             inpTrailingStopPips,
         bool            inpGoLong,
@@ -50,9 +51,9 @@ protected:
     
     double _inpLots;
     STOPLOSS_RULE _inpInitialStopLossRule;
-    double _inpInitialStopLossPips;
+    int _inpInitialStopLossPips;
     bool _inpUseTakeProfit;
-    double _inpTakeProfitPips;
+    int _inpTakeProfitPips;
     STOPLOSS_RULE _inpTrailingStopLossRule;
     bool _inpGoLong;
     bool _inpGoShort;
@@ -95,9 +96,9 @@ CMyExpertBase::~CMyExpertBase(void)
 int CMyExpertBase::Init(
     double          inpLots,
     STOPLOSS_RULE   inpInitialStopLossRule,
-    double          inpInitialStopLossPips,
+    int             inpInitialStopLossPips,
     bool            inpUseTakeProfit,
-    double          inpTakeProfitPips,
+    int             inpTakeProfitPips,
     STOPLOSS_RULE   inpTrailingStopLossRule,
     int             inpTrailingStopPips,
     bool            inpGoLong,
@@ -114,6 +115,66 @@ int CMyExpertBase::Init(
 
     if (!RefreshRates()) {
         Print("Could not refresh rates - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (!(inpLots > 0 && inpLots <= 10)) {
+        Print("Invalid lot size - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (inpInitialStopLossRule != StaticPipsValue && inpInitialStopLossPips != 0) {
+        Print("Invalid initial stop loss rule.  Pips should be 0 when not using StaticPipsValue - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (inpInitialStopLossRule == StaticPipsValue && inpInitialStopLossPips <= 0) {
+        Print("Invalid initial stop loss pip value.  Pips should be greater than 0 - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (inpTrailingStopLossRule != StaticPipsValue && inpTrailingStopPips != 0) {
+        Print("Invalid trailing stop loss rule.  Pips should be 0 when not using StaticPipsValue - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (inpTrailingStopLossRule == StaticPipsValue && inpTrailingStopPips <= 0) {
+        Print("Invalid trailing stop loss pip value.  Pips should be greater than 0 - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (inpTakeProfitPips <= 0) {
+        Print("Invalid take profit pip value.  Pips should be greater than 0 - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (!inpUseTakeProfit && inpTakeProfitPips != 0) {
+        Print("Invalid take profit pip value.  Pips should be 0 when not using take profit - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (inpMinutesToWaitAfterPositionClosed < 0) {
+        Print("Invalid number of minutes to wait after position closed. Value should be >= 0 - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (inpMinTradingHour < 0 || inpMinTradingHour > 23) {
+        Print("Invalid min trading hour. Value should be between 0 and 23 - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (inpMaxTradingHour < 0 || inpMaxTradingHour > 23) {
+        Print("Invalid max trading hour. Value should be between 0 and 23 - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (inpMaxTradingHour < inpMinTradingHour) {
+        Print("Invalid min/max trading hours. Min should be less than or equal to max - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (inpInitialStopLossRule == None && inpTrailingStopLossRule == None) {
+        Print("Invalid stop loss rules - both initial and trailing are set to None - init failed.");
         return(INIT_FAILED);
     }
 
@@ -179,7 +240,7 @@ void CMyExpertBase::Processing(void)
 
     PrevBars = time_0;
 
-    double takeProfitPipsFinal;
+    int takeProfitPipsFinal;
     double stopLossLevel;
     double takeProfitLevel;
 
@@ -268,6 +329,10 @@ void CMyExpertBase::OnRecentlyClosedTrade()
 
 bool CMyExpertBase::RecentlyClosedTrade()
 {
+    if (_inpMinutesToWaitAfterPositionClosed == 0) {
+        return false;
+    }
+
     datetime to = TimeCurrent();
     datetime from = to - 60 * _inpMinutesToWaitAfterPositionClosed;
 
@@ -344,7 +409,7 @@ bool CMyExpertBase::RefreshRates()
 
 bool CMyExpertBase::CheckToModifyPositions()
 {
-    if (_inpTrailingStopLossRule == StaticPipsValue && _trailing_stop == 0) return false;
+    if (_inpTrailingStopLossRule == None) return false;
 
     if (!_position.Select(Symbol())) {
         return false;
@@ -371,7 +436,6 @@ bool CMyExpertBase::LongModified()
 
         switch (_inpTrailingStopLossRule) {
             case StaticPipsValue:
-                if (_trailing_stop <= 0) return false;
                 newStop = _recentHigh - _trailing_stop;
                 break;
 
@@ -414,7 +478,6 @@ bool CMyExpertBase::ShortModified()
 
         switch (_inpTrailingStopLossRule) {
             case StaticPipsValue:
-                if (_trailing_stop <= 0) return false;
                 newStop = _recentLow + _trailing_stop;
                 break;
 
@@ -537,6 +600,10 @@ double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
 
     stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
     switch (_inpInitialStopLossRule) {
+        case None:
+            stopLossLevel = 0;
+            break;
+
         case StaticPipsValue:           
             if (_inpInitialStopLossPips < stopLevelPips) {
                 stopLossPipsFinal = stopLevelPips;
@@ -590,6 +657,10 @@ double CMyExpertBase::CalculateStopLossLevelForSellOrder()
     double high;
 
     switch (_inpInitialStopLossRule) {
+        case None:
+            stopLossLevel = 0;
+            break;
+
         case StaticPipsValue:
             stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
 
