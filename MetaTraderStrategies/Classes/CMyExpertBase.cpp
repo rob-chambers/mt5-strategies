@@ -48,7 +48,8 @@ protected:
     double _adjustedPoints;
     double _trailing_stop;
     double _currentBid, _currentAsk;
-    
+    double _atrData[];
+
     double _inpLots;
     STOPLOSS_RULE _inpInitialStopLossRule;
     int _inpInitialStopLossPips;
@@ -81,7 +82,6 @@ private:
 
     double _recentHigh;
     double _recentLow;
-    double _atrData[];
     int _atrHandle;
 };
 
@@ -350,7 +350,7 @@ bool CMyExpertBase::RecentlyClosedTrade()
         if (HistoryOrderGetString(ticket, ORDER_SYMBOL) == _symbol.Name()) {
             long orderType = HistoryOrderGetInteger(ticket, ORDER_TYPE);
             printf("We had a recent order of type %d", orderType);
-            if (orderType == ORDER_TYPE_SELL) {
+            if (orderType == ORDER_TYPE_SELL || orderType == ORDER_TYPE_BUY) {
                 // Print("We had a recent sell order so we'll wait a bit");
 
                 /*

@@ -7,30 +7,42 @@ public:
     ~CPinBar(void);
     virtual int Init
     (
-        double   inpLots = 1,
-        bool     inpUseDynamicStops = false,
-        double   inpStopLossPips = 30,
-        bool     inpUseTakeProfit = true,
-        double   inpTakeProfitPips = 40,
-        int      inpTrailingStopPips = 30,
-        bool     inpGoLong = true,
-        bool     inpGoShort = true,
-        double   inpPinbarThreshhold = 0.6,
-        double   inpPinbarRangeThreshhold = 1,
-        bool     inpAlertTerminalEnabled = true,
-        bool     inpAlertEmailEnabled = false,
-        int      inpMinutesToWaitAfterPositionClosed = 60,
-        int      inpMinTradingHour = 7,
-        int      inpMaxTradingHour = 19
+        double          inpLots = 1,
+        STOPLOSS_RULE   inpStopLossRule = StaticPipsValue,
+        int             inpStopLossPips = 15,
+        bool            inpUseTakeProfit = true,
+        int             inpTakeProfitPips = 30,
+        STOPLOSS_RULE   inpTrailingStopLossRule = StaticPipsValue,
+        int             inpTrailingStopPips = 20,
+        bool            inpGoLong = true,
+        bool            inpGoShort = true,
+        bool            inpAlertTerminalEnabled = true,
+        bool            inpAlertEmailEnabled = false,
+        int             inpMinutesToWaitAfterPositionClosed = 60,
+        int             inpMinTradingHour = 0,
+        int             inpMaxTradingHour = 0,
+        double          inpPinbarThreshhold = 0.67,
+        double          inpPinbarRangeThreshhold = 2,
+        bool            inpFilterByMA = true,
+        ENUM_TIMEFRAMES inpMAPeriodType = PERIOD_D1,
+        int             inpMAPeriodAmount = 8
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
     virtual bool              HasBullishSignal();
     virtual bool              HasBearishSignal();
 
+protected:
+    virtual void NewBarAndNoCurrentPositions(void);
+
 private:
     double _inpPinbarThreshhold;
     double _inpPinbarRangeThreshhold;
+    bool _inpFilterByMA;
+    ENUM_TIMEFRAMES _inpMAPeriodType;
+    int _inpMAPeriodAmount;
+    int _maHandle;
+    double _maData[];
 };
 
 CPinBar::CPinBar(void)
@@ -42,44 +54,73 @@ CPinBar::~CPinBar(void)
 }
 
 int CPinBar::Init(
-    double   inpLots,
-    bool     inpUseDynamicStops,
-    double   inpStopLossPips,
-    bool     inpUseTakeProfit,
-    double   inpTakeProfitPips,
-    int      inpTrailingStopPips,
-    bool     inpGoLong,
-    bool     inpGoShort,
-    double   inpPinbarThreshhold,
-    double   inpPinbarRangeThreshhold,
-    bool     inpAlertTerminalEnabled,
-    bool     inpAlertEmailEnabled,
-    int      inpMinutesToWaitAfterPositionClosed,
-    int      inpMinTradingHour,
-    int      inpMaxTradingHour
-    )
+    double          inpLots,
+    STOPLOSS_RULE   inpStopLossRule,
+    int             inpStopLossPips,
+    bool            inpUseTakeProfit,
+    int             inpTakeProfitPips,
+    STOPLOSS_RULE   inpTrailingStopLossRule,
+    int             inpTrailingStopPips,
+    bool            inpGoLong,
+    bool            inpGoShort,
+    bool            inpAlertTerminalEnabled,
+    bool            inpAlertEmailEnabled,
+    int             inpMinutesToWaitAfterPositionClosed,
+    int             inpMinTradingHour,
+    int             inpMaxTradingHour,
+    double          inpPinbarThreshhold,
+    double          inpPinbarRangeThreshhold,
+    bool            inpFilterByMA,
+    ENUM_TIMEFRAMES inpMAPeriodType,
+    int             inpMAPeriodAmount
+)
 {
-    Print("In derived class OnInit");
+    Print("In derived class CPinBar OnInit");
 
-    // Non-base variables initialised here
-    _inpPinbarThreshhold = inpPinbarThreshhold;
-    _inpPinbarRangeThreshhold = inpPinbarRangeThreshhold;
+    int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit,
+        inpTakeProfitPips, inpTrailingStopLossRule, inpTrailingStopPips, inpGoLong, inpGoShort,
+        inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed,
+        inpMinTradingHour, inpMaxTradingHour);
 
-    return CMyExpertBase::Init(inpLots, inpUseDynamicStops, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips,
-        inpTrailingStopPips, inpGoLong, inpGoShort, 
-        inpAlertTerminalEnabled, inpAlertEmailEnabled,
-        inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
+    if (retCode == INIT_SUCCEEDED) {
+        Print("Custom initialisation for pin bar EA");
+        
+        // Non-base variables initialised here
+        _inpPinbarThreshhold = inpPinbarThreshhold;
+        _inpPinbarRangeThreshhold = inpPinbarRangeThreshhold;
+        _inpFilterByMA = inpFilterByMA;
+        _inpMAPeriodType = inpMAPeriodType;
+        _inpMAPeriodAmount = inpMAPeriodAmount;
+
+        if (inpFilterByMA) {
+            ArraySetAsSeries(_maData, true);
+            _maHandle = iMA(_Symbol, inpMAPeriodType, _inpMAPeriodAmount, 0, MODE_EMA, PRICE_CLOSE);
+        }
+    }
+
+    return retCode;
 }
 
 void CPinBar::Deinit(void)
 {
     Print("In derived class OnDeInit");
     CMyExpertBase::Deinit();
+    if (_inpFilterByMA) {
+        Print("Releasing MA indicator handle");
+        ReleaseIndicator(_maHandle);
+    }
 }
 
 void CPinBar::Processing(void)
 {
     CMyExpertBase::Processing();
+}
+
+void CPinBar::NewBarAndNoCurrentPositions(void)
+{
+    if (_inpFilterByMA) {
+        int maDataCount = CopyBuffer(_maHandle, 0, 0, _inpMAPeriodAmount, _maData);
+    }
 }
 
 bool CPinBar::HasBullishSignal()
@@ -90,7 +131,7 @@ bool CPinBar::HasBullishSignal()
     Not a higher high (Current high <= previous high)
     Current candle has a long wick pointing down
 
-    Close must be above moving average (200 period by default)
+    Close must be above moving average
     */
     if (!(_prices[1].low < _prices[2].low)) return false;
     if (!(_prices[1].close > _prices[2].low)) return false;
@@ -105,22 +146,16 @@ bool CPinBar::HasBullishSignal()
         return false;
     }
 
-    /*
-    bool maSignal = false;
-    if (!_inpUseMA) {
-        // Ignore if we don't care
-        maSignal = true;
-    }
-    else {
-        maSignal = _prices[1].close < _maData[0];
-    }
-    */
-
-    double avg = (_prices[2].high - _prices[2].low + _prices[3].high - _prices[3].low + _prices[4].high - _prices[4].low) / 3;
+    //double avg = (_prices[2].high - _prices[2].low + _prices[3].high - _prices[3].low + _prices[4].high - _prices[4].low) / 3;
+    double avg = _atrData[0];
     if (currentRange / _inpPinbarRangeThreshhold < avg) {
         return false;
     }
-    
+
+    if (_inpFilterByMA && _prices[1].close < _maData[0]) {
+        return false;
+    }
+
     return true;
 }
 
@@ -150,23 +185,16 @@ bool CPinBar::HasBearishSignal()
         return false;
     }
 
-    /*
-    bool maSignal = false;
-    if (!_inpUseMA) {
-        // Ignore if we don't care
-        maSignal = true;
-    }
-    else {
-        maSignal = _prices[1].close > _maData[0];
-    }
-    */
-
-    /*
-    double avg = (_prices[2].high - _prices[2].low + _prices[3].high - _prices[3].low + _prices[4].high - _prices[4].low) / 3;
+    
+    //double avg = (_prices[2].high - _prices[2].low + _prices[3].high - _prices[3].low + _prices[4].high - _prices[4].low) / 3;
+    double avg = _atrData[0];
     if (currentRange / _inpPinbarRangeThreshhold < avg) {
         return false;
     }
-    */
+    
+    if (_inpFilterByMA && _prices[1].close > _maData[0]) {
+        return false;
+    }
 
     return true;
 }
