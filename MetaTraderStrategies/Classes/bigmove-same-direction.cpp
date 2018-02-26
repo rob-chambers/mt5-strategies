@@ -1,11 +1,11 @@
 //+------------------------------------------------------------------+
-//|                                                        newtrend.mq5 
+//|                                         bigmove-same-direction.mq5 
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2018, Robert Chambers"
 #property version   "1.00"
 
-#include "CNewTrend.mqh"
+#include "CBigMove.mqh"
 
 //+------------------------------------------------------------------+
 //| Input variables                                  |
@@ -19,34 +19,27 @@ input STOPLOSS_RULE _inpTrailingStopLossRule = StaticPipsValue; // Trailing Stop
 input int      _inpTrailingStopPips = 0;   // Trailing stop in pips (0 to not use a trailing stop)
 input int      _inpMinutesToWaitAfterPositionClosed = 60;   // Number of minutes to wait before a new signal is raised after the last position was closed
 
-// Go Long / short parameters
+                                                            // Go Long / short parameters
 input bool      _inpGoLong = true;          // Whether to enter long trades or not
 input bool      _inpGoShort = true;         // Whether to enter short trades or not
 
-// Alert parameters
+                                            // Alert parameters
 input bool      _inpAlertTerminalEnabled = true;  // Whether to show terminal alerts or not
 input bool      _inpAlertEmailEnabled = false;  // Whether to alert via email or not
 
-// Trading time parameters
+                                                // Trading time parameters
 input int       _inpMinTradingHour = 0;     // The minimum hour of the day to trade (e.g. 7 for 7am)
 input int       _inpMaxTradingHour = 0;    // The maximum hour of the day to trade (e.g. 19 for 7pm)
 
-// Pin Bar parameters
-//input double   _inpPinbarThreshhold = 0.6;  // Length of candle wick vs range
-//input double   _inpPinbarRangeThreshhold = 2; // Range of pin bar compared to historical range
-
 // Technical parameters
-input int       _inpBarCountHighestHigh = 40; // The number of bars where the current high must be higher than
-input bool      _inpFilterByADX = true;     // Whether to take into account the ADX indicator or not when providing signals
-input int       _inpADXPeriod = 14;         // The number of bars used to calculate the ADX
-input int       _inpBarCountInRange = 10;   // The number of bars that must have an ADX value lower than the threshold
-input int       _inpADXThreshold = 30;      // The ADX threshold value used to determine whether we are in a range or not
-
+input int       _inpATRPeriod = 12;
 input bool      _inpFilterByMA = true;              // Whether to take into account the Moving Average rule
-input ENUM_TIMEFRAMES _inpMAPeriodType = PERIOD_H1; // The time frame of the moving average
-input int _inpMAPeriodAmount = 21;                  // The number of bars used for calculating the Moving Average
+input ENUM_TIMEFRAMES _inpMAPeriodType = PERIOD_D1; // The time frame of the moving average
+input int _inpMAPeriodAmount = 8;                  // The number of bars used for calculating the Moving Average
+input int _inpMinMultiplier = 3;
+input int _inpMaxMultiplier = 7;
 
-CNewTrend derived;
+CBigMoveSameDirection derived;
 
 //+------------------------------------------------------------------+
 //| Expert initialisation function                                   |
@@ -68,15 +61,13 @@ int OnInit()
         _inpMinutesToWaitAfterPositionClosed,
         _inpMinTradingHour,
         _inpMaxTradingHour,
-        _inpBarCountHighestHigh,
-        _inpFilterByADX,
-        _inpADXPeriod,
-        _inpBarCountInRange,
-        _inpADXThreshold,
+        _inpATRPeriod,
         _inpFilterByMA,
         _inpMAPeriodType,
-        _inpMAPeriodAmount
-        );
+        _inpMAPeriodAmount,
+        _inpMinMultiplier,
+        _inpMaxMultiplier
+    );
 }
 //+------------------------------------------------------------------+
 //| Expert deinitialization function                                 |

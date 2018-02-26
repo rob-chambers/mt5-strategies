@@ -7,27 +7,28 @@ public:
     ~CNewTrend(void);
     virtual int Init
     (
-        double   inpLots = 1,
-        bool     inpUseDynamicStops = false,
-        int      inpStopLossPips = 15,
-        bool     inpUseTakeProfit = true,
-        int      inpTakeProfitPips = 30,
-        int      inpTrailingStopPips = 20,
-        bool     inpGoLong = true,
-        bool     inpGoShort = true,
-        bool     inpAlertTerminalEnabled = true,
-        bool     inpAlertEmailEnabled = false,
-        int      inpMinutesToWaitAfterPositionClosed = 60,
-        int      inpMinTradingHour = 0,
-        int      inpMaxTradingHour = 0,
-        int      inpBarCountHighestHigh = 40,
-        bool     inpFilterByADX = true,
-        int      inpADXPeriod = 14,
-        int      inpBarCountInRange = 10,
-        int      inpADXThreshold = 30,
-        bool     inpFilterByMA = true,
+        double          inpLots,
+        STOPLOSS_RULE   inpInitialStopLossRule,
+        int             inpInitialStopLossPips,
+        bool            inpUseTakeProfit,
+        int             inpTakeProfitPips,
+        STOPLOSS_RULE   inpTrailingStopLossRule,
+        int             inpTrailingStopPips,
+        bool            inpGoLong,
+        bool            inpGoShort,
+        bool            inpAlertTerminalEnabled,
+        bool            inpAlertEmailEnabled,
+        int             inpMinutesToWaitAfterPositionClosed,
+        int             inpMinTradingHour,
+        int             inpMaxTradingHour,
+        int             inpBarCountHighestHigh = 40,
+        bool            inpFilterByADX = true,
+        int             inpADXPeriod = 14,
+        int             inpBarCountInRange = 10,
+        int             inpADXThreshold = 30,
+        bool            inpFilterByMA = true,
         ENUM_TIMEFRAMES inpMAPeriodType = PERIOD_H1,
-        int inpMAPeriodAmount = 21
+        int             inpMAPeriodAmount = 21
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -57,7 +58,9 @@ private:
     double _maData[];
 
     bool IsHighestHigh();
+    bool IsLowestLow();
     bool IsCloseNearHigh();
+    bool IsCloseNearLow();
     bool IsRangeIncreasing();
     bool InRange();
 };
@@ -71,33 +74,37 @@ CNewTrend::~CNewTrend(void)
 }
 
 int CNewTrend::Init(
-    double   inpLots,
-    bool     inpUseDynamicStops,
-    int      inpStopLossPips,
-    bool     inpUseTakeProfit,
-    int      inpTakeProfitPips,
-    int      inpTrailingStopPips,
-    bool     inpGoLong,
-    bool     inpGoShort,
-    bool     inpAlertTerminalEnabled,
-    bool     inpAlertEmailEnabled,
-    int      inpMinutesToWaitAfterPositionClosed,
-    int      inpMinTradingHour,
-    int      inpMaxTradingHour,
-    int      inpBarCountHighestHigh,
-    bool     inpFilterByADX,
-    int      inpADXPeriod,
-    int      inpBarCountInRange,
-    int      inpADXThreshold,
-    bool     inpFilterByMA,
+    double          inpLots,
+    STOPLOSS_RULE   inpInitialStopLossRule,
+    int             inpInitialStopLossPips,
+    bool            inpUseTakeProfit,
+    int             inpTakeProfitPips,
+    STOPLOSS_RULE   inpTrailingStopLossRule,
+    int             inpTrailingStopPips,
+    bool            inpGoLong,
+    bool            inpGoShort,
+    bool            inpAlertTerminalEnabled,
+    bool            inpAlertEmailEnabled,
+    int             inpMinutesToWaitAfterPositionClosed,
+    int             inpMinTradingHour,
+    int             inpMaxTradingHour,
+    int             inpBarCountHighestHigh,
+    bool            inpFilterByADX,
+    int             inpADXPeriod,
+    int             inpBarCountInRange,
+    int             inpADXThreshold,
+    bool            inpFilterByMA,
     ENUM_TIMEFRAMES inpMAPeriodType,
-    int      inpMAPeriodAmount
+    int             inpMAPeriodAmount
     )
 {
     Print("In derived class CNewTrend OnInit");
 
     // Non-base variables initialised here
-    int retCode = CMyExpertBase::Init(inpLots, inpUseDynamicStops, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
+    int retCode = CMyExpertBase::Init(inpLots, inpInitialStopLossRule, inpInitialStopLossPips, inpUseTakeProfit,
+        inpTakeProfitPips, inpTrailingStopLossRule, inpTrailingStopPips, inpGoLong, inpGoShort,
+        inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed,
+        inpMinTradingHour, inpMaxTradingHour);
 
     if (retCode == INIT_SUCCEEDED) {
         Print("Custom initialisation for new trend EA");
@@ -163,6 +170,9 @@ bool CNewTrend::HasBullishSignal()
     1) Close must be higher than open
     2) Current high > yesterday's high
     3) Current high must be higher than all highs for last x bars
+    4) Optionally, close must be near the high
+    5) Range must be increasing
+    6) We must be in a trading range (i.e. not trending)
     */
     if (!(_prices[1].close > _prices[1].open)) return false;
     if (!(_prices[1].high > _prices[2].high)) return false;
@@ -214,11 +224,58 @@ bool CNewTrend::HasBullishSignal()
 bool CNewTrend::HasBearishSignal()
 {
     /* Rules:
-    
+    1) Close must be lower than open
+    2) Current high < yesterday's high
+    3) Current low must be lower than all lows for last x bars
+    4) Optionally, close must be near the low
+    5) Range must be increasing
+    6) We must be in a trading range (i.e. not trending)
     */
-    return false;
+    if (!(_prices[1].close < _prices[1].open)) return false;
+    if (!(_prices[1].high < _prices[2].high)) return false;
 
-    //return true;
+    if (!IsLowestLow()) return false;
+
+    if (!IsCloseNearLow()) return false;
+    if (!IsRangeIncreasing()) return false;
+
+    if (_inpFilterByADX && !InRange()) return false;
+
+    //double closeFromHigh = _prices[1].high - _prices[1].close;
+    //double openFromHigh = _prices[1].high - _prices[1].open;
+
+
+    /*
+    double currentRange = _prices[1].high - _prices[1].low;
+    if (!((closeFromHigh / currentRange <= (1 - _inpPinbarThreshhold)) &&
+    (openFromHigh / currentRange <= (1 - _inpPinbarThreshhold)))) {
+    return false;
+    }
+    */
+
+    if (_inpFilterByMA && _prices[1].close < _maData[0]) {
+        return false;
+    }
+
+    /*
+    bool maSignal = false;
+    if (!_inpUseMA) {
+    // Ignore if we don't care
+    maSignal = true;
+    }
+    else {
+    maSignal = _prices[1].close < _maData[0];
+    }
+    */
+
+    /*
+    double avg = (_prices[2].high - _prices[2].low + _prices[3].high - _prices[3].low + _prices[4].high - _prices[4].low) / 3;
+    if (currentRange / _inpPinbarRangeThreshhold < avg) {
+    return false;
+    }
+    */
+
+    return true;
 }
 
 bool CNewTrend::IsHighestHigh()
@@ -232,10 +289,27 @@ bool CNewTrend::IsHighestHigh()
     return true;
 }
 
+bool CNewTrend::IsLowestLow()
+{
+    for (int bar = 2; bar < _inpBarCountHighestHigh; bar++) {
+        if (_prices[1].low >= _prices[bar].low) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool CNewTrend::IsCloseNearHigh()
 {
     double range = _prices[1].high - _prices[1].low;
     return ((_prices[1].high - _prices[1].close) <= (range * 0.05));
+}
+
+bool CNewTrend::IsCloseNearLow()
+{
+    double range = _prices[1].high - _prices[1].low;
+    return ((_prices[1].close - _prices[1].low) <= (range * 0.05));
 }
 
 bool CNewTrend::IsRangeIncreasing()
