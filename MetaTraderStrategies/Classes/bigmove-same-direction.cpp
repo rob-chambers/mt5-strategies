@@ -5,7 +5,7 @@
 #property copyright "Copyright 2018, Robert Chambers"
 #property version   "1.00"
 
-#include "CBigMove.mqh"
+#include "CBigMoveSameDirection.mqh"
 
 //+------------------------------------------------------------------+
 //| Input variables                                  |

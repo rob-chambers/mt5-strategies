@@ -38,7 +38,7 @@ protected:
 
 private:
     int _atrHandle;
-    double _atrData[];
+    double _rangeData[];
     int _inpATRPeriod;
     bool _inpFilterByMA;
     ENUM_TIMEFRAMES _inpMAPeriodType;
@@ -90,7 +90,7 @@ int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inp
 if (retCode == INIT_SUCCEEDED) {
     Print("Custom initialisation for big move EA");
 
-    ArraySetAsSeries(_atrData, true);
+    ArraySetAsSeries(_rangeData, true);
     _atrHandle = iATR(Symbol(), PERIOD_CURRENT, inpATRPeriod);
 
     _inpATRPeriod = inpATRPeriod;
@@ -129,7 +129,7 @@ void CBigMoveSameDirection::Processing(void)
 
 void CBigMoveSameDirection::NewBarAndNoCurrentPositions(void)
 {
-    int count = CopyBuffer(_atrHandle, 0, 0, _inpATRPeriod, _atrData);
+    int count = CopyBuffer(_atrHandle, 0, 0, _inpATRPeriod, _rangeData);
     if (_inpFilterByMA) {
         int maDataCount = CopyBuffer(_maHandle, 0, 0, _inpMAPeriodAmount, _maData);
     }
@@ -138,7 +138,7 @@ void CBigMoveSameDirection::NewBarAndNoCurrentPositions(void)
 bool CBigMoveSameDirection::HasBullishSignal()
 {
     double currentRange = _prices[1].high - _prices[1].low;
-    if (currentRange >= _atrData[1] * _inpMinMultiplier && currentRange <= _atrData[1] * _inpMaxMultiplier) {
+    if (currentRange >= _rangeData[1] * _inpMinMultiplier && currentRange <= _rangeData[1] * _inpMaxMultiplier) {
 
         // What colour candle is it - trade in the SAME direction as the move
         if (_prices[1].close > _prices[1].open) {
@@ -159,7 +159,7 @@ bool CBigMoveSameDirection::HasBullishSignal()
 bool CBigMoveSameDirection::HasBearishSignal()
 {
     double currentRange = _prices[1].high - _prices[1].low;
-    if (currentRange >= _atrData[1] * _inpMinMultiplier && currentRange <= _atrData[1] * _inpMaxMultiplier) {
+    if (currentRange >= _rangeData[1] * _inpMinMultiplier && currentRange <= _rangeData[1] * _inpMaxMultiplier) {
 
         // What colour candle is it - trade in the SAME direction as the move
         if (_prices[1].close < _prices[1].open) {
