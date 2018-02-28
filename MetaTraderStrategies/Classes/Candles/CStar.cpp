@@ -130,7 +130,9 @@ bool CStar::HasBearishSignal()
         (_prices[2].close > _prices[3].close) &&
         (_prices[2].open > _prices[3].open) &&
         (_prices[1].close < middle) &&
-        (_prices[1].high < _prices[2].high)) // custom rule            
+        (_prices[1].high < _prices[2].high) && // custom rule
+        (_prices[3].high < _prices[2].high)) // custom rule    
+
     {
         if (_inpFilterByMA && _prices[1].close > _maData[0]) {
             return false;

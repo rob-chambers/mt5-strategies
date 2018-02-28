@@ -6,9 +6,10 @@ enum STOPLOSS_RULE
 {
     None,
     StaticPipsValue,
-    CurrentBar5Pips,
+    CurrentBar2Pips,
     CurrentBar2ATR,
-    PreviousBar5Pips
+    PreviousBar5Pips,
+    PreviousBar2Pips
 };
 
 class CMyExpertBase
@@ -83,6 +84,7 @@ private:
     double _recentHigh;
     double _recentLow;
     int _atrHandle;
+    int _barsSinceTradeOpened;
 };
 
 CMyExpertBase::CMyExpertBase(void)
@@ -143,7 +145,7 @@ int CMyExpertBase::Init(
         return(INIT_FAILED);
     }
 
-    if (inpTakeProfitPips <= 0) {
+    if (inpUseTakeProfit && inpTakeProfitPips <= 0) {
         Print("Invalid take profit pip value.  Pips should be greater than 0 - init failed.");
         return(INIT_FAILED);
     }
@@ -256,6 +258,8 @@ void CMyExpertBase::Processing(void)
 
     if (PositionSelect(_Symbol) == true) // We have an open position
     {
+        _barsSinceTradeOpened++;
+        Print("Bars since opened: ", _barsSinceTradeOpened);
         CheckToModifyPositions();
         return;
     }
@@ -431,6 +435,10 @@ bool CMyExpertBase::LongModified()
 {
     double newStop = 0;
 
+    if (_barsSinceTradeOpened == 0) {
+        return false;
+    }
+
     if (_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh) {
         _recentHigh = _prices[1].high;
 
@@ -439,8 +447,8 @@ bool CMyExpertBase::LongModified()
                 newStop = _recentHigh - _trailing_stop;
                 break;
 
-            case CurrentBar5Pips:
-                newStop = _prices[1].low - _symbol.Point() * 5;
+            case CurrentBar2Pips:
+                newStop = _prices[1].low - _adjustedPoints * 2;
                 break;
 
             case CurrentBar2ATR:
@@ -448,7 +456,11 @@ bool CMyExpertBase::LongModified()
                 break;
 
             case PreviousBar5Pips:
-                newStop = _prices[2].low - _symbol.Point() * 5;
+                newStop = _prices[2].low - _adjustedPoints * 5;
+                break;
+
+            case PreviousBar2Pips:
+                newStop = _prices[2].low - _adjustedPoints * 2;
                 break;
         }
 
@@ -470,6 +482,10 @@ bool CMyExpertBase::LongModified()
 
 bool CMyExpertBase::ShortModified()
 {
+    if (_barsSinceTradeOpened == 0) {
+        return false;
+    }
+
     double newStop = 0;
 
     if (_prices[1].low < _prices[2].low && _prices[1].low < _recentLow) {
@@ -481,8 +497,8 @@ bool CMyExpertBase::ShortModified()
                 newStop = _recentLow + _trailing_stop;
                 break;
 
-            case CurrentBar5Pips:
-                newStop = _prices[1].high +_symbol.Point() * 5;
+            case CurrentBar2Pips:
+                newStop = _prices[1].high + _adjustedPoints * 2;
                 break;
 
             case CurrentBar2ATR:
@@ -490,11 +506,17 @@ bool CMyExpertBase::ShortModified()
                 break;
 
             case PreviousBar5Pips:
-                newStop = _prices[2].high + _symbol.Point() * 5;
+                newStop = _prices[2].high + _adjustedPoints * 5;
+                break;
+
+            case PreviousBar2Pips:
+                newStop = _prices[2].high + _adjustedPoints * 2;
                 break;
         }
 
         double sl = NormalizeDouble(newStop, _symbol.Digits());
+        printf("Prior level = %f and new level = %f", newStop, sl);
+
         double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
 
         double tp = _position.TakeProfit();
@@ -566,6 +588,7 @@ void CMyExpertBase::OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, doubl
         uint resultCode = _trade.ResultRetcode();
         if (resultCode == TRADE_RETCODE_PLACED || resultCode == TRADE_RETCODE_DONE) {
             Print("Entry rules: A ", orderTypeMsg, " order has been successfully placed with Ticket#: ", _trade.ResultOrder());
+            _barsSinceTradeOpened = 0;
         }
         else {
             Print("Entry rules: The ", orderTypeMsg, " order request could not be completed.  Result code: ", resultCode, ", Error: ", GetLastError());
@@ -615,8 +638,8 @@ double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
             stopLossLevel = _currentAsk - stopLossPipsFinal * _Point * _digits_adjust;
             break;
 
-        case CurrentBar5Pips:
-            stopLossLevel = _prices[1].low - _symbol.Point() * 5;
+        case CurrentBar2Pips:
+            stopLossLevel = _prices[1].low - _adjustedPoints * 2;
             priceFromStop = (_currentAsk - stopLossLevel) / (_Point * _digits_adjust);
 
             Print("Price from stop: ", priceFromStop);
@@ -641,7 +664,16 @@ double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
                 low = _prices[2].low;
             }
 
-            stopLossLevel = low - _symbol.Point() * 5;
+            stopLossLevel = low - _adjustedPoints * 5;
+            break;
+
+        case PreviousBar2Pips:
+            low = _prices[1].low;
+            if (_prices[2].low < low) {
+                low = _prices[2].low;
+            }
+
+            stopLossLevel = low - _adjustedPoints * 2;
             break;
     }
 
@@ -674,8 +706,8 @@ double CMyExpertBase::CalculateStopLossLevelForSellOrder()
             stopLossLevel = _currentBid + stopLossPipsFinal * _Point * _digits_adjust;
             break;
 
-        case CurrentBar5Pips:
-            stopLossLevel = _prices[1].high + _symbol.Point() * 5;
+        case CurrentBar2Pips:
+            stopLossLevel = _prices[1].high + _adjustedPoints * 2;
             break;
 
         case CurrentBar2ATR:
@@ -688,7 +720,16 @@ double CMyExpertBase::CalculateStopLossLevelForSellOrder()
                 high = _prices[2].high;
             }
 
-            stopLossLevel = high + _symbol.Point() * 5;
+            stopLossLevel = high + _adjustedPoints * 5;
+            break;
+
+        case PreviousBar2Pips:
+            high = _prices[1].high;
+            if (_prices[2].high > high) {
+                high = _prices[2].high;
+            }
+
+            stopLossLevel = high + _adjustedPoints * 2;
             break;
     }
 
