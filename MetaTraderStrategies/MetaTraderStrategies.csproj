@@ -5,4 +5,16 @@
     <PostBuildEvent></PostBuildEvent>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Remove="Scripts\CalcLotSize.cpp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Scripts\CalcLotSize.cpp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Indicators\" />
+  </ItemGroup>
+
 </Project>
