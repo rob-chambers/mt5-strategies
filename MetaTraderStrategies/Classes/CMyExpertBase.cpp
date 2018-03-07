@@ -27,13 +27,14 @@ public:
         int             inpTakeProfitPips,
         STOPLOSS_RULE   inpTrailingStopLossRule,
         int             inpTrailingStopPips,
+        bool            inpMoveToBreakEven,
         bool            inpGoLong,
         bool            inpGoShort,
         bool            inpAlertTerminalEnabled,
         bool            inpAlertEmailEnabled,
         int             inpMinutesToWaitAfterPositionClosed,
         int             inpMinTradingHour,
-        int             inpMaxTradingHour
+        int             inpMaxTradingHour        
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -64,6 +65,8 @@ protected:
     int _inpMinutesToWaitAfterPositionClosed;
     int _inpMinTradingHour;
     int _inpMaxTradingHour;
+    bool _inpMoveToBreakEven;
+    bool _alreadyMovedToBreakEven;
 
     void ReleaseIndicator(int& handle);
     virtual void NewBarAndNoCurrentPositions();
@@ -103,13 +106,14 @@ int CMyExpertBase::Init(
     int             inpTakeProfitPips,
     STOPLOSS_RULE   inpTrailingStopLossRule,
     int             inpTrailingStopPips,
+    bool            inpMoveToBreakEven,
     bool            inpGoLong,
     bool            inpGoShort,
     bool            inpAlertTerminalEnabled,
     bool            inpAlertEmailEnabled,
     int             inpMinutesToWaitAfterPositionClosed,
     int             inpMinTradingHour,
-    int             inpMaxTradingHour
+    int             inpMaxTradingHour    
 )
 {
     if (!_symbol.Name(Symbol())) // sets symbol name
@@ -208,6 +212,9 @@ int CMyExpertBase::Init(
     _inpMinutesToWaitAfterPositionClosed = inpMinutesToWaitAfterPositionClosed;
     _inpMinTradingHour = inpMinTradingHour;
     _inpMaxTradingHour = inpMaxTradingHour;
+    _inpMoveToBreakEven = inpMoveToBreakEven;
+
+    _alreadyMovedToBreakEven = false;
 
     printf("DA=%f, adjusted points = %f", _digits_adjust, _adjustedPoints);
 
@@ -269,7 +276,6 @@ void CMyExpertBase::Processing(void)
     if (PositionSelect(_Symbol) == true) // We have an open position
     {
         _barsSinceTradeOpened++;
-        Print("Bars since opened: ", _barsSinceTradeOpened);
         CheckToModifyPositions();
         return;
     }
@@ -288,6 +294,7 @@ void CMyExpertBase::Processing(void)
 
         _recentHigh = 0;
         _recentLow = 999999;
+        _alreadyMovedToBreakEven = false;
 
         numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 40, _prices);
 
@@ -423,7 +430,7 @@ bool CMyExpertBase::RefreshRates()
 
 bool CMyExpertBase::CheckToModifyPositions()
 {
-    if (_inpTrailingStopLossRule == None) return false;
+    if (_inpTrailingStopLossRule == None && !_inpMoveToBreakEven) return false;
 
     if (!_position.Select(Symbol())) {
         return false;
@@ -474,14 +481,44 @@ bool CMyExpertBase::LongModified()
                 break;
         }
 
+        // Check if we should move to breakeven
+        double risk;
+        if (!_alreadyMovedToBreakEven) {
+            risk = _position.PriceOpen() - _position.StopLoss();
+            double breakEvenPoint = _position.PriceOpen() + risk;
+            
+            if (_currentAsk > breakEvenPoint + _atrData[0] * 2) { // Add true range for a buffer
+                if (breakEvenPoint > newStop) {
+                    printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
+                    newStop = breakEvenPoint;
+                }
+            }
+        }
+
         double sl = NormalizeDouble(newStop, _symbol.Digits());
-        double tp = _position.TakeProfit();
+        double tp = _position.TakeProfit();        
+        double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+
         if (_position.StopLoss() < sl || _position.StopLoss() == 0.0) {
+            double diff = (_currentAsk - sl) / _adjustedPoints;
+            if (diff < stopLevelPips) {
+                printf("Can't set new stop that close to the current price.  Ask = %f, new stop = %f, stop level = %f, diff = %f",
+                    _currentAsk, sl, stopLevelPips, diff);
+
+                sl = _currentAsk - stopLevelPips * _adjustedPoints;
+            }
+
             //--- modify position
             if (!_trade.PositionModify(Symbol(), sl, tp)) {
                 printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
                 printf("Modify parameters : SL=%f,TP=%f", sl, tp);
             }
+
+            if (!_alreadyMovedToBreakEven && sl >= _position.PriceOpen()) {
+                int profitInPips = int((sl - _position.PriceOpen()) / _adjustedPoints);
+                printf("%d pips profit now locked in (sl = %f, open = %f)", profitInPips, sl, _position.PriceOpen());
+                _alreadyMovedToBreakEven = true;
+            }            
 
             return true;
         }
@@ -528,8 +565,8 @@ bool CMyExpertBase::ShortModified()
         printf("Prior level = %f and new level = %f", newStop, sl);
 
         double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
-
         double tp = _position.TakeProfit();
+
         if (_position.StopLoss() > sl || _position.StopLoss() == 0.0) {
 
             double diff = (sl - _currentBid) / _adjustedPoints;

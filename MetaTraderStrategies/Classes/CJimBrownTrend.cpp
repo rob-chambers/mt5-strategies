@@ -8,12 +8,13 @@ public:
     virtual int Init
     (
         double          inpLots = 1,
-        STOPLOSS_RULE   inpStopLossRule = StaticPipsValue,
-        int             inpStopLossPips = 15,
+        STOPLOSS_RULE   inpStopLossRule = PreviousBar5Pips,
+        int             inpStopLossPips = 0,
         bool            inpUseTakeProfit = true,
-        int             inpTakeProfitPips = 30,
+        int             inpTakeProfitPips = 60,
         STOPLOSS_RULE   inpTrailingStopLossRule = StaticPipsValue,
         int             inpTrailingStopPips = 20,
+        bool            inpMoveToBreakEven = true,
         bool            inpGoLong = true,
         bool            inpGoShort = true,
         bool            inpAlertTerminalEnabled = true,
@@ -53,6 +54,7 @@ private:
     string _sig;
 
     string GetTrendDirection(int index);
+    void CheckSignal();
 };
 
 CJimBrownTrend::CJimBrownTrend(void)
@@ -71,13 +73,14 @@ int CJimBrownTrend::Init(
     int             inpTakeProfitPips,
     STOPLOSS_RULE   inpTrailingStopLossRule,
     int             inpTrailingStopPips,
+    bool            inpMoveToBreakEven,
     bool            inpGoLong,
     bool            inpGoShort,
     bool            inpAlertTerminalEnabled,
     bool            inpAlertEmailEnabled,
     int             inpMinutesToWaitAfterPositionClosed,
     int             inpMinTradingHour,
-    int             inpMaxTradingHour,
+    int             inpMaxTradingHour,    
     int             inpFastPlatinum,
     int             inpSlowPlatinum,
     int             inpSmoothPlatinum,
@@ -90,7 +93,7 @@ int CJimBrownTrend::Init(
 
     // Non-base variables initialised here
     int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit, 
-        inpTakeProfitPips, inpTrailingStopLossRule, inpTrailingStopPips, inpGoLong, inpGoShort, 
+        inpTakeProfitPips, inpTrailingStopLossRule, inpTrailingStopPips, inpMoveToBreakEven, inpGoLong, inpGoShort, 
         inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, 
         inpMinTradingHour, inpMaxTradingHour);
 
@@ -176,24 +179,19 @@ void CJimBrownTrend::NewBarAndNoCurrentPositions()
 }
 
 bool CJimBrownTrend::HasBullishSignal()
-{    
-    //Print("Current trend is: ", _trend);
+{
+    CheckSignal();
+    return _sig == "Buy";
+}
 
-    /*for (int i = 1; i < _inpMAPeriod; i++) {
-        if (trend != "Up" && GetTrendDirection(PERIOD_CURRENT, i) == "Up")
-        {
-            trend = "Up";
-            Print("Found up trend");
-            return true;
-        }
-        else if (trend != "Dn" && GetTrendDirection(PERIOD_CURRENT, i) == "Dn")
-        {
-            Print("Found down trend");
-            trend = "Dn";
-        }
-    }*/
-    
-    
+bool CJimBrownTrend::HasBearishSignal()
+{
+    CheckSignal();
+    return _sig == "Sell";
+}
+
+void CJimBrownTrend::CheckSignal()
+{    
     /*
     _filter1 = "Both";
 
@@ -228,48 +226,12 @@ bool CJimBrownTrend::HasBullishSignal()
         if (_trend == "Up" && (_filter1 == "Both" || _filter1 == "Buy"))
         {
             _sig = "Buy";
-            return true;
         }
         else if (_trend == "Dn" && (_filter1 == "Both" || _filter1 == "Sell"))
         {
             _sig = "Sell";
         }
     }
-    
-    /*
-
-
-    string oldTrend = _trend;
-
-    if (_trend != "Up" && GetTrendDirection(PERIOD_CURRENT, 1) == "Up")
-    {
-        _trend = "Up";
-        Print("Found up trend");
-        return oldTrend == "Dn";
-    } else if (_trend != "Dn" && GetTrendDirection(PERIOD_CURRENT, 1) == "Dn")
-    {
-        Print("Found down trend");
-        _trend = "Dn";
-    } 
-    */
-
-    //if (_qmpData[1] > 0) {
-    //    /*for (int i = 0; i < _inpMAPeriod; i++) {
-    //        printf("QMP Data %d = %f", i, _qmpData[i]);
-    //    }
-    //    for (int i = 0; i < _inpMAPeriod; i++) {
-    //        printf("QMP Down Data %d = %f", i, _qmpDownData[i]);
-    //    }*/
-
-    //    return true;
-    //}
-
-    return false;
-}
-
-bool CJimBrownTrend::HasBearishSignal()
-{
-    return false;
 }
 
 string CJimBrownTrend::GetTrendDirection(int index)
@@ -281,68 +243,12 @@ string CJimBrownTrend::GetTrendDirection(int index)
     double qqe1 = _qqe1Data[index];
     double qqe2 = _qqe2Data[index];
     
-    string message;
-    string data;
-
     if (blue > -1 && blue < 1 && qqe1 > qqe2) {
-        printf("trend dir up for %d: %f, %f, %f, %f", index, blue, orange, qqe1, qqe2);
-        
-        data = "";
-        //for (int i = 0; i < _inpSlowPlatinum; i++) {
-        //    printf(_platinumUpCrossData[i]);
-        //}
-        for (int i = 0; i < _inpSlowPlatinum; i++) {
-            StringConcatenate(data, _platinumUpCrossData[i], ",");
-        }
-        message = "";
-        StringConcatenate(message, "Platinum Buy: ", data);
-        Print(message);
-
-        data = "";
-        for (int i = 0; i < _inpSlowPlatinum; i++) {
-            StringConcatenate(data, _platinumDownCrossData[i], ",");
-        }
-        message = "";
-        StringConcatenate(message, "Platinum Sell: ", data);
-        Print(message);
-
-        data = "";
-        for (int i = 0; i < _inpFTF_RSI_Period; i++) {
-            StringConcatenate(data, _qqe1Data[i], ",");
-        }
-        StringConcatenate(message, "QQE 1: ", data);
-        Print(message);
-
-        data = "";
-        for (int i = 0; i < _inpFTF_RSI_Period; i++) {
-            StringConcatenate(data, _qqe2Data[i], ",");
-        }
-        StringConcatenate(message, "QQE 2: ", data);
-        Print(message);
-
         trend = "Up";
     }
     else if (orange > -1 && orange < 1 && qqe1 < qqe2) {
-        printf("trend dir down for index %d: %f, %f, %f, %f", index, blue, orange, qqe1, qqe2);
         trend = "Dn";
     }
 
     return trend;
 }
-
-/*
-string trend(int x)
-{
-    //----
-    string ctrend = "X";
-    double blue = iCustom(Symbol(), 0, "MACD_Platinum", Fast_Platinum, Slow_Platinum, Smooth_Platinum, true, false, false, "", false, false, false, 4, x);
-    double orange = iCustom(Symbol(), 0, "MACD_Platinum", Fast_Platinum, Slow_Platinum, Smooth_Platinum, true, false, false, "", false, false, false, 5, x);
-    double qqe1 = iCustom(Symbol(), 0, "QQE Adv", SF, RSI_Period, WP, 0, x);
-    double qqe2 = iCustom(Symbol(), 0, "QQE Adv", SF, RSI_Period, WP, 1, x);
-    //----
-    if (blue >= orange && qqe1 >= qqe2) ctrend = "Up";
-    else if (blue<orange && qqe1<qqe2) ctrend = "Dn";
-    //----
-    return (ctrend);
-}
-*/
