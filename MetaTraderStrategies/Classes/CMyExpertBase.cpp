@@ -248,11 +248,21 @@ void CMyExpertBase::Processing(void)
 
     // -------------------- Collect most current data --------------------
     if (!RefreshRates()) {
+        Print("Could not refresh rates during processing.");
         return;
     }
 
     int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 40, _prices);
+    if (numberOfPriceDataPoints == -1) {
+        Print("Error copying rates during processing.");
+        return;
+    }
+
     int atrDataCount = CopyBuffer(_atrHandle, 0, 0, 3, _atrData);
+    if (atrDataCount == -1) {
+        Print("Error copying ATR data.");
+        return;
+    }
 
     // -------------------- EXITS --------------------
 

@@ -32,7 +32,12 @@ input int       _inpMinTradingHour = 7;     // The minimum hour of the day to tr
 input int       _inpMaxTradingHour = 19;    // The maximum hour of the day to trade (e.g. 19 for 7pm)
 
 // Technical parameters
-input int       _inpMAPeriod = 12;          // The number of bars used for averaging
+input int       _inpFastPlatinum = 12;      // Fast MA Period
+input int       _inpSlowPlatinum = 26;      // Slow MA Period
+input int       _inpSmoothPlatinum = 9;     // MA Smoothing Period
+input int       _inpFTF_SF = 1;             // QQE SF
+input int       _inpFTF_RSI_Period = 8;     // QQE RSI Period
+input int       _inpFTF_WP = 3;             // QQE WP
 
 CJimBrownTrend derived;
 
@@ -56,7 +61,12 @@ int OnInit()
         _inpMinutesToWaitAfterPositionClosed,
         _inpMinTradingHour,
         _inpMaxTradingHour,
-        _inpMAPeriod
+        _inpFastPlatinum,
+        _inpSlowPlatinum,
+        _inpSmoothPlatinum,
+        _inpFTF_SF,
+        _inpFTF_RSI_Period,
+        _inpFTF_WP
     );
 }
 //+------------------------------------------------------------------+
