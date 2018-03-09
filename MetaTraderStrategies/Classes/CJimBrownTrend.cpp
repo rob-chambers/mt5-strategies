@@ -41,11 +41,14 @@ protected:
 private:
     int _platinumHandle;
     int _qqeHandle;
+    int _qmpFilterHandle;
     double _platinumUpCrossData[];
     double _platinumDownCrossData[];
     double _macdData[];
     double _qqe1Data[];
     double _qqe2Data[];
+    double _qmpFilterUpData[];
+    double _qmpFilterDownData[];
     int _inpFTF_RSI_Period;
     int _inpSmoothPlatinum;
     int _inpSlowPlatinum;
@@ -106,8 +109,23 @@ int CJimBrownTrend::Init(
         ArraySetAsSeries(_qqe1Data, true);
         ArraySetAsSeries(_qqe2Data, true);
 
+        ArraySetAsSeries(_qmpFilterUpData, true);
+        ArraySetAsSeries(_qmpFilterDownData, true);
+
         _platinumHandle = iCustom(_Symbol, PERIOD_CURRENT, "MACD_Platinum", inpFastPlatinum, inpSlowPlatinum, inpSmoothPlatinum, true, true, false, false);
+        if (_platinumHandle == INVALID_HANDLE) {
+            Print("Error creating MACD Platinum indicator");
+        }
+
         _qqeHandle = iCustom(_Symbol, PERIOD_CURRENT, "QQE Adv", inpFTF_SF, inpFTF_RSI_Period, inpFTF_WP);
+        if (_qqeHandle == INVALID_HANDLE) {
+            Print("Error creating QQE Adv indicator");
+        }
+
+        _qmpFilterHandle = iCustom(_Symbol, PERIOD_CURRENT, "QMP Filter", PERIOD_CURRENT, inpFTF_SF, inpFTF_RSI_Period, inpFTF_WP, true, inpFTF_SF, inpFTF_RSI_Period, inpFTF_WP, false, false);
+        if (_qmpFilterHandle == INVALID_HANDLE) {
+            Print("Error creating QMP Filter indicator");
+        }
 
         _inpSlowPlatinum = inpSlowPlatinum;
         _inpSmoothPlatinum = inpSmoothPlatinum;
@@ -131,6 +149,7 @@ void CJimBrownTrend::Deinit(void)
 
     ReleaseIndicator(_platinumHandle);
     ReleaseIndicator(_qqeHandle);
+    ReleaseIndicator(_qmpFilterHandle);
 }
 
 void CJimBrownTrend::Processing(void)
@@ -140,9 +159,9 @@ void CJimBrownTrend::Processing(void)
 
 void CJimBrownTrend::OnRecentlyClosedTrade()
 {
-    //Print("Resetting trend status");
-    //_trend = "X";
-    //_sig = "Start";
+    Print("Resetting trend status");
+    _trend = "X";
+    _sig = "Start";
 }
 
 void CJimBrownTrend::NewBarAndNoCurrentPositions()
@@ -176,18 +195,32 @@ void CJimBrownTrend::NewBarAndNoCurrentPositions()
         Print("Error copying platinum down cross data.");
         return;
     }
+
+
+
+    count = CopyBuffer(_qmpFilterHandle, 0, 0, 2, _qmpFilterUpData);
+    if (count == -1) {
+        Print("Error copying QMP Filter data for up buffer.");
+        return;
+    }
+
+    count = CopyBuffer(_qmpFilterHandle, 1, 0, 2, _qmpFilterDownData);
+    if (count == -1) {
+        Print("Error copying QMP Filter data for down buffer.");
+        return;
+    }
 }
 
 bool CJimBrownTrend::HasBullishSignal()
 {
     CheckSignal();
-    return _sig == "Buy";
+    return _sig == "Buy"; // && _macdData[1] < 0.001; // Added custom MACD filter
 }
 
 bool CJimBrownTrend::HasBearishSignal()
 {
     CheckSignal();
-    return _sig == "Sell";
+    return _sig == "Sell"; // && _macdData[1] > 0.001; // Added custom MACD filter
 }
 
 void CJimBrownTrend::CheckSignal()
@@ -234,19 +267,33 @@ void CJimBrownTrend::CheckSignal()
     }
 }
 
+//string CJimBrownTrend::GetTrendDirection(int index)
+//{
+//    string trend = "X";
+//       
+//    double blue = _platinumUpCrossData[index];
+//    double orange = _platinumDownCrossData[index];
+//    double qqe1 = _qqe1Data[index];
+//    double qqe2 = _qqe2Data[index];
+//    
+//    if (blue > -1 && blue < 1 && qqe1 > qqe2) {
+//        trend = "Up";
+//    }
+//    else if (orange > -1 && orange < 1 && qqe1 < qqe2) {
+//        trend = "Dn";
+//    }
+//
+//    return trend;
+//}
+
 string CJimBrownTrend::GetTrendDirection(int index)
 {
     string trend = "X";
-       
-    double blue = _platinumUpCrossData[index];
-    double orange = _platinumDownCrossData[index];
-    double qqe1 = _qqe1Data[index];
-    double qqe2 = _qqe2Data[index];
-    
-    if (blue > -1 && blue < 1 && qqe1 > qqe2) {
+
+    if (_qmpFilterUpData[index] && _qmpFilterUpData[index] != 0.0) {
         trend = "Up";
     }
-    else if (orange > -1 && orange < 1 && qqe1 < qqe2) {
+    else if (_qmpFilterDownData[index] && _qmpFilterDownData[index] != 0.0) {
         trend = "Dn";
     }
 

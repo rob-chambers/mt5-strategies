@@ -67,12 +67,14 @@ protected:
     int _inpMaxTradingHour;
     bool _inpMoveToBreakEven;
     bool _alreadyMovedToBreakEven;
+    double _initialStop;
 
     void ReleaseIndicator(int& handle);
     virtual void NewBarAndNoCurrentPositions();
     virtual void OnRecentlyClosedTrade();
 
 private:
+    void ResetState();
     bool RefreshRates();
     datetime iTime(const int index, string symbol = NULL, ENUM_TIMEFRAMES timeframe = PERIOD_CURRENT);
     bool CheckToModifyPositions();
@@ -218,6 +220,8 @@ int CMyExpertBase::Init(
 
     printf("DA=%f, adjusted points = %f", _digits_adjust, _adjustedPoints);
 
+    ResetState();
+
     return(INIT_SUCCEEDED);
 }
 
@@ -228,6 +232,14 @@ void CMyExpertBase::Deinit(void)
         Print("Releasing ATR indicator handle");
         ReleaseIndicator(_atrHandle);
     }
+}
+
+void CMyExpertBase::ResetState()
+{
+    _recentHigh = 0;
+    _recentLow = 999999;
+    _alreadyMovedToBreakEven = false;
+
 }
 
 void CMyExpertBase::ReleaseIndicator(int& handle) {
@@ -241,14 +253,6 @@ void CMyExpertBase::ReleaseIndicator(int& handle) {
 
 void CMyExpertBase::Processing(void)
 {
-    //--- we work only at the time of the birth of new bar
-    static datetime PrevBars = 0;
-
-    datetime time_0 = iTime(0);
-    if (time_0 == PrevBars) return;
-
-    PrevBars = time_0;
-
     int takeProfitPipsFinal;
     double stopLossLevel;
     double takeProfitLevel;
@@ -271,14 +275,20 @@ void CMyExpertBase::Processing(void)
         return;
     }
 
-    // -------------------- EXITS --------------------
 
+    datetime time_0 = iTime(0);    
+    static datetime PrevBars = 0;
+
+    // -------------------- EXITS --------------------
     if (PositionSelect(_Symbol) == true) // We have an open position
     {
         _barsSinceTradeOpened++;
         CheckToModifyPositions();
-        return;
     }
+
+    //--- we work only at the time of the birth of new bar    
+    if (time_0 == PrevBars) return;
+    PrevBars = time_0;
 
     // -------------------- ENTRIES --------------------  
     if (PositionSelect(_Symbol) == false) // We have no open positions
@@ -288,13 +298,10 @@ void CMyExpertBase::Processing(void)
         }
 
         if (RecentlyClosedTrade()) {
+            ResetState();
             OnRecentlyClosedTrade();
             return;
         }
-
-        _recentHigh = 0;
-        _recentLow = 999999;
-        _alreadyMovedToBreakEven = false;
 
         numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 40, _prices);
 
@@ -473,18 +480,23 @@ bool CMyExpertBase::LongModified()
                 break;
 
             case PreviousBar5Pips:
+                // TODO: Check if previous bar high is actually higher!
                 newStop = _prices[2].low - _adjustedPoints * 5;
                 break;
 
             case PreviousBar2Pips:
+                // TODO: Check if previous bar high is actually higher!
                 newStop = _prices[2].low - _adjustedPoints * 2;
                 break;
         }
 
+        // TOOD: Is the new stop sufficiently far away or perhaps too far?
+
+
         // Check if we should move to breakeven
         double risk;
         if (!_alreadyMovedToBreakEven) {
-            risk = _position.PriceOpen() - _position.StopLoss();
+            risk = _position.PriceOpen() - _initialStop;
             double breakEvenPoint = _position.PriceOpen() + risk;
             
             if (_currentAsk > breakEvenPoint + _atrData[0] * 2) { // Add true range for a buffer
@@ -632,10 +644,12 @@ void CMyExpertBase::OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, doubl
     }
 
     if (_trade.PositionOpen(symbol, orderType, volume, price, stopLoss, takeProfit, message)) {
+        _initialStop = 0;
         uint resultCode = _trade.ResultRetcode();
         if (resultCode == TRADE_RETCODE_PLACED || resultCode == TRADE_RETCODE_DONE) {
             Print("Entry rules: A ", orderTypeMsg, " order has been successfully placed with Ticket#: ", _trade.ResultOrder());
             _barsSinceTradeOpened = 0;
+            _initialStop = stopLoss;
         }
         else {
             Print("Entry rules: The ", orderTypeMsg, " order request could not be completed.  Result code: ", resultCode, ", Error: ", GetLastError());
