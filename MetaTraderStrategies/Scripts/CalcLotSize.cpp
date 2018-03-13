@@ -9,7 +9,7 @@
 #include <Trade\SymbolInfo.mqh> 
 #include <ChartObjects\ChartObjectsTxtControls.mqh>
 
-input double Risk = 1; // Risk per trade as percentage of account size (e.g. 1 for 1%)
+input double Risk = 0.2; // Risk per trade as percentage of account size (e.g. 1 for 1%)
 
 CSymbolInfo _symbol;
 CChartObjectEdit _inputStopPrice;
