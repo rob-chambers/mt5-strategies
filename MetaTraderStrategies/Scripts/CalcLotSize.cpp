@@ -9,24 +9,30 @@
 #include <Trade\SymbolInfo.mqh> 
 #include <ChartObjects\ChartObjectsTxtControls.mqh>
 
-extern double Risk = 1;         // Risk per trade as percentage of account size (e.g. 1 for 1%)
-extern double BrokerComm = 7;   // Broker Commission
+input double Risk = 1; // Risk per trade as percentage of account size (e.g. 1 for 1%)
 
 CSymbolInfo _symbol;
 CChartObjectEdit _inputStopPrice;
 CChartObjectLabel _lotSizeLabel;
 bool _textBoxCreated;
 
-int OnInit() {    
-    if (!_symbol.RefreshRates())
-        return -1;
+int OnInit() {
+    if (!_symbol.Name(_Symbol)) {
+        Print("Error setting symbol name");
+        return(INIT_FAILED);
+    }
+
+    if (!_symbol.RefreshRates()) {
+        Print("Error refreshing rates!");
+        return(INIT_FAILED);
+    }
 
     if (_symbol.Ask() == 0 || _symbol.Bid() == 0) {
         MessageBox("Couldn't get rates");
-        return -1;
+        return(INIT_FAILED);
     }
 
-    _textBoxCreated = _inputStopPrice.Create(0, "_inputStopPrice", 0, 800, 10, 50, 25);
+    _textBoxCreated = _inputStopPrice.Create(0, "_inputStopPrice", 0, 800, 10, 80, 25);
     if (_textBoxCreated) {
         _inputStopPrice.BackColor(White);
         _inputStopPrice.BorderColor(Black);
@@ -53,24 +59,31 @@ void OnDeinit(const int reason)
     }
 }
 
-double ComputeRisk(double RiskPercent, double sl, double comm)
+double ComputeRisk(double distance)
 {
-    double MMBalance, MMRiskMoney;
-    double MMLotStep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-    double MMTickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
-    double MMTickSize = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+    double accountBalance, riskInMoney;
+    double lotStep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+    double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+    double tickSize = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
 
     int lotdigits = 0;
     do
     {
         lotdigits++;
-        MMLotStep *= 10;
-    } while (MMLotStep < 1);
+        lotStep *= 10;
+    } while (lotStep < 1);
 
-    MMBalance = MathMin(AccountInfoDouble(ACCOUNT_BALANCE), AccountInfoDouble(ACCOUNT_EQUITY));
-    MMRiskMoney = MMBalance * RiskPercent / 100;
-    double lot = MMRiskMoney / (sl * (MMTickValue / MMTickSize) + comm);
-    lot = NormalizeDouble(MathFloor(lot * MathPow(10, lotdigits)) / MathPow(10, lotdigits), lotdigits);
+    accountBalance = MathMin(AccountInfoDouble(ACCOUNT_BALANCE), AccountInfoDouble(ACCOUNT_EQUITY));
+    riskInMoney = accountBalance * Risk / 100;
+
+    double lot = NormalizeDouble(riskInMoney / (distance * (tickValue / tickSize)), lotdigits);
+
+    // Hack for JPY pairs
+    if (_symbol.Digits() == 3) {
+        lot = lot / 10;
+    }
+
+    lot = MathFloor(lot * MathPow(10, lotdigits)) / MathPow(10, lotdigits);
 
     return NormalizeDouble(lot, lotdigits);
 }
@@ -95,7 +108,7 @@ void OnChartEvent(
             double price = _symbol.Ask();
             double stopLoss = StringToDouble(_inputStopPrice.GetString(OBJPROP_TEXT));
             double sl = NormalizeDouble(stopLoss, _Digits);
-            double lot = ComputeRisk(Risk, MathAbs(price - sl), BrokerComm);
+            double lot = ComputeRisk(MathAbs(price - sl));
 
             message = "Lot size should be: " + (string)lot;
         }

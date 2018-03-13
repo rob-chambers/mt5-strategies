@@ -31,6 +31,7 @@ public:
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
+    virtual void              OnTrade(void);
     virtual bool              HasBullishSignal();
     virtual bool              HasBearishSignal();
 
@@ -157,13 +158,6 @@ void CJimBrownTrend::Processing(void)
     CMyExpertBase::Processing();
 }
 
-void CJimBrownTrend::OnRecentlyClosedTrade()
-{
-    Print("Resetting trend status");
-    _trend = "X";
-    _sig = "Start";
-}
-
 void CJimBrownTrend::NewBarAndNoCurrentPositions()
 {
     int count = CopyBuffer(_qqeHandle, 0, 0, _inpFTF_RSI_Period, _qqe1Data);
@@ -196,8 +190,6 @@ void CJimBrownTrend::NewBarAndNoCurrentPositions()
         return;
     }
 
-
-
     count = CopyBuffer(_qmpFilterHandle, 0, 0, 2, _qmpFilterUpData);
     if (count == -1) {
         Print("Error copying QMP Filter data for up buffer.");
@@ -209,6 +201,18 @@ void CJimBrownTrend::NewBarAndNoCurrentPositions()
         Print("Error copying QMP Filter data for down buffer.");
         return;
     }
+}
+
+void CJimBrownTrend::OnTrade(void)
+{
+    CMyExpertBase::OnTrade();
+}
+
+void CJimBrownTrend::OnRecentlyClosedTrade()
+{
+    Print("Resetting trend status");
+    _trend = "X";
+    _sig = "Start";
 }
 
 bool CJimBrownTrend::HasBullishSignal()

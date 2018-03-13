@@ -38,6 +38,7 @@ public:
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
+    virtual void              OnTrade(void);
     virtual bool              HasBullishSignal();
     virtual bool              HasBearishSignal();
 
@@ -85,11 +86,17 @@ private:
     double CalculateStopLossLevelForBuyOrder();
     double CalculateStopLossLevelForSellOrder();
     bool RecentlyClosedTrade();
+    bool IsNewBar(datetime currentTime);
 
+    datetime _barTime;
     double _recentHigh;
     double _recentLow;
     int _atrHandle;
     int _barsSinceTradeOpened;
+    int _previousOrderTotal; // Number of orders at the time of previous OnTrade() call
+    int _GetLastError; // Error code
+    long _orderState; // Order state
+    ulong _lastOrderTicket; // Ticket of the last processed order
 };
 
 CMyExpertBase::CMyExpertBase(void)
@@ -239,7 +246,9 @@ void CMyExpertBase::ResetState()
     _recentHigh = 0;
     _recentLow = 999999;
     _alreadyMovedToBreakEven = false;
+    _previousOrderTotal = 0;
 
+    _previousOrderTotal = 0;
 }
 
 void CMyExpertBase::ReleaseIndicator(int& handle) {
@@ -275,10 +284,6 @@ void CMyExpertBase::Processing(void)
         return;
     }
 
-
-    datetime time_0 = iTime(0);    
-    static datetime PrevBars = 0;
-
     // -------------------- EXITS --------------------
     if (PositionSelect(_Symbol) == true) // We have an open position
     {
@@ -287,12 +292,11 @@ void CMyExpertBase::Processing(void)
     }
 
     //--- we work only at the time of the birth of new bar    
-    if (time_0 == PrevBars) return;
-    PrevBars = time_0;
+    if (!IsNewBar(iTime(0))) return;
 
     // -------------------- ENTRIES --------------------  
     if (PositionSelect(_Symbol) == false) // We have no open positions
-    {
+    {        
         if (IsOutsideTradingHours()) {
             return;
         }
@@ -316,7 +320,7 @@ void CMyExpertBase::Processing(void)
         double limitPrice;
 
         NewBarAndNoCurrentPositions();
-
+        
         if (_inpGoLong && HasBullishSignal()) {
             limitPrice = _currentAsk;
             stopLossLevel = CalculateStopLossLevelForBuyOrder();
@@ -345,6 +349,163 @@ void CMyExpertBase::Processing(void)
         }
     }
 }
+
+//void CMyExpertBase::OnTrade(void)
+//{
+//    Print("OnTrade event fired!");
+//
+//    int minutes = 5;
+//    datetime to = TimeCurrent();
+//    datetime from = to - 60 * minutes;
+//
+//    Print("Getting history from ", from, " to ", to);
+//    if (!HistorySelect(from, to)) {
+//        Print("Failed to retrieve order history");
+//    }
+//
+//    int ordersTotal = HistoryOrdersTotal();
+//
+//    printf("%d orders found", ordersTotal);
+//
+//    Print("PreviousOrderTotal: ", _previousOrderTotal);
+//
+//    /**/
+//    if (_previousOrderTotal < ordersTotal)
+//    {
+//        OrderGetTicket(ordersTotal - 1); // Select the last order to work with
+//        _GetLastError = GetLastError();
+//        Print("Error #", _GetLastError);
+//        ResetLastError();
+//
+//        long orderState = OrderGetInteger(ORDER_STATE);
+//
+//        Print("State of order", orderState);
+//
+//        if (orderState == ORDER_STATE_STARTED)
+//        {
+//            Alert(OrderGetTicket(ordersTotal - 1), "Order has arrived for processing");
+//            _lastOrderTicket = OrderGetTicket(ordersTotal - 1);    // Saving the order ticket for further work
+//            if (_lastOrderTicket == 0) {
+//                Print("Couldn't get last order ticket");
+//            }
+//        }
+//
+//    }
+//    else if (_previousOrderTotal > ordersTotal)
+//    {
+//        Print("Prev total exceeds current total");
+//        _orderState = HistoryOrderGetInteger(_lastOrderTicket, ORDER_STATE);
+//        Print("Order state: ", _orderState);
+//
+//        // If order is not found, generate an error
+//        _GetLastError = GetLastError();
+//        if (_GetLastError != 0) {
+//            Alert("Error #", _GetLastError, " Order is not found!");
+//            _lastOrderTicket = 0;
+//        }
+//
+//        Print("Error #", _GetLastError, " state: ", _orderState);
+//        ResetLastError();
+//
+//        // My code below
+//
+//        //if ((ticket = HistoryOrderGetTicket(orderCount - 1)) > 0) {
+//        //    if (HistoryOrderGetString(ticket, ORDER_SYMBOL) == _symbol.Name()) {
+//        //        long orderType = HistoryOrderGetInteger(ticket, ORDER_TYPE);
+//        //        printf("We had a recent order of type %d", orderType);
+//        //        if (orderType == ORDER_TYPE_SELL || orderType == ORDER_TYPE_BUY) {
+//
+//        //        }
+//        //    }
+//        //}
+//
+//        // End of my code
+//
+//        // If order is fully executed
+//        if (_orderState == ORDER_STATE_FILLED)
+//        {
+//            // Then analyse the last deal
+//            printf("Order %d executed, going to deal", _lastOrderTicket);
+//            switch (HistoryDealGetInteger(HistoryDealGetTicket(HistoryDealsTotal() - 1), DEAL_ENTRY))
+//            {
+//            case DEAL_ENTRY_IN:
+//                Print("We just entered the market.");
+//                break;
+//
+//            case DEAL_ENTRY_OUT:
+//                Print("We just exited our position.");
+//                break;
+//
+//            case DEAL_ENTRY_INOUT:
+//                Print("Close using inout");
+//                break;
+//
+//            case DEAL_ENTRY_OUT_BY:
+//                Print("We just closed our position by an opposite one.");
+//                break;
+//            }
+//        }
+//    }
+//
+//    _previousOrderTotal = ordersTotal;
+//}
+
+void CMyExpertBase::OnTrade(void)
+{
+    Print("OnTrade event fired!");
+
+    int minutes = 1;
+    datetime to = TimeCurrent();
+    datetime from = to - 60 * minutes;
+
+    Print("Getting history from ", from, " to ", to);
+    if (!HistorySelect(from, to)) {
+        Print("Failed to retrieve order history");
+    }
+
+    int ordersTotal = HistoryOrdersTotal();
+
+    printf("%d orders found", ordersTotal);
+
+    if (ordersTotal > 0)
+    {
+        OrderGetTicket(ordersTotal - 1); // Select the last order to work with
+        _GetLastError = GetLastError();
+        Print("Error #", _GetLastError);
+        ResetLastError();
+
+        long orderState = OrderGetInteger(ORDER_STATE);
+
+        Print("State of order", orderState);
+
+        if (orderState == ORDER_STATE_STARTED)
+        {
+            Alert(OrderGetTicket(ordersTotal - 1), "Order has arrived for processing");
+            _lastOrderTicket = OrderGetTicket(ordersTotal - 1);    // Saving the order ticket for further work
+            if (_lastOrderTicket == 0) {
+                Print("Couldn't get last order ticket");
+            }
+        }
+
+        long ticket = OrderGetTicket(ordersTotal - 1);
+
+        _orderState = HistoryOrderGetInteger(ticket, ORDER_STATE);
+        Print("Historical Order state: ", _orderState);
+
+        if ((ticket = HistoryOrderGetTicket(ordersTotal - 1)) > 0) {
+            if (HistoryOrderGetString(ticket, ORDER_SYMBOL) == _symbol.Name()) {
+                long orderType = HistoryOrderGetInteger(ticket, ORDER_TYPE);
+                printf("We had a recent order of type %d", orderType);
+                if (orderType == ORDER_TYPE_SELL || orderType == ORDER_TYPE_BUY) {
+
+                }
+            }
+        }
+    }
+
+    //_previousOrderTotal = ordersTotal;
+}
+
 
 void CMyExpertBase::NewBarAndNoCurrentPositions()
 {
@@ -796,4 +957,17 @@ double CMyExpertBase::CalculateStopLossLevelForSellOrder()
 
     double sl = NormalizeDouble(stopLossLevel, _symbol.Digits());
     return sl;
+}
+
+bool CMyExpertBase::IsNewBar(datetime currentTime)
+{
+    bool result = false;
+    //if (iBarShift(NULL, PERIOD_CURRENT, _barTime) != iBarShift(NULL, PERIOD_CURRENT, currentTime))
+    if (_barTime != currentTime)
+    {
+        _barTime = currentTime;
+        result = true;
+    }
+
+    return result;
 }
