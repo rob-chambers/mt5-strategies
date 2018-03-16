@@ -41,13 +41,10 @@ protected:
 
 private:
     int _platinumHandle;
-    int _qqeHandle;
     int _qmpFilterHandle;
     double _platinumUpCrossData[];
     double _platinumDownCrossData[];
     double _macdData[];
-    double _qqe1Data[];
-    double _qqe2Data[];
     double _qmpFilterUpData[];
     double _qmpFilterDownData[];
     int _inpFTF_RSI_Period;
@@ -107,8 +104,6 @@ int CJimBrownTrend::Init(
         ArraySetAsSeries(_platinumUpCrossData, true);
         ArraySetAsSeries(_platinumDownCrossData, true);
         ArraySetAsSeries(_macdData, true);
-        ArraySetAsSeries(_qqe1Data, true);
-        ArraySetAsSeries(_qqe2Data, true);
 
         ArraySetAsSeries(_qmpFilterUpData, true);
         ArraySetAsSeries(_qmpFilterDownData, true);
@@ -116,11 +111,6 @@ int CJimBrownTrend::Init(
         _platinumHandle = iCustom(_Symbol, PERIOD_CURRENT, "MACD_Platinum", inpFastPlatinum, inpSlowPlatinum, inpSmoothPlatinum, true, true, false, false);
         if (_platinumHandle == INVALID_HANDLE) {
             Print("Error creating MACD Platinum indicator");
-        }
-
-        _qqeHandle = iCustom(_Symbol, PERIOD_CURRENT, "QQE Adv", inpFTF_SF, inpFTF_RSI_Period, inpFTF_WP);
-        if (_qqeHandle == INVALID_HANDLE) {
-            Print("Error creating QQE Adv indicator");
         }
 
         _qmpFilterHandle = iCustom(_Symbol, PERIOD_CURRENT, "QMP Filter", PERIOD_CURRENT, inpFTF_SF, inpFTF_RSI_Period, inpFTF_WP, true, inpFTF_SF, inpFTF_RSI_Period, inpFTF_WP, false, false);
@@ -149,7 +139,6 @@ void CJimBrownTrend::Deinit(void)
     if (_platinumHandle == 0) return;
 
     ReleaseIndicator(_platinumHandle);
-    ReleaseIndicator(_qqeHandle);
     ReleaseIndicator(_qmpFilterHandle);
 }
 
@@ -160,19 +149,7 @@ void CJimBrownTrend::Processing(void)
 
 void CJimBrownTrend::NewBarAndNoCurrentPositions()
 {
-    int count = CopyBuffer(_qqeHandle, 0, 0, _inpFTF_RSI_Period, _qqe1Data);
-    if (count == -1) {
-        Print("Error copying qqe1 data.");
-        return;
-    }
-
-    count = CopyBuffer(_qqeHandle, 1, 0, _inpFTF_RSI_Period, _qqe2Data);
-    if (count == -1) {
-        Print("Error copying qqe2 data.");
-        return;
-    }
-
-    count = CopyBuffer(_platinumHandle, 0, 0, _inpSlowPlatinum, _macdData);
+    int count = CopyBuffer(_platinumHandle, 0, 0, _inpSlowPlatinum, _macdData);
     if (count == -1) {
         Print("Error copying MACD data.");
         return;
@@ -270,25 +247,6 @@ void CJimBrownTrend::CheckSignal()
         }
     }
 }
-
-//string CJimBrownTrend::GetTrendDirection(int index)
-//{
-//    string trend = "X";
-//       
-//    double blue = _platinumUpCrossData[index];
-//    double orange = _platinumDownCrossData[index];
-//    double qqe1 = _qqe1Data[index];
-//    double qqe2 = _qqe2Data[index];
-//    
-//    if (blue > -1 && blue < 1 && qqe1 > qqe2) {
-//        trend = "Up";
-//    }
-//    else if (orange > -1 && orange < 1 && qqe1 < qqe2) {
-//        trend = "Dn";
-//    }
-//
-//    return trend;
-//}
 
 string CJimBrownTrend::GetTrendDirection(int index)
 {

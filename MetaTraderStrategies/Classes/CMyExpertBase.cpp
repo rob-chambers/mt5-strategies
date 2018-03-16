@@ -9,7 +9,8 @@ enum STOPLOSS_RULE
     CurrentBar2Pips,
     CurrentBar2ATR,
     PreviousBar5Pips,
-    PreviousBar2Pips
+    PreviousBar2Pips,
+    CurrentBar5Pips
 };
 
 class CMyExpertBase
@@ -539,6 +540,10 @@ bool CMyExpertBase::LongModified()
                 newStop = _prices[1].low - _adjustedPoints * 2;
                 break;
 
+            case CurrentBar5Pips:
+                newStop = _prices[1].low - _adjustedPoints * 5;
+                break;
+
             case CurrentBar2ATR:
                 newStop = _currentAsk - _atrData[0] * 2;
                 break;
@@ -628,6 +633,10 @@ bool CMyExpertBase::ShortModified()
 
             case CurrentBar2Pips:
                 newStop = _prices[1].high + _adjustedPoints * 2;
+                break;
+
+            case CurrentBar5Pips:
+                newStop = _prices[1].high + _adjustedPoints * 5;
                 break;
 
             case CurrentBar2ATR:
@@ -790,7 +799,9 @@ double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
             break;
 
         case CurrentBar2Pips:
-            stopLossLevel = _prices[1].low - _adjustedPoints * 2;
+            // Fall-through
+        case CurrentBar5Pips:
+            stopLossLevel = _prices[1].low - _adjustedPoints * (_inpInitialStopLossRule == CurrentBar2Pips ? 2 : 5);
             priceFromStop = (_currentAsk - stopLossLevel) / (_Point * _digits_adjust);
 
             Print("Price from stop: ", priceFromStop);
@@ -858,7 +869,9 @@ double CMyExpertBase::CalculateStopLossLevelForSellOrder()
             break;
 
         case CurrentBar2Pips:
-            stopLossLevel = _prices[1].high + _adjustedPoints * 2;
+            // Fall-through
+        case CurrentBar5Pips:
+            stopLossLevel = _prices[1].high + _adjustedPoints * (_inpInitialStopLossRule == CurrentBar2Pips ? 2 : 5);
             break;
 
         case CurrentBar2ATR:
