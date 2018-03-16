@@ -85,21 +85,20 @@ private:
     bool IsOutsideTradingHours();
     double CalculateStopLossLevelForBuyOrder();
     double CalculateStopLossLevelForSellOrder();
-    bool RecentlyClosedTrade();
+    bool ShouldPauseUntilOpeningNewPosition();
     bool IsNewBar(datetime currentTime);
 
-    datetime _barTime;
-    double _recentHigh;
-    double _recentLow;
-    int _atrHandle;
-    int _barsSinceTradeOpened;
-    int _previousOrderTotal; // Number of orders at the time of previous OnTrade() call
-    int _GetLastError; // Error code
-    long _orderState; // Order state
-    ulong _lastOrderTicket; // Ticket of the last processed order
-    int _eventCount;
-    int _currentPositionType;
-    datetime _lastClosedTradeTime;
+    datetime _barTime;                  // For detection of a new bar
+    double _recentHigh;                 // Tracking the most recent high for stop management
+    double _recentLow;                  // Tracking the most recent low for stop management
+    int _atrHandle;                     // Average True Range indicator handle
+    int _barsSincePositionOpened;       // Counter of the number of bars since a position was opened
+    int _previousOrderTotal;            // Number of orders at the time of previous OnTrade() call
+    int _GetLastError;                  // Error code
+    ulong _lastOrderTicket;             // Ticket of the last processed order
+    int _eventCount;                    // Counter for OnTrade event
+    int _currentPositionType;           // The current type of position (long/short)
+    datetime _lastClosedPositionTime;   // The time when a position was most recently closed
 };
 
 CMyExpertBase::CMyExpertBase(void)
@@ -198,7 +197,6 @@ int CMyExpertBase::Init(
 
     ArraySetAsSeries(_prices, true);
     ArraySetAsSeries(_atrData, true);
-    //_maHandle = iMA(Symbol(), _inpMovingAveragePeriodType, _inpMovingAveragePeriodAmount, 0, MODE_SMA, PRICE_CLOSE);
     _atrHandle = iATR(_Symbol, 0, 14);
 
     _digits_adjust = 1;
@@ -291,7 +289,7 @@ void CMyExpertBase::Processing(void)
     // -------------------- EXITS --------------------
     if (PositionSelect(_Symbol) == true) // We have an open position
     {
-        _barsSinceTradeOpened++;
+        _barsSincePositionOpened++;
         CheckToModifyPositions();
     }
 
@@ -305,10 +303,7 @@ void CMyExpertBase::Processing(void)
             return;
         }
 
-        if (RecentlyClosedTrade()) {
-        //    ResetState();
-        //    OnRecentlyClosedTrade();
-            Print("Trade recently closed - waiting");
+        if (ShouldPauseUntilOpeningNewPosition()) {
             return;
         }
 
@@ -355,119 +350,15 @@ void CMyExpertBase::Processing(void)
     }
 }
 
-//void CMyExpertBase::OnTrade(void)
-//{
-//    Print("OnTrade event fired!");
-//
-//    int minutes = 5;
-//    datetime to = TimeCurrent();
-//    datetime from = to - 60 * minutes;
-//
-//    Print("Getting history from ", from, " to ", to);
-//    if (!HistorySelect(from, to)) {
-//        Print("Failed to retrieve order history");
-//    }
-//
-//    int ordersTotal = HistoryOrdersTotal();
-//
-//    printf("%d orders found", ordersTotal);
-//
-//    Print("PreviousOrderTotal: ", _previousOrderTotal);
-//
-//    /**/
-//    if (_previousOrderTotal < ordersTotal)
-//    {
-//        OrderGetTicket(ordersTotal - 1); // Select the last order to work with
-//        _GetLastError = GetLastError();
-//        Print("Error #", _GetLastError);
-//        ResetLastError();
-//
-//        long orderState = OrderGetInteger(ORDER_STATE);
-//
-//        Print("State of order", orderState);
-//
-//        if (orderState == ORDER_STATE_STARTED)
-//        {
-//            Alert(OrderGetTicket(ordersTotal - 1), "Order has arrived for processing");
-//            _lastOrderTicket = OrderGetTicket(ordersTotal - 1);    // Saving the order ticket for further work
-//            if (_lastOrderTicket == 0) {
-//                Print("Couldn't get last order ticket");
-//            }
-//        }
-//
-//    }
-//    else if (_previousOrderTotal > ordersTotal)
-//    {
-//        Print("Prev total exceeds current total");
-//        _orderState = HistoryOrderGetInteger(_lastOrderTicket, ORDER_STATE);
-//        Print("Order state: ", _orderState);
-//
-//        // If order is not found, generate an error
-//        _GetLastError = GetLastError();
-//        if (_GetLastError != 0) {
-//            Alert("Error #", _GetLastError, " Order is not found!");
-//            _lastOrderTicket = 0;
-//        }
-//
-//        Print("Error #", _GetLastError, " state: ", _orderState);
-//        ResetLastError();
-//
-//        // My code below
-//
-//        //if ((ticket = HistoryOrderGetTicket(orderCount - 1)) > 0) {
-//        //    if (HistoryOrderGetString(ticket, ORDER_SYMBOL) == _symbol.Name()) {
-//        //        long orderType = HistoryOrderGetInteger(ticket, ORDER_TYPE);
-//        //        printf("We had a recent order of type %d", orderType);
-//        //        if (orderType == ORDER_TYPE_SELL || orderType == ORDER_TYPE_BUY) {
-//
-//        //        }
-//        //    }
-//        //}
-//
-//        // End of my code
-//
-//        // If order is fully executed
-//        if (_orderState == ORDER_STATE_FILLED)
-//        {
-//            // Then analyse the last deal
-//            printf("Order %d executed, going to deal", _lastOrderTicket);
-//            switch (HistoryDealGetInteger(HistoryDealGetTicket(HistoryDealsTotal() - 1), DEAL_ENTRY))
-//            {
-//            case DEAL_ENTRY_IN:
-//                Print("We just entered the market.");
-//                break;
-//
-//            case DEAL_ENTRY_OUT:
-//                Print("We just exited our position.");
-//                break;
-//
-//            case DEAL_ENTRY_INOUT:
-//                Print("Close using inout");
-//                break;
-//
-//            case DEAL_ENTRY_OUT_BY:
-//                Print("We just closed our position by an opposite one.");
-//                break;
-//            }
-//        }
-//    }
-//
-//    _previousOrderTotal = ordersTotal;
-//}
-
 void CMyExpertBase::OnTrade(void)
 {
-    Print("OnTrade event fired!");
     _eventCount++;
-
-    Print("Event count", _eventCount);
 
     // The OnTrade event fires multiples times.  We're only interested in handling it on the third time.
     if (_eventCount < 3) return;
 
     if (PositionSelect(_Symbol) == true) { // We have an open position
         _currentPositionType = _position.PositionType();
-        printf("Position opened of type %d - exiting", _currentPositionType);
         return;
     }
 
@@ -475,140 +366,101 @@ void CMyExpertBase::OnTrade(void)
     datetime to = TimeCurrent();
     datetime from = to - 60 * minutes;
 
-    Print("Getting history from ", from, " to ", to);
     if (!HistorySelect(from, to)) {
         Print("Failed to retrieve order history");
     }
 
     int ordersTotal = HistoryOrdersTotal();
-
-    printf("%d orders found", ordersTotal);
-
-    if (ordersTotal > 0)
-    {
-        ulong ticket = HistoryOrderGetTicket(ordersTotal - 1); // Select the last order to work with
-        if (ticket == 0) {
-            Print("Couldn't get last order ticket");
-            return;
-        }
-
-        //_GetLastError = GetLastError();
-        //Print("Error #", _GetLastError);
-        //ResetLastError();
-
-        //long orderState = OrderGetInteger(ORDER_STATE);
-
-        //Print("State of order", orderState);
-
-        //if (orderState == ORDER_STATE_STARTED)
-        //{
-        //    Alert(OrderGetTicket(ordersTotal - 1), "Order has arrived for processing");
-        //    _lastOrderTicket = OrderGetTicket(ordersTotal - 1);    // Saving the order ticket for further work
-        //    if (_lastOrderTicket == 0) {
-        //        Print("Couldn't get last order ticket");
-        //    }
-        //}
-
-        //long ticket = OrderGetTicket(ordersTotal - 1);
-
-        Print("Order ticket: ", ticket);
-
-        _orderState = HistoryOrderGetInteger(ticket, ORDER_STATE);
-        Print("Historical Order state: ", _orderState);
-        if (_orderState == 4) {
-            // Order state = 4
-
-            //if ((ticket = HistoryOrderGetTicket(ordersTotal - 1)) > 0) {
-            if (HistoryOrderGetString(ticket, ORDER_SYMBOL) == _symbol.Name()) {
-                long orderType = HistoryOrderGetInteger(ticket, ORDER_TYPE);
-                printf("We had a recent order of type %d", orderType);
-
-                bool reset = false;
-
-                if (_currentPositionType == POSITION_TYPE_BUY && orderType == ORDER_TYPE_SELL) {
-                    Print("Closed a long position");
-                    reset = true;
-                }
-                else if (_currentPositionType == POSITION_TYPE_SELL && orderType == ORDER_TYPE_BUY) {
-                    Print("Closed a short position");
-                    reset = true;
-                }
-
-                if (reset) {
-                    _lastClosedTradeTime = TimeCurrent();
-                    ResetState();
-                    OnRecentlyClosedTrade();
-                }
-            }
-            //}
-        }
-
+    if (ordersTotal <= 0) {
+        return;
     }
 
-    //_previousOrderTotal = ordersTotal;
-}
+    // Select the last order to work with
+    ulong ticket = HistoryOrderGetTicket(ordersTotal - 1);
+    if (ticket == 0) {
+        Print("Couldn't get last order ticket");
+        return;
+    }
+
+    long orderState = HistoryOrderGetInteger(ticket, ORDER_STATE);
+    if (orderState != ORDER_STATE_FILLED) {
+        return;
+    }
+
+    if (HistoryOrderGetString(ticket, ORDER_SYMBOL) != _symbol.Name()) {
+        return;
+    }
+
+    long orderType = HistoryOrderGetInteger(ticket, ORDER_TYPE);
+
+    /* Just in case we need to refer to other order types...
+    case (ORDER_TYPE_BUY):            return("buy"); 
+    case (ORDER_TYPE_SELL):           return("sell"); 
+    case (ORDER_TYPE_BUY_LIMIT):      return("buy limit"); 
+    case (ORDER_TYPE_SELL_LIMIT):     return("sell limit"); 
+    case (ORDER_TYPE_BUY_STOP):       return("buy stop"); 
+    case (ORDER_TYPE_SELL_STOP):      return("sell stop"); 
+    case (ORDER_TYPE_BUY_STOP_LIMIT): return("buy stop limit"); 
+    case (ORDER_TYPE_SELL_STOP_LIMIT):return("sell stop limit"); 
+    */
 
 
-void CMyExpertBase::NewBarAndNoCurrentPositions()
-{
-    Print("In base class NewBarAndNoCurrentPositions");
+    // We may refer to this
+
+    //            switch (HistoryDealGetInteger(HistoryDealGetTicket(HistoryDealsTotal() - 1), DEAL_ENTRY))
+    //            {
+    //            case DEAL_ENTRY_IN:
+    //                Print("We just entered the market.");
+    //                break;
+    //
+    //            case DEAL_ENTRY_OUT:
+    //                Print("We just exited our position.");
+    //                break;
+    //
+    //            case DEAL_ENTRY_INOUT:
+    //                Print("Close using inout");
+    //                break;
+    //
+    //            case DEAL_ENTRY_OUT_BY:
+    //                Print("We just closed our position by an opposite one.");
+    //                break;
+    //            }
+
+    bool reset = false;
+    if (_currentPositionType == POSITION_TYPE_BUY && orderType == ORDER_TYPE_SELL) {
+        reset = true;
+    }
+    else if (_currentPositionType == POSITION_TYPE_SELL && orderType == ORDER_TYPE_BUY) {
+        reset = true;
+    }
+
+    if (reset) {
+        _lastClosedPositionTime = TimeCurrent();
+        ResetState();
+        OnRecentlyClosedTrade();
+    }
 }
 
 void CMyExpertBase::OnRecentlyClosedTrade()
 {
 }
 
-bool CMyExpertBase::RecentlyClosedTrade()
+void CMyExpertBase::NewBarAndNoCurrentPositions()
+{
+    Print("In base class NewBarAndNoCurrentPositions");
+}
+
+bool CMyExpertBase::ShouldPauseUntilOpeningNewPosition()
 {
     if (_inpMinutesToWaitAfterPositionClosed == 0) {
         return false;
     }
 
-    if (TimeCurrent() > _lastClosedTradeTime + 60 * _inpMinutesToWaitAfterPositionClosed) {
+    if (TimeCurrent() > _lastClosedPositionTime + 60 * _inpMinutesToWaitAfterPositionClosed) {
         return false;
     }
 
     return true;
-
-    //datetime to = TimeCurrent();
-
-    //datetime to = TimeCurrent();
-    //datetime from = to - 60 * _inpMinutesToWaitAfterPositionClosed;
-
-    //if (!HistorySelect(from, to)) {
-    //    Print("Failed to retrieve order history");
-    //    return false;
-    //}
-
-    //uint orderCount = HistoryOrdersTotal();
-    //if (orderCount <= 0) return false;
-
-    //ulong ticket;
-    ////--- return order ticket by its position in the list 
-    //if ((ticket = HistoryOrderGetTicket(orderCount - 1)) > 0) {
-    //    if (HistoryOrderGetString(ticket, ORDER_SYMBOL) == _symbol.Name()) {
-    //        long orderType = HistoryOrderGetInteger(ticket, ORDER_TYPE);
-    //        printf("We had a recent order of type %d", orderType);
-    //        if (orderType == ORDER_TYPE_SELL || orderType == ORDER_TYPE_BUY) {
-    //            // Print("We had a recent sell order so we'll wait a bit");
-
-    //            /*
-    //            case (ORDER_TYPE_BUY):            return("buy"); 
-    //  case (ORDER_TYPE_SELL):           return("sell"); 
-    //  case (ORDER_TYPE_BUY_LIMIT):      return("buy limit"); 
-    //  case (ORDER_TYPE_SELL_LIMIT):     return("sell limit"); 
-    //  case (ORDER_TYPE_BUY_STOP):       return("buy stop"); 
-    //  case (ORDER_TYPE_SELL_STOP):      return("sell stop"); 
-    //  case (ORDER_TYPE_BUY_STOP_LIMIT): return("buy stop limit"); 
-    //  case (ORDER_TYPE_SELL_STOP_LIMIT):return("sell stop limit"); 
-    //            */
-
-    //            return true;
-    //        }
-    //    }
-    //}
-
-    //return false;
 }
 
 ////+------------------------------------------------------------------+ 
@@ -635,6 +487,7 @@ bool CMyExpertBase::RefreshRates()
     //--- refresh rates
     if (!_symbol.RefreshRates())
         return(false);
+
     //--- protection against the return value of "zero"
     if (_symbol.Ask() == 0 || _symbol.Bid() == 0)
         return(false);
@@ -670,7 +523,7 @@ bool CMyExpertBase::LongModified()
 {
     double newStop = 0;
 
-    if (_barsSinceTradeOpened == 0) {
+    if (_barsSincePositionOpened == 0) {
         return false;
     }
 
@@ -754,7 +607,7 @@ bool CMyExpertBase::LongModified()
 
 bool CMyExpertBase::ShortModified()
 {
-    if (_barsSinceTradeOpened == 0) {
+    if (_barsSincePositionOpened == 0) {
         return false;
     }
 
@@ -861,7 +714,7 @@ void CMyExpertBase::OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, doubl
         uint resultCode = _trade.ResultRetcode();
         if (resultCode == TRADE_RETCODE_PLACED || resultCode == TRADE_RETCODE_DONE) {
             Print("Entry rules: A ", orderTypeMsg, " order has been successfully placed with Ticket#: ", _trade.ResultOrder());
-            _barsSinceTradeOpened = 0;
+            _barsSincePositionOpened = 0;
             _initialStop = stopLoss;
         }
         else {
@@ -1014,7 +867,6 @@ double CMyExpertBase::CalculateStopLossLevelForSellOrder()
 bool CMyExpertBase::IsNewBar(datetime currentTime)
 {
     bool result = false;
-    //if (iBarShift(NULL, PERIOD_CURRENT, _barTime) != iBarShift(NULL, PERIOD_CURRENT, currentTime))
     if (_barTime != currentTime)
     {
         _barTime = currentTime;

@@ -18,7 +18,7 @@ input int   _inpTakeProfitPips = 60;                            // Take profit l
 input STOPLOSS_RULE _inpTrailingStopLossRule = None;            // Trailing Stop Loss Rule
 input int      _inpTrailingStopPips = 0;                        // Trailing stop in pips (0 to not use a trailing stop)
 input bool     _inpMoveToBreakEven = false;                     // Trail stop to break even position
-input int      _inpMinutesToWaitAfterPositionClosed = 60;       // Time to wait before a new trade is placed after last position was closed
+input int      _inpMinutesToWaitAfterPositionClosed = 60;       // Time to wait before trading again after last position closed
 
 // Go Long / short parameters
 input bool      _inpGoLong = true;                              // Whether to enter long trades or not
