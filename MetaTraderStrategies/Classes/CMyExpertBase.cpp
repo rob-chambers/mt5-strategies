@@ -565,12 +565,16 @@ bool CMyExpertBase::LongModified()
             risk = _position.PriceOpen() - _initialStop;
             double breakEvenPoint = _position.PriceOpen() + risk;
             
-            if (_currentAsk > breakEvenPoint + _atrData[0] * 2) { // Add true range for a buffer
-                if (breakEvenPoint > newStop) {
+            if (_currentAsk > breakEvenPoint) {
+                if (newStop == 0.0 || breakEvenPoint > newStop) {
                     printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
                     newStop = breakEvenPoint;
                 }
             }
+        }
+
+        if (newStop == 0.0) {
+            return false;
         }
 
         double sl = NormalizeDouble(newStop, _symbol.Digits());
@@ -639,9 +643,23 @@ bool CMyExpertBase::ShortModified()
                 break;
         }
 
-        double sl = NormalizeDouble(newStop, _symbol.Digits());
-        printf("Prior level = %f and new level = %f", newStop, sl);
+        // Check if we should move to breakeven        
+        if (!_alreadyMovedToBreakEven) {
+            double risk = _initialStop - _position.PriceOpen();
+            double breakEvenPoint = _position.PriceOpen() - risk;
+            if (_currentAsk < breakEvenPoint) {
+                if (newStop == 0.0 || breakEvenPoint < newStop) {
+                    printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
+                    newStop = breakEvenPoint;
+                }
+            }
+        }
 
+        if (newStop == 0.0) {
+            return false;
+        }
+
+        double sl = NormalizeDouble(newStop, _symbol.Digits());
         double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
         double tp = _position.TakeProfit();
 
@@ -659,6 +677,12 @@ bool CMyExpertBase::ShortModified()
             if (!_trade.PositionModify(Symbol(), sl, tp)) {
                 printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
                 printf("Modify parameters : SL=%f,TP=%f", sl, tp);
+            }
+
+            if (!_alreadyMovedToBreakEven && sl <= _position.PriceOpen()) {
+                int profitInPips = int((_position.PriceOpen() - sl) / _adjustedPoints);
+                printf("%d pips profit now locked in (sl = %f, open = %f)", profitInPips, sl, _position.PriceOpen());
+                _alreadyMovedToBreakEven = true;
             }
 
             return true;
