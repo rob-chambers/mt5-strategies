@@ -70,6 +70,7 @@ protected:
     bool _inpMoveToBreakEven;
     bool _alreadyMovedToBreakEven;
     double _initialStop;
+    bool _trailingStarted;
 
     void ReleaseIndicator(int& handle);
     virtual void NewBarAndNoCurrentPositions();
@@ -252,6 +253,7 @@ void CMyExpertBase::ResetState()
 
     _previousOrderTotal = 0;
     _eventCount = 0;
+    _trailingStarted = false;
 }
 
 void CMyExpertBase::ReleaseIndicator(int& handle) {
@@ -524,91 +526,106 @@ bool CMyExpertBase::LongModified()
 {
     double newStop = 0;
 
-    if (_barsSincePositionOpened == 0) {
+    //if (_barsSincePositionOpened == 0) {
+    //    return false;
+    //}
+
+    if (!(_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh)) {
         return false;
     }
 
-    if (_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh) {
-        _recentHigh = _prices[1].high;
+    _recentHigh = _prices[1].high;
 
-        switch (_inpTrailingStopLossRule) {
-            case StaticPipsValue:
-                newStop = _recentHigh - _trailing_stop;
-                break;
+    double breakEvenPoint = 0;
+    if (!_trailingStarted) {
+        double initialRisk = _position.PriceOpen() - _initialStop;
+        breakEvenPoint = _position.PriceOpen() + initialRisk;
 
-            case CurrentBar2Pips:
-                newStop = _prices[1].low - _adjustedPoints * 2;
-                break;
-
-            case CurrentBar5Pips:
-                newStop = _prices[1].low - _adjustedPoints * 5;
-                break;
-
-            case CurrentBar2ATR:
-                newStop = _currentAsk - _atrData[0] * 2;
-                break;
-
-            case PreviousBar5Pips:
-                // TODO: Check if previous bar high is actually higher!
-
-
-                newStop = _prices[2].low - _adjustedPoints * 5;
-                break;
-
-            case PreviousBar2Pips:
-                // TODO: Check if previous bar high is actually higher!
-                newStop = _prices[2].low - _adjustedPoints * 2;
-                break;
-        }
-
-        // TOOD: Is the new stop sufficiently far away or perhaps too far?
-
-
-        // Check if we should move to breakeven
-        double risk;
-        if (!_alreadyMovedToBreakEven) {
-            risk = _position.PriceOpen() - _initialStop;
-            double breakEvenPoint = _position.PriceOpen() + risk;
-            
-            if (_currentAsk > breakEvenPoint) {
-                if (newStop == 0.0 || breakEvenPoint > newStop) {
-                    printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
-                    newStop = breakEvenPoint;
-                }
-            }
-        }
-
-        if (newStop == 0.0) {
+        if (_currentAsk <= breakEvenPoint) {
             return false;
         }
 
-        double sl = NormalizeDouble(newStop, _symbol.Digits());
-        double tp = _position.TakeProfit();        
-        double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+        Print("Initiating trailing as we have hit breakeven");
+        _trailingStarted = true;
+    }
 
-        if (_position.StopLoss() < sl || _position.StopLoss() == 0.0) {
-            double diff = (_currentAsk - sl) / _adjustedPoints;
-            if (diff < stopLevelPips) {
-                printf("Can't set new stop that close to the current price.  Ask = %f, new stop = %f, stop level = %f, diff = %f",
-                    _currentAsk, sl, stopLevelPips, diff);
+    switch (_inpTrailingStopLossRule) {
+        case StaticPipsValue:
+            newStop = _recentHigh - _trailing_stop;
+            break;
 
-                sl = _currentAsk - stopLevelPips * _adjustedPoints;
+        case CurrentBar2Pips:
+            newStop = _prices[1].low - _adjustedPoints * 2;
+            break;
+
+        case CurrentBar5Pips:
+            newStop = _prices[1].low - _adjustedPoints * 5;
+            break;
+
+        case CurrentBar2ATR:
+            newStop = _currentAsk - _atrData[0] * 2;
+            break;
+
+        case PreviousBar5Pips:
+            // TODO: Check if previous bar high is actually higher!
+
+
+            newStop = _prices[2].low - _adjustedPoints * 5;
+            break;
+
+        case PreviousBar2Pips:
+            // TODO: Check if previous bar high is actually higher!
+            newStop = _prices[2].low - _adjustedPoints * 2;
+            break;
+    }
+
+    // TOOD: Is the new stop sufficiently far away or perhaps too far?
+
+
+    // Check if we should move to breakeven
+    //double risk;
+    if (!_alreadyMovedToBreakEven) {
+        //risk = _position.PriceOpen() - _initialStop;
+        //double breakEvenPoint = _position.PriceOpen() + risk;
+        //    
+        if (_currentAsk > breakEvenPoint) {
+            if (newStop == 0.0 || breakEvenPoint > newStop) {
+                printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
+                newStop = _position.PriceOpen();
             }
-
-            //--- modify position
-            if (!_trade.PositionModify(Symbol(), sl, tp)) {
-                printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
-                printf("Modify parameters : SL=%f,TP=%f", sl, tp);
-            }
-
-            if (!_alreadyMovedToBreakEven && sl >= _position.PriceOpen()) {
-                int profitInPips = int((sl - _position.PriceOpen()) / _adjustedPoints);
-                printf("%d pips profit now locked in (sl = %f, open = %f)", profitInPips, sl, _position.PriceOpen());
-                _alreadyMovedToBreakEven = true;
-            }            
-
-            return true;
         }
+    }
+
+    if (newStop == 0.0) {
+        return false;
+    }
+
+    double sl = NormalizeDouble(newStop, _symbol.Digits());
+    double tp = _position.TakeProfit();        
+    double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+
+    if (_position.StopLoss() < sl || _position.StopLoss() == 0.0) {
+        double diff = (_currentAsk - sl) / _adjustedPoints;
+        if (diff < stopLevelPips) {
+            printf("Can't set new stop that close to the current price.  Ask = %f, new stop = %f, stop level = %f, diff = %f",
+                _currentAsk, sl, stopLevelPips, diff);
+
+            sl = _currentAsk - stopLevelPips * _adjustedPoints;
+        }
+
+        //--- modify position
+        if (!_trade.PositionModify(Symbol(), sl, tp)) {
+            printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
+            printf("Modify parameters : SL=%f,TP=%f", sl, tp);
+        }
+
+        if (!_alreadyMovedToBreakEven && sl >= _position.PriceOpen()) {
+            int profitInPips = int((sl - _position.PriceOpen()) / _adjustedPoints);
+            printf("%d pips profit now locked in (sl = %f, open = %f)", profitInPips, sl, _position.PriceOpen());
+            _alreadyMovedToBreakEven = true;
+        }            
+
+        return true;
     }
 
     return false;
@@ -616,86 +633,101 @@ bool CMyExpertBase::LongModified()
 
 bool CMyExpertBase::ShortModified()
 {
-    if (_barsSincePositionOpened == 0) {
-        return false;
-    }
+    //if (_barsSincePositionOpened == 0) {
+    //    return false;
+    //}
 
     double newStop = 0;
 
-    if (_prices[1].low < _prices[2].low && _prices[1].low < _recentLow) {
-        printf("A new low found (%f). Prev low: %f and recent low: %f", _prices[1].low, _prices[2].low, _recentLow);
-        _recentLow = _prices[1].low;
+    if (!(_prices[1].low < _prices[2].low && _prices[1].low < _recentLow)) {
+        return false;
+    }
 
-        switch (_inpTrailingStopLossRule) {
-            case StaticPipsValue:
-                newStop = _recentLow + _trailing_stop;
-                break;
+    printf("A new low found (%f). Prev low: %f and recent low: %f", _prices[1].low, _prices[2].low, _recentLow);
+    _recentLow = _prices[1].low;
 
-            case CurrentBar2Pips:
-                newStop = _prices[1].high + _adjustedPoints * 2;
-                break;
+    double breakEvenPoint = 0;
+    if (!_trailingStarted) {
+        double risk = _initialStop - _position.PriceOpen();
+        breakEvenPoint = _position.PriceOpen() - risk;
 
-            case CurrentBar5Pips:
-                newStop = _prices[1].high + _adjustedPoints * 5;
-                break;
-
-            case CurrentBar2ATR:
-                newStop = _currentBid + _atrData[0] * 2;
-                break;
-
-            case PreviousBar5Pips:
-                newStop = _prices[2].high + _adjustedPoints * 5;
-                break;
-
-            case PreviousBar2Pips:
-                newStop = _prices[2].high + _adjustedPoints * 2;
-                break;
-        }
-
-        // Check if we should move to breakeven        
-        if (!_alreadyMovedToBreakEven) {
-            double risk = _initialStop - _position.PriceOpen();
-            double breakEvenPoint = _position.PriceOpen() - risk;
-            if (_currentAsk < breakEvenPoint) {
-                if (newStop == 0.0 || breakEvenPoint < newStop) {
-                    printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
-                    newStop = breakEvenPoint;
-                }
-            }
-        }
-
-        if (newStop == 0.0) {
+        if (_currentAsk > breakEvenPoint) {
             return false;
         }
 
-        double sl = NormalizeDouble(newStop, _symbol.Digits());
-        double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
-        double tp = _position.TakeProfit();
+        Print("Initiating trailing as we have hit breakeven");
+        _trailingStarted = true;
+    }
 
-        if (_position.StopLoss() > sl || _position.StopLoss() == 0.0) {
+    switch (_inpTrailingStopLossRule) {
+        case StaticPipsValue:
+            newStop = _recentLow + _trailing_stop;
+            break;
 
-            double diff = (sl - _currentBid) / _adjustedPoints;
-            if (diff < stopLevelPips) {
-                printf("Can't set new stop that close to the current price.  Bid = %f, new stop = %f, stop level = %f, diff = %f",
-                    _currentBid, sl, stopLevelPips, diff);
+        case CurrentBar2Pips:
+            newStop = _prices[1].high + _adjustedPoints * 2;
+            break;
 
-                sl = _currentBid + stopLevelPips * _adjustedPoints;
+        case CurrentBar5Pips:
+            newStop = _prices[1].high + _adjustedPoints * 5;
+            break;
+
+        case CurrentBar2ATR:
+            newStop = _currentBid + _atrData[0] * 2;
+            break;
+
+        case PreviousBar5Pips:
+            newStop = _prices[2].high + _adjustedPoints * 5;
+            break;
+
+        case PreviousBar2Pips:
+            newStop = _prices[2].high + _adjustedPoints * 2;
+            break;
+    }
+
+    // Check if we should move to breakeven        
+    if (!_alreadyMovedToBreakEven) {
+        //double risk = _initialStop - _position.PriceOpen();
+        //double breakEvenPoint = _position.PriceOpen() - risk;
+        if (_currentAsk < breakEvenPoint) {
+            if (newStop == 0.0 || breakEvenPoint < newStop) {
+                printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
+                newStop = _position.PriceOpen();
             }
-
-            //--- modify position
-            if (!_trade.PositionModify(Symbol(), sl, tp)) {
-                printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
-                printf("Modify parameters : SL=%f,TP=%f", sl, tp);
-            }
-
-            if (!_alreadyMovedToBreakEven && sl <= _position.PriceOpen()) {
-                int profitInPips = int((_position.PriceOpen() - sl) / _adjustedPoints);
-                printf("%d pips profit now locked in (sl = %f, open = %f)", profitInPips, sl, _position.PriceOpen());
-                _alreadyMovedToBreakEven = true;
-            }
-
-            return true;
         }
+    }
+
+    if (newStop == 0.0) {
+        return false;
+    }
+
+    double sl = NormalizeDouble(newStop, _symbol.Digits());
+    double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+    double tp = _position.TakeProfit();
+
+    if (_position.StopLoss() > sl || _position.StopLoss() == 0.0) {
+
+        double diff = (sl - _currentBid) / _adjustedPoints;
+        if (diff < stopLevelPips) {
+            printf("Can't set new stop that close to the current price.  Bid = %f, new stop = %f, stop level = %f, diff = %f",
+                _currentBid, sl, stopLevelPips, diff);
+
+            sl = _currentBid + stopLevelPips * _adjustedPoints;
+        }
+
+        //--- modify position
+        if (!_trade.PositionModify(Symbol(), sl, tp)) {
+            printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
+            printf("Modify parameters : SL=%f,TP=%f", sl, tp);
+        }
+
+        if (!_alreadyMovedToBreakEven && sl <= _position.PriceOpen()) {
+            int profitInPips = int((_position.PriceOpen() - sl) / _adjustedPoints);
+            printf("%d pips profit now locked in (sl = %f, open = %f)", profitInPips, sl, _position.PriceOpen());
+            _alreadyMovedToBreakEven = true;
+        }
+
+        return true;
     }
 
     return false;

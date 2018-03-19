@@ -27,7 +27,9 @@ public:
         int             inpSmoothPlatinum = 9,
         int             inpFTF_SF = 1,
         int             inpFTF_RSI_Period = 8,
-        int             inpFTF_WP = 3
+        int             inpFTF_WP = 3,
+        ENUM_TIMEFRAMES inpLongTermTimeFrame = PERIOD_D1,
+        int             inpLongTermPeriod = 9
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -42,20 +44,26 @@ protected:
 private:
     int _platinumHandle;
     int _qmpFilterHandle;
+    int _longTermTrendHandle;
+    int _shortTermTrendHandle;
     double _platinumUpCrossData[];
     double _platinumDownCrossData[];
     double _macdData[];
+    double _longTermTrendData[];
+    double _shortTermTrendData[];
     double _qmpFilterUpData[];
     double _qmpFilterDownData[];
+    double _longTermTimeFrameData[];
     int _inpFTF_RSI_Period;
     int _inpSmoothPlatinum;
     int _inpSlowPlatinum;
     string _trend;
     string _filter1;
     string _sig;
+    int _longTermTimeFrameHandle;
+    int _inpLongTermPeriod;
 
     string GetTrendDirection(int index);
-    void CheckSignal();
 };
 
 CJimBrownTrend::CJimBrownTrend(void)
@@ -87,7 +95,9 @@ int CJimBrownTrend::Init(
     int             inpSmoothPlatinum,
     int             inpFTF_SF,
     int             inpFTF_RSI_Period,
-    int             inpFTF_WP
+    int             inpFTF_WP,
+    ENUM_TIMEFRAMES inpLongTermTimeFrame,
+    int             inpLongTermPeriod
     )
 {
     Print("In derived class CJimBrownTrend OnInit");
@@ -108,6 +118,10 @@ int CJimBrownTrend::Init(
         ArraySetAsSeries(_qmpFilterUpData, true);
         ArraySetAsSeries(_qmpFilterDownData, true);
 
+        ArraySetAsSeries(_longTermTrendData, true);
+        ArraySetAsSeries(_shortTermTrendData, true);
+        ArraySetAsSeries(_longTermTimeFrameData, true);
+
         _platinumHandle = iCustom(_Symbol, PERIOD_CURRENT, "MACD_Platinum", inpFastPlatinum, inpSlowPlatinum, inpSmoothPlatinum, true, true, false, false);
         if (_platinumHandle == INVALID_HANDLE) {
             Print("Error creating MACD Platinum indicator");
@@ -118,9 +132,25 @@ int CJimBrownTrend::Init(
             Print("Error creating QMP Filter indicator");
         }
 
+        _longTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, 240, 0, MODE_LWMA, PRICE_CLOSE);
+        if (_longTermTrendHandle == INVALID_HANDLE) {
+            Print("Error creating long term MA indicator");
+        }
+
+        _shortTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, 50, 0, MODE_EMA, PRICE_CLOSE);
+        if (_shortTermTrendHandle == INVALID_HANDLE) {
+            Print("Error creating short term MA indicator");
+        }
+
+        _longTermTimeFrameHandle = iMA(_Symbol, inpLongTermTimeFrame, inpLongTermPeriod, 0, MODE_EMA, PRICE_CLOSE);
+        if (_longTermTimeFrameHandle == INVALID_HANDLE) {
+            Print("Error creating long term timeframe indicator");
+        }
+
         _inpSlowPlatinum = inpSlowPlatinum;
         _inpSmoothPlatinum = inpSmoothPlatinum;
         _inpFTF_RSI_Period = inpFTF_RSI_Period;
+        _inpLongTermPeriod = inpLongTermPeriod;
 
         _trend = "X";
         _sig = "Start";
@@ -140,6 +170,9 @@ void CJimBrownTrend::Deinit(void)
 
     ReleaseIndicator(_platinumHandle);
     ReleaseIndicator(_qmpFilterHandle);
+    ReleaseIndicator(_longTermTrendHandle);
+    ReleaseIndicator(_shortTermTrendHandle);
+    ReleaseIndicator(_longTermTimeFrameHandle);
 }
 
 void CJimBrownTrend::Processing(void)
@@ -178,6 +211,24 @@ void CJimBrownTrend::NewBarAndNoCurrentPositions()
         Print("Error copying QMP Filter data for down buffer.");
         return;
     }
+
+    count = CopyBuffer(_longTermTrendHandle, 0, 0, 2, _longTermTrendData);
+    if (count == -1) {
+        Print("Error copying long term trend data.");
+        return;
+    }    
+
+    count = CopyBuffer(_shortTermTrendHandle, 0, 0, 2, _shortTermTrendData);
+    if (count == -1) {
+        Print("Error copying short term trend data.");
+        return;
+    }
+
+    count = CopyBuffer(_longTermTimeFrameHandle, 0, 0, _inpLongTermPeriod, _longTermTimeFrameData);
+    if (count == -1) {
+        Print("Error copying long term timeframe data.");
+        return;
+    }
 }
 
 void CJimBrownTrend::OnTrade(void)
@@ -194,58 +245,45 @@ void CJimBrownTrend::OnRecentlyClosedTrade()
 
 bool CJimBrownTrend::HasBullishSignal()
 {
-    CheckSignal();
-    return _sig == "Buy"; // && _macdData[1] < 0.001; // Added custom MACD filter
+    //CheckSignal();
+    //bool basicSignal = _sig == "Buy";
+    //
+    //if (basicSignal) {
+    if (GetTrendDirection(1) == "Up") {
+        if (_prices[1].close >= _longTermTrendData[1] && _prices[1].low <= _shortTermTrendData[1]) {        
+            if (_prices[1].close < _longTermTimeFrameData[1]) {
+                Print("Rejecting signal due to long-term trend.");
+                return false;
+            }
+
+            return true;
+        }
+    }
+
+    //if (_macdData[1] < 0.001) {
+
+    return false;       
 }
 
 bool CJimBrownTrend::HasBearishSignal()
 {
-    CheckSignal();
-    return _sig == "Sell"; // && _macdData[1] > 0.001; // Added custom MACD filter
-}
+    //CheckSignal();
+    //bool basicSignal = _sig == "Sell";
+    //
+    //if (basicSignal) {
+    if (GetTrendDirection(1) == "Dn") {
+        if (_prices[1].close <= _longTermTrendData[1] && _prices[1].high >= _shortTermTrendData[1]) {
+            if (_prices[1].close > _longTermTimeFrameData[1]) {
+                Print("Rejecting signal due to long-term trend.");
+                return false;
+            }
 
-void CJimBrownTrend::CheckSignal()
-{    
-    /*
-    _filter1 = "Both";
-
-    _filter1 = "";
-    for (int i = 1; _filter1 == ""; i++)
-    {
-        if (GetTrendDirection(i) == "Up") {
-            _filter1 = "Buy";
-        }
-        else if (GetTrendDirection(i) == "Dn") {
-            _filter1 = "Sell";
+            return true;
         }
     }
-    */
-
-    _filter1 = "Both";
-
-    // Start of proper signal
-    if (_trend != "Up" && GetTrendDirection(1) == "Up")
-    {
-        _trend = "Up";
-        _sig = "X";
-    }
-    else if (_trend != "Dn" && GetTrendDirection(1) == "Dn")
-    {
-        _trend = "Dn";
-        _sig = "X";
-    }
-
-    if (_sig == "X")
-    {
-        if (_trend == "Up" && (_filter1 == "Both" || _filter1 == "Buy"))
-        {
-            _sig = "Buy";
-        }
-        else if (_trend == "Dn" && (_filter1 == "Both" || _filter1 == "Sell"))
-        {
-            _sig = "Sell";
-        }
-    }
+    
+    return false;
+    // && _macdData[1] > 0.001; // Added custom MACD filter
 }
 
 string CJimBrownTrend::GetTrendDirection(int index)
