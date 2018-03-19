@@ -72,23 +72,23 @@ protected:
     double _initialStop;
     bool _trailingStarted;
 
+    virtual bool CheckToModifyPositions();
     void ReleaseIndicator(int& handle);
     virtual void NewBarAndNoCurrentPositions();
     virtual void OnRecentlyClosedTrade();
+    bool IsNewBar(datetime currentTime);
+    datetime iTime(const int index, string symbol = NULL, ENUM_TIMEFRAMES timeframe = PERIOD_CURRENT);
 
 private:
     void ResetState();
-    bool RefreshRates();
-    datetime iTime(const int index, string symbol = NULL, ENUM_TIMEFRAMES timeframe = PERIOD_CURRENT);
-    bool CheckToModifyPositions();
+    bool RefreshRates();    
     void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit);
     bool LongModified();
     bool ShortModified();
     bool IsOutsideTradingHours();
     double CalculateStopLossLevelForBuyOrder();
     double CalculateStopLossLevelForSellOrder();
-    bool ShouldPauseUntilOpeningNewPosition();
-    bool IsNewBar(datetime currentTime);
+    bool ShouldPauseUntilOpeningNewPosition();    
 
     datetime _barTime;                  // For detection of a new bar
     double _recentHigh;                 // Tracking the most recent high for stop management

@@ -40,6 +40,7 @@ public:
 protected:
     virtual void NewBarAndNoCurrentPositions();
     virtual void OnRecentlyClosedTrade();
+    virtual bool CheckToModifyPositions();
 
 private:
     int _platinumHandle;
@@ -180,6 +181,44 @@ void CJimBrownTrend::Processing(void)
     CMyExpertBase::Processing();
 }
 
+bool CJimBrownTrend::CheckToModifyPositions()
+{
+    //--- we work only at the time of the birth of new bar    
+    if (!IsNewBar(iTime(0))) return false;    
+
+    if (!_position.Select(Symbol())) {
+        Print("Couldn't select position");
+        return false;
+    }
+
+    int count = CopyBuffer(_qmpFilterHandle, 0, 0, 2, _qmpFilterUpData);
+    if (count == -1) {
+        Print("Error copying QMP Filter data for up buffer.");
+        return false;
+    }
+
+    count = CopyBuffer(_qmpFilterHandle, 1, 0, 2, _qmpFilterDownData);
+    if (count == -1) {
+        Print("Error copying QMP Filter data for down buffer.");
+        return false;
+    }
+
+    ulong deviation = 5; // Number of points
+
+    if (_position.PositionType() == POSITION_TYPE_BUY) {
+        if (GetTrendDirection(1) == "Dn") {
+            Print("Closing long position");
+            return _trade.PositionClose(Symbol(), deviation);
+        }
+    }
+    else if (GetTrendDirection(1) == "Up") {
+        Print("Closing short position");
+        return _trade.PositionClose(Symbol(), deviation);
+    }
+
+    return false;
+}
+
 void CJimBrownTrend::NewBarAndNoCurrentPositions()
 {
     int count = CopyBuffer(_platinumHandle, 0, 0, _inpSlowPlatinum, _macdData);
@@ -250,14 +289,15 @@ bool CJimBrownTrend::HasBullishSignal()
     //
     //if (basicSignal) {
     if (GetTrendDirection(1) == "Up") {
-        if (_prices[1].close >= _longTermTrendData[1] && _prices[1].low <= _shortTermTrendData[1]) {        
-            if (_prices[1].close < _longTermTimeFrameData[1]) {
-                Print("Rejecting signal due to long-term trend.");
-                return false;
-            }
+        //if (_prices[1].close >= _longTermTrendData[1] && _prices[1].low <= _shortTermTrendData[1]) {        
+        //    if (_prices[1].close < _longTermTimeFrameData[1]) {
+        //        Print("Rejecting signal due to long-term trend.");
+        //        return false;
+        //    }
 
-            return true;
-        }
+        //    return true;
+        //}
+        return true;
     }
 
     //if (_macdData[1] < 0.001) {
@@ -272,14 +312,15 @@ bool CJimBrownTrend::HasBearishSignal()
     //
     //if (basicSignal) {
     if (GetTrendDirection(1) == "Dn") {
-        if (_prices[1].close <= _longTermTrendData[1] && _prices[1].high >= _shortTermTrendData[1]) {
-            if (_prices[1].close > _longTermTimeFrameData[1]) {
-                Print("Rejecting signal due to long-term trend.");
-                return false;
-            }
+        //if (_prices[1].close <= _longTermTrendData[1] && _prices[1].high >= _shortTermTrendData[1]) {
+        //    if (_prices[1].close > _longTermTimeFrameData[1]) {
+        //        Print("Rejecting signal due to long-term trend.");
+        //        return false;
+        //    }
 
-            return true;
-        }
+        //    return true;
+        //}
+        return true;
     }
     
     return false;
