@@ -615,7 +615,7 @@ bool CMyExpertBase::LongModified()
 
         //--- modify position
         if (!_trade.PositionModify(Symbol(), sl, tp)) {
-            printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
+            printf("Error modifying position for %s : '%s'", Symbol(), _trade.ResultComment());
             printf("Modify parameters : SL=%f,TP=%f", sl, tp);
         }
 
@@ -643,7 +643,6 @@ bool CMyExpertBase::ShortModified()
         return false;
     }
 
-    printf("A new low found (%f). Prev low: %f and recent low: %f", _prices[1].low, _prices[2].low, _recentLow);
     _recentLow = _prices[1].low;
 
     double breakEvenPoint = 0;
@@ -717,7 +716,7 @@ bool CMyExpertBase::ShortModified()
 
         //--- modify position
         if (!_trade.PositionModify(Symbol(), sl, tp)) {
-            printf("Error modifying position by %s : '%s'", Symbol(), _trade.ResultComment());
+            printf("Error modifying position for %s : '%s'", Symbol(), _trade.ResultComment());
             printf("Modify parameters : SL=%f,TP=%f", sl, tp);
         }
 

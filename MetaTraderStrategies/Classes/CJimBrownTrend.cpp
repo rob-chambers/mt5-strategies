@@ -63,7 +63,11 @@ private:
     string _sig;
     int _longTermTimeFrameHandle;
     int _inpLongTermPeriod;
+    double _recentHigh;                 // Tracking the most recent high for stop management
+    double _recentLow;                  // Tracking the most recent low for stop management
 
+    void CheckToMoveLongPositionToBreakEven();
+    void CheckToMoveShortPositionToBreakEven();
     string GetTrendDirection(int index);
 };
 
@@ -205,18 +209,124 @@ bool CJimBrownTrend::CheckToModifyPositions()
 
     ulong deviation = 5; // Number of points
 
-    if (_position.PositionType() == POSITION_TYPE_BUY) {
+    if (_position.PositionType() == POSITION_TYPE_BUY) {        
         if (GetTrendDirection(1) == "Dn") {
             Print("Closing long position");
             return _trade.PositionClose(Symbol(), deviation);
         }
+        else {
+            CheckToMoveLongPositionToBreakEven();
+        }
     }
-    else if (GetTrendDirection(1) == "Up") {
-        Print("Closing short position");
-        return _trade.PositionClose(Symbol(), deviation);
+    else if (_position.PositionType() == POSITION_TYPE_SELL) {
+        if (GetTrendDirection(1) == "Up") {
+            Print("Closing short position");
+            return _trade.PositionClose(Symbol(), deviation);
+        } 
+        else {
+            CheckToMoveShortPositionToBreakEven();
+        }
     }
 
     return false;
+}
+
+void CJimBrownTrend::CheckToMoveLongPositionToBreakEven()
+{
+    double newStop = 0;
+
+    if (!(_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh)) {
+        return;
+    }
+
+    _recentHigh = _prices[1].high;
+
+    if (_alreadyMovedToBreakEven) {
+        return;
+    }
+
+    double breakEvenPoint = 0;
+    double initialRisk = _position.PriceOpen() - _initialStop;
+    breakEvenPoint = _position.PriceOpen() + initialRisk;
+
+    if (_currentAsk <= breakEvenPoint) {
+        return;
+    }
+    
+    printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
+    newStop = _position.PriceOpen();
+
+    double sl = NormalizeDouble(newStop, _symbol.Digits());
+    double tp = _position.TakeProfit();
+    double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+
+    if (_position.StopLoss() < sl || _position.StopLoss() == 0.0) {
+        double diff = (_currentAsk - sl) / _adjustedPoints;
+        if (diff < stopLevelPips) {
+            printf("Can't set new stop that close to the current price.  Ask = %f, new stop = %f, stop level = %f, diff = %f",
+                _currentAsk, sl, stopLevelPips, diff);
+
+            sl = _currentAsk - stopLevelPips * _adjustedPoints;
+        }
+
+        //--- modify position
+        if (!_trade.PositionModify(Symbol(), sl, tp)) {
+            printf("Error modifying position for %s : '%s'", Symbol(), _trade.ResultComment());
+            printf("Modify parameters : SL=%f,TP=%f", sl, tp);
+        }
+
+        _alreadyMovedToBreakEven = true;
+    }
+
+}
+
+void CJimBrownTrend::CheckToMoveShortPositionToBreakEven()
+{
+    double newStop = 0;
+
+    if (!(_prices[1].low < _prices[2].low && _prices[1].low < _recentLow)) {
+        return;
+    }
+
+    _recentLow = _prices[1].low;
+
+    if (_alreadyMovedToBreakEven) {
+        return;
+    }
+
+    double breakEvenPoint = 0;
+    double initialRisk = _initialStop - _position.PriceOpen();
+    breakEvenPoint = _position.PriceOpen() - initialRisk;
+
+    if (_currentAsk > breakEvenPoint) {
+        return;
+    }
+
+    printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
+    newStop = _position.PriceOpen();
+
+    double sl = NormalizeDouble(newStop, _symbol.Digits());
+    double tp = _position.TakeProfit();
+    double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+
+    if (_position.StopLoss() > sl || _position.StopLoss() == 0.0) {
+        double diff = (sl - _currentBid) / _adjustedPoints;
+        if (diff < stopLevelPips) {
+            printf("Can't set new stop that close to the current price.  Ask = %f, new stop = %f, stop level = %f, diff = %f",
+                _currentAsk, sl, stopLevelPips, diff);
+
+            sl = _currentBid + stopLevelPips * _adjustedPoints;
+        }
+
+        //--- modify position
+        if (!_trade.PositionModify(Symbol(), sl, tp)) {
+            printf("Error modifying position for %s : '%s'", Symbol(), _trade.ResultComment());
+            printf("Modify parameters : SL=%f,TP=%f", sl, tp);
+        }
+
+        _alreadyMovedToBreakEven = true;
+    }
+
 }
 
 void CJimBrownTrend::NewBarAndNoCurrentPositions()
@@ -280,6 +390,10 @@ void CJimBrownTrend::OnRecentlyClosedTrade()
     Print("Resetting trend status");
     _trend = "X";
     _sig = "Start";
+
+    _recentHigh = 0;
+    _recentLow = 999999;
+    _alreadyMovedToBreakEven = false;
 }
 
 bool CJimBrownTrend::HasBullishSignal()
