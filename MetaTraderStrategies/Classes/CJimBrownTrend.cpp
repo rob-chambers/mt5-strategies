@@ -233,7 +233,9 @@ bool CJimBrownTrend::CheckToModifyPositions()
 
 void CJimBrownTrend::CheckToMoveLongPositionToBreakEven()
 {
-    double newStop = 0;
+    if (!_inpMoveToBreakEven) {
+        return;
+    }
 
     if (!(_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh)) {
         return;
@@ -254,7 +256,7 @@ void CJimBrownTrend::CheckToMoveLongPositionToBreakEven()
     }
     
     printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
-    newStop = _position.PriceOpen();
+    double newStop = _position.PriceOpen();
 
     double sl = NormalizeDouble(newStop, _symbol.Digits());
     double tp = _position.TakeProfit();
@@ -282,7 +284,9 @@ void CJimBrownTrend::CheckToMoveLongPositionToBreakEven()
 
 void CJimBrownTrend::CheckToMoveShortPositionToBreakEven()
 {
-    double newStop = 0;
+    if (!_inpMoveToBreakEven) {
+        return;
+    }
 
     if (!(_prices[1].low < _prices[2].low && _prices[1].low < _recentLow)) {
         return;
@@ -303,7 +307,7 @@ void CJimBrownTrend::CheckToMoveShortPositionToBreakEven()
     }
 
     printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
-    newStop = _position.PriceOpen();
+    double newStop = _position.PriceOpen();
 
     double sl = NormalizeDouble(newStop, _symbol.Digits());
     double tp = _position.TakeProfit();
@@ -361,23 +365,23 @@ void CJimBrownTrend::NewBarAndNoCurrentPositions()
         return;
     }
 
-    count = CopyBuffer(_longTermTrendHandle, 0, 0, 2, _longTermTrendData);
-    if (count == -1) {
-        Print("Error copying long term trend data.");
-        return;
-    }    
+    //count = CopyBuffer(_longTermTrendHandle, 0, 0, 2, _longTermTrendData);
+    //if (count == -1) {
+    //    Print("Error copying long term trend data.");
+    //    return;
+    //}    
 
-    count = CopyBuffer(_shortTermTrendHandle, 0, 0, 2, _shortTermTrendData);
-    if (count == -1) {
-        Print("Error copying short term trend data.");
-        return;
-    }
+    //count = CopyBuffer(_shortTermTrendHandle, 0, 0, 2, _shortTermTrendData);
+    //if (count == -1) {
+    //    Print("Error copying short term trend data.");
+    //    return;
+    //}
 
-    count = CopyBuffer(_longTermTimeFrameHandle, 0, 0, _inpLongTermPeriod, _longTermTimeFrameData);
-    if (count == -1) {
-        Print("Error copying long term timeframe data.");
-        return;
-    }
+    //count = CopyBuffer(_longTermTimeFrameHandle, 0, 0, _inpLongTermPeriod, _longTermTimeFrameData);
+    //if (count == -1) {
+    //    Print("Error copying long term timeframe data.");
+    //    return;
+    //}
 }
 
 void CJimBrownTrend::OnTrade(void)
@@ -414,7 +418,9 @@ bool CJimBrownTrend::HasBullishSignal()
     //    return true;
     //}
 
-    int firstIndex = 0;
+    return true;
+
+    /*int firstIndex = 0;
     int secondIndex = 0;
 
     for (int index = 0; index < _inpSlowPlatinum; index++) {
@@ -427,23 +433,36 @@ bool CJimBrownTrend::HasBullishSignal()
                 break;
             }
         }            
-    }
+    }*/
 
-    // Ensure we have cross data and that the most recent one was recent
-    if (firstIndex == 0 || secondIndex == 0 || firstIndex > 3) {
-        return false;
-    }
-        
-    if (_platinumUpCrossData[firstIndex] > _platinumUpCrossData[secondIndex] &&
-        (_platinumUpCrossData[firstIndex] < 0 || _platinumUpCrossData[secondIndex] < 0)) {
-        Print("latest ma:", _platinumUpCrossData[firstIndex]);
-        Print("prior ma:", _platinumUpCrossData[secondIndex]);
+    //// Ensure we have cross data and that the most recent one was recent
+    //if (firstIndex == 0 || secondIndex == 0 || firstIndex > 3) {
+    //    return false;
+    //}
+    ////    
+    ////if (_platinumUpCrossData[firstIndex] > _platinumUpCrossData[secondIndex] &&
+    ////    (_platinumUpCrossData[firstIndex] < 0 || _platinumUpCrossData[secondIndex] < 0)) {
+    ////    Print("latest ma:", _platinumUpCrossData[firstIndex]);
+    ////    Print("prior ma:", _platinumUpCrossData[secondIndex]);
+    ////    return true;
+    ////}
+    //    
+    //if (_platinumUpCrossData[firstIndex] > _platinumUpCrossData[secondIndex] &&
+    //    _prices[firstIndex].close < _prices[secondIndex].close) {
+    //    //Print("latest ma:", _platinumUpCrossData[firstIndex]);
+    //    //Print("prior ma:", _platinumUpCrossData[secondIndex]);
+
+    //    //Print("Price at recent bar ", firstIndex, " was ", _prices[firstIndex].close);
+    //    //Print("Price at previous bar ", secondIndex, " was ", _prices[secondIndex].close);
+
+    //    return true;
+    //}
+
+    /*if (_platinumUpCrossData[firstIndex] >= 0) {
         return true;
     }
 
-    //if (_macdData[1] < 0.001) {
-
-    return false;       
+    return false;       */
 }
 
 bool CJimBrownTrend::HasBearishSignal()
@@ -456,6 +475,8 @@ bool CJimBrownTrend::HasBearishSignal()
         return false;
     }
 
+    return true;
+
     //if (_prices[1].close <= _longTermTrendData[1] && _prices[1].high >= _shortTermTrendData[1]) {
     //    if (_prices[1].close > _longTermTimeFrameData[1]) {
     //        Print("Rejecting signal due to long-term trend.");
@@ -464,34 +485,32 @@ bool CJimBrownTrend::HasBearishSignal()
 
     //    return true;
     //}
-    int firstIndex = 0;
-    int secondIndex = 0;
+    //int firstIndex = 0;
+    //int secondIndex = 0;
 
-    for (int index = 0; index < _inpSlowPlatinum; index++) {
-        if (_platinumDownCrossData[index] < 1) {
-            if (firstIndex == 0) {
-                firstIndex = index;
-            }
-            else {
-                secondIndex = index;
-                break;
-            }
-        }
-    }
+    //for (int index = 0; index < _inpSlowPlatinum; index++) {
+    //    if (_platinumDownCrossData[index] < 1) {
+    //        if (firstIndex == 0) {
+    //            firstIndex = index;
+    //        }
+    //        else {
+    //            secondIndex = index;
+    //            break;
+    //        }
+    //    }
+    //}
 
-    // Ensure we have cross data and that the most recent one was recent
-    if (firstIndex == 0 || secondIndex == 0 || firstIndex > 3) {
-        return false;
-    }
+    //// Ensure we have cross data and that the most recent one was recent
+    //if (firstIndex == 0 || secondIndex == 0 || firstIndex > 3) {
+    //    return false;
+    //}
 
-    if (_platinumDownCrossData[firstIndex] < _platinumDownCrossData[secondIndex] &&
-        (_platinumDownCrossData[firstIndex] > 0 || _platinumDownCrossData[secondIndex] > 0)) {
-        Print("latest ma:", _platinumDownCrossData[firstIndex]);
-        Print("prior ma:", _platinumDownCrossData[secondIndex]);
-        return true;
-    }
+    //if (_platinumDownCrossData[firstIndex] < _platinumDownCrossData[secondIndex] &&
+    //    _prices[firstIndex].close > _prices[secondIndex].close) {
+    //    return true;
+    //}
 
-    return false;
+    //return false;
 }
 
 string CJimBrownTrend::GetTrendDirection(int index)

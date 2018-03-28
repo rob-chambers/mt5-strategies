@@ -1,9 +1,9 @@
 ﻿//+------------------------------------------------------------------+
-//|                                                    CalcLotSize.mq5 
+//|                                                   CalcLotSize2.mq5 
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright     "Copyright 2018, Robert Chambers"
-#property version       "1.10"
+#property version       "1.00"
 #property description   "Lot Size Calculator"
 
 #include <Trade\SymbolInfo.mqh> 
@@ -14,6 +14,7 @@ input int PipsFromSignalCandle = 2; // Number of pips the default stop loss shou
 
 CSymbolInfo _symbol;
 CChartObjectEdit _inputStopPrice;
+
 CChartObjectLabel _lotSizeLabel;
 bool _textBoxCreated;
 int _qmpFilterHandle;
@@ -37,6 +38,7 @@ int OnInit() {
     }
 
     _textBoxCreated = _inputStopPrice.Create(0, "_inputStopPrice", 0, 800, 10, 90, 28);
+
     if (_textBoxCreated) {
         _inputStopPrice.BackColor(White);
         _inputStopPrice.BorderColor(Black);
@@ -65,8 +67,8 @@ int OnInit() {
             return(INIT_FAILED);
         }
 
-        Print("QMP Filter Up: ", _qmpFilterUpData[1], ",", _qmpFilterUpData[2]);
-        Print("QMP Filter Down: ", _qmpFilterDownData[1], ",", _qmpFilterDownData[2]);
+        Print("_qmpFilterUpData: ", _qmpFilterUpData[1], ",", _qmpFilterUpData[2]);
+        Print("_qmpFilterDownData: ", _qmpFilterDownData[1], ",", _qmpFilterDownData[2]);
 
         double size = 0.0001;
         if (_symbol.Digits() == 3) {
@@ -90,7 +92,7 @@ int OnInit() {
         string defaultText = DoubleToString(initialStop, 5);
         _inputStopPrice.SetString(OBJPROP_TEXT, defaultText);
         _inputStopPrice.SetInteger(OBJPROP_SELECTED, true);
-
+        
         ChartRedraw(0);
     }
 
@@ -102,6 +104,7 @@ void OnDeinit(const int reason)
     if (_textBoxCreated) {
         _inputStopPrice.Delete();
         _lotSizeLabel.Delete();
+
         ReleaseIndicator(_qmpFilterHandle);
     }
 }
@@ -121,6 +124,8 @@ double ComputeRisk(double distance)
     double lotStep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
     double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
     double tickSize = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+
+    Print("tickValue: ", tickValue, ", tickSize: ", tickSize);
 
     int lotdigits = 0;
     do

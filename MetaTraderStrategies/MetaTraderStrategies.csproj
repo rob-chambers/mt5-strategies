@@ -7,9 +7,11 @@
 
   <ItemGroup>
     <None Remove="Scripts\CalcLotSize.cpp" />
+    <None Remove="Scripts\CalcLotSize2.cpp" />
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="Scripts\CalcLotSize2.cpp" />
     <Compile Include="Scripts\CalcLotSize.cpp" />
   </ItemGroup>
 
