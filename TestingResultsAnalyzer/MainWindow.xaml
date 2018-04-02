@@ -1,0 +1,90 @@
+﻿<Window x:Class="TestingResultsAnalyzer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:TestingResultsAnalyzer"
+        mc:Ignorable="d"
+        Title="MainWindow" Height="450" Width="1200">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="auto" />
+            <RowDefinition Height="auto" />
+            <RowDefinition Height="auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Menu>
+            <MenuItem Header="_File">
+                <MenuItem Header="_Open" Command="{Binding OpenFileCommand}" />
+                <!--<Separator />-->
+            </MenuItem>
+        </Menu>
+
+        <Expander Grid.Row="1" Header="Results Summary" IsExpanded="True" >
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="150" />
+                </Grid.ColumnDefinitions>
+
+                <Grid.RowDefinitions>
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                </Grid.RowDefinitions>
+                
+                <TextBlock>Total Profit/Loss</TextBlock>
+                <TextBlock Grid.Column="1" Text="{Binding ProfitLoss}"></TextBlock>
+                
+                <TextBlock Grid.Row="1">Largest Win</TextBlock>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MaxProfit, UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+
+                <TextBlock Grid.Row="2">Largest Loss</TextBlock>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding MaxLoss, UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+
+                <TextBlock Grid.Row="3">Total Trades</TextBlock>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TotalTrades}"></TextBlock>
+                <TextBlock Grid.Row="4">Total Wins</TextBlock>
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding TotalWins}"></TextBlock>
+                <TextBlock Grid.Row="5">Total Losses</TextBlock>
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding TotalLosses}"></TextBlock>
+                <TextBlock Grid.Row="6">W/L Ratio</TextBlock>
+                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding WinLossRatio}"></TextBlock>
+            </Grid>
+        </Expander>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal">
+            <Button>H4 MA</Button>
+            <Button>H4 RSI</Button>
+        </StackPanel>
+
+        <ListView Grid.Row="3" Margin="8" ItemsSource="{Binding Trades}" >
+            <ListView.View>
+                <GridView>
+                    <!-- Deal,Entry Time,S/L,Entry,Exit Time,Exit,Profit,MA50,MA100,MA240,MACD,H4 MA 0,H4 RSI 0,H4 MA 1,H4 RSI 1-->
+                    <GridViewColumn Width="35" Header="Deal" DisplayMemberBinding="{Binding DealNumber}"  />
+                    <GridViewColumn Width="120" Header="Entry" DisplayMemberBinding="{Binding EntryDateTime, StringFormat='dd/MM/yy hh:mm'}" />
+                    <GridViewColumn Width="50" Header="S/L" DisplayMemberBinding="{Binding Direction}" />
+                    <GridViewColumn Width="80" Header="Entry Price" DisplayMemberBinding="{Binding EntryPrice}" />
+                    <GridViewColumn Width="120" Header="Exit" DisplayMemberBinding="{Binding ExitDateTime, StringFormat='dd/MM/yy hh:mm'}" />
+                    <GridViewColumn Width="80" Header="Exit Price" DisplayMemberBinding="{Binding ExitPrice}" />
+                    <GridViewColumn Width="80" Header="Profit" DisplayMemberBinding="{Binding Profit}" />
+                    <GridViewColumn Width="80" Header="MA50" DisplayMemberBinding="{Binding MA50}" />
+                    <GridViewColumn Width="80" Header="MA100" DisplayMemberBinding="{Binding MA100}" />
+                    <GridViewColumn Width="80" Header="MA240" DisplayMemberBinding="{Binding MA240}" />
+                    <GridViewColumn Width="80" Header="MACD" DisplayMemberBinding="{Binding MACD}" />
+                    <GridViewColumn Width="80" Header="H4MA" DisplayMemberBinding="{Binding H4MA}" />
+                    <GridViewColumn Width="80" Header="H4Rsi" DisplayMemberBinding="{Binding H4Rsi}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+        
+    </Grid>
+</Window>

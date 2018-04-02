@@ -40,7 +40,7 @@ input int       _inpFTF_SF = 1;                                 // QQE SF
 input int       _inpFTF_RSI_Period = 8;                         // QQE RSI Period
 input int       _inpFTF_WP = 3;                                 // QQE WP
 
-input ENUM_TIMEFRAMES _inpLongTermTimeFrame = PERIOD_D1;        // Long-term MA timeframe
+input ENUM_TIMEFRAMES _inpLongTermTimeFrame = PERIOD_H4;        // Long-term MA timeframe
 input int       _inpLongTermPeriod = 9;                         // Long-term MA Period
 
 CJimBrownTrend derived;

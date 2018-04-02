@@ -28,7 +28,7 @@ public:
         int             inpFTF_SF = 1,
         int             inpFTF_RSI_Period = 8,
         int             inpFTF_WP = 3,
-        ENUM_TIMEFRAMES inpLongTermTimeFrame = PERIOD_D1,
+        ENUM_TIMEFRAMES inpLongTermTimeFrame = PERIOD_H4,
         int             inpLongTermPeriod = 9
     );
     virtual void              Deinit(void);
@@ -46,15 +46,19 @@ private:
     int _platinumHandle;
     int _qmpFilterHandle;
     int _longTermTrendHandle;
+    int _mediumTermTrendHandle;
     int _shortTermTrendHandle;
+    int _longTermRsiHandle;
     double _platinumUpCrossData[];
     double _platinumDownCrossData[];
     double _macdData[];
     double _longTermTrendData[];
+    double _mediumTermTrendData[];
     double _shortTermTrendData[];
     double _qmpFilterUpData[];
     double _qmpFilterDownData[];
     double _longTermTimeFrameData[];
+    double _longTermRsiData[];
     int _inpFTF_RSI_Period;
     int _inpSmoothPlatinum;
     int _inpSlowPlatinum;
@@ -66,9 +70,17 @@ private:
     double _recentHigh;                 // Tracking the most recent high for stop management
     double _recentLow;                  // Tracking the most recent low for stop management
 
+    // The following are used for optimisation / monitoring performance
+    // "MA50", "MA100", "MA240", "MACD", "H4 MA", "H4 RSI"
+    int _fileHandle;
+    double _ma50Data[], _ma100Data[], _ma240Data[];
+    double _ma50, _ma100, _ma240, _macd, _h4MA, _h4Rsi, _h4MA0, _h4Rsi0;
+
     void CheckToMoveLongPositionToBreakEven();
     void CheckToMoveShortPositionToBreakEven();
     string GetTrendDirection(int index);
+    void WritePerformanceToFile();
+    void StorePerfData();
 };
 
 CJimBrownTrend::CJimBrownTrend(void)
@@ -124,33 +136,52 @@ int CJimBrownTrend::Init(
         ArraySetAsSeries(_qmpFilterDownData, true);
 
         ArraySetAsSeries(_longTermTrendData, true);
+        ArraySetAsSeries(_mediumTermTrendData, true);
         ArraySetAsSeries(_shortTermTrendData, true);
         ArraySetAsSeries(_longTermTimeFrameData, true);
+        ArraySetAsSeries(_longTermRsiData, true);
 
         _platinumHandle = iCustom(_Symbol, PERIOD_CURRENT, "MACD_Platinum", inpFastPlatinum, inpSlowPlatinum, inpSmoothPlatinum, true, true, false, false);
         if (_platinumHandle == INVALID_HANDLE) {
             Print("Error creating MACD Platinum indicator");
+            return(INIT_FAILED);
         }
 
         _qmpFilterHandle = iCustom(_Symbol, PERIOD_CURRENT, "QMP Filter", PERIOD_CURRENT, inpFTF_SF, inpFTF_RSI_Period, inpFTF_WP, true, inpFTF_SF, inpFTF_RSI_Period, inpFTF_WP, false, false);
         if (_qmpFilterHandle == INVALID_HANDLE) {
             Print("Error creating QMP Filter indicator");
+            return(INIT_FAILED);
         }
 
         _longTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, 240, 0, MODE_LWMA, PRICE_CLOSE);
         if (_longTermTrendHandle == INVALID_HANDLE) {
             Print("Error creating long term MA indicator");
+            return(INIT_FAILED);
+        }
+
+        _mediumTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, 100, 0, MODE_EMA, PRICE_CLOSE);
+        if (_mediumTermTrendHandle == INVALID_HANDLE) {
+            Print("Error creating medium term MA indicator");
+            return(INIT_FAILED);
         }
 
         _shortTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, 50, 0, MODE_EMA, PRICE_CLOSE);
         if (_shortTermTrendHandle == INVALID_HANDLE) {
             Print("Error creating short term MA indicator");
+            return(INIT_FAILED);
         }
 
         _longTermTimeFrameHandle = iMA(_Symbol, inpLongTermTimeFrame, inpLongTermPeriod, 0, MODE_EMA, PRICE_CLOSE);
         if (_longTermTimeFrameHandle == INVALID_HANDLE) {
             Print("Error creating long term timeframe indicator");
+            return(INIT_FAILED);
         }
+
+        _longTermRsiHandle = iRSI(_Symbol, inpLongTermTimeFrame, 14, PRICE_CLOSE);
+        if (_longTermRsiHandle == INVALID_HANDLE) {
+            Print("Error creating long term RSI indicator");
+            return(INIT_FAILED);
+        }        
 
         _inpSlowPlatinum = inpSlowPlatinum;
         _inpSmoothPlatinum = inpSmoothPlatinum;
@@ -159,6 +190,15 @@ int CJimBrownTrend::Init(
 
         _trend = "X";
         _sig = "Start";
+
+        string FileName = Symbol() + " " + IntegerToString(PeriodSeconds() / 60) + ".csv";
+        _fileHandle = FileOpen(FileName, FILE_WRITE | FILE_ANSI | FILE_CSV, ",");
+        if (_fileHandle == INVALID_HANDLE) {
+            Alert("Error opening file for writing");
+            return(INIT_FAILED);
+        }
+
+        FileWrite(_fileHandle, "Deal", "Entry Time", "S/L", "Entry", "Exit Time", "Exit", "Profit", "MA50", "MA100", "MA240", "MACD", "H4 MA 0", "H4 RSI 0", "H4 MA 1", "H4 RSI 1");
     }
 
     return retCode;
@@ -171,13 +211,14 @@ void CJimBrownTrend::Deinit(void)
 
     Print("Releasing indicator handles");
 
-    if (_platinumHandle == 0) return;
-
     ReleaseIndicator(_platinumHandle);
     ReleaseIndicator(_qmpFilterHandle);
     ReleaseIndicator(_longTermTrendHandle);
+    ReleaseIndicator(_mediumTermTrendHandle);
     ReleaseIndicator(_shortTermTrendHandle);
     ReleaseIndicator(_longTermTimeFrameHandle);
+
+    FileClose(_fileHandle);
 }
 
 void CJimBrownTrend::Processing(void)
@@ -365,23 +406,35 @@ void CJimBrownTrend::NewBarAndNoCurrentPositions()
         return;
     }
 
-    //count = CopyBuffer(_longTermTrendHandle, 0, 0, 2, _longTermTrendData);
-    //if (count == -1) {
-    //    Print("Error copying long term trend data.");
-    //    return;
-    //}    
+    count = CopyBuffer(_longTermTrendHandle, 0, 0, 2, _longTermTrendData);
+    if (count == -1) {
+        Print("Error copying long term trend data.");
+        return;
+    }
 
-    //count = CopyBuffer(_shortTermTrendHandle, 0, 0, 2, _shortTermTrendData);
-    //if (count == -1) {
-    //    Print("Error copying short term trend data.");
-    //    return;
-    //}
+    count = CopyBuffer(_mediumTermTrendHandle, 0, 0, 2, _mediumTermTrendData);
+    if (count == -1) {
+        Print("Error copying medium term trend data.");
+        return;
+    }
 
-    //count = CopyBuffer(_longTermTimeFrameHandle, 0, 0, _inpLongTermPeriod, _longTermTimeFrameData);
-    //if (count == -1) {
-    //    Print("Error copying long term timeframe data.");
-    //    return;
-    //}
+    count = CopyBuffer(_shortTermTrendHandle, 0, 0, 2, _shortTermTrendData);
+    if (count == -1) {
+        Print("Error copying short term trend data.");
+        return;
+    }
+
+    count = CopyBuffer(_longTermTimeFrameHandle, 0, 0, _inpLongTermPeriod, _longTermTimeFrameData);
+    if (count == -1) {
+        Print("Error copying long term timeframe data.");
+        return;
+    }
+
+    count = CopyBuffer(_longTermRsiHandle, 0, 0, 14, _longTermRsiData);
+    if (count == -1) {
+        Print("Error copying long term RSI data.");
+        return;
+    }
 }
 
 void CJimBrownTrend::OnTrade(void)
@@ -398,6 +451,63 @@ void CJimBrownTrend::OnRecentlyClosedTrade()
     _recentHigh = 0;
     _recentLow = 999999;
     _alreadyMovedToBreakEven = false;
+    
+    WritePerformanceToFile();
+}
+
+void CJimBrownTrend::WritePerformanceToFile()
+{   
+    int minutes = 24 * 60 * 2;
+    datetime to = TimeCurrent();
+    datetime from = to - 60 * minutes;
+
+    if (!HistorySelect(from, to)) {
+        Print("Failed to retrieve order history");
+    }
+
+    int dealsTotal = HistoryDealsTotal();
+    if (dealsTotal <= 0) {
+        return;
+    }
+
+    ulong outDeal = HistoryDealGetTicket(dealsTotal - 1);
+    ulong inDeal = HistoryDealGetTicket(dealsTotal - 2);
+    long dealNumber = HistoryDealGetInteger(inDeal, DEAL_TICKET);
+
+    Print("Deals total: ", dealsTotal, ", in deal: ", inDeal, ", Out deal: ", outDeal);
+
+    // type of entry
+    long dealEntry = HistoryDealGetInteger(inDeal, DEAL_ENTRY);
+    if (dealEntry != DEAL_ENTRY_IN) {
+        Alert("Deal direction was not in");
+        return;
+    }
+
+    dealEntry = HistoryDealGetInteger(outDeal, DEAL_ENTRY);
+    if (dealEntry != DEAL_ENTRY_OUT) {
+        Alert("Deal direction was not out");
+        return;
+    }
+
+    datetime entryTime = (datetime)HistoryDealGetInteger(inDeal, DEAL_TIME);
+    datetime exitTime = (datetime)HistoryDealGetInteger(outDeal, DEAL_TIME);
+       
+    double entryPrice = HistoryDealGetDouble(inDeal, DEAL_PRICE);
+    double exitPrice = HistoryDealGetDouble(outDeal, DEAL_PRICE);
+    double profit = HistoryDealGetDouble(outDeal, DEAL_PROFIT);
+
+    long dealType = HistoryDealGetInteger(inDeal, DEAL_TYPE);
+    string dealTypeString;
+
+    if (dealType == DEAL_TYPE_BUY) {
+        dealTypeString = "L";
+    }
+    else if (dealType == DEAL_TYPE_SELL) {
+        dealTypeString = "S";
+    }
+
+    FileWrite(_fileHandle, dealNumber, entryTime, dealTypeString, entryPrice, exitTime, exitPrice, profit, _ma50, _ma100, _ma240, _macd, _h4MA0, _h4Rsi0, _h4MA, _h4Rsi);
+    FileFlush(_fileHandle);
 }
 
 bool CJimBrownTrend::HasBullishSignal()
@@ -417,6 +527,8 @@ bool CJimBrownTrend::HasBullishSignal()
 
     //    return true;
     //}
+
+    StorePerfData();
 
     return true;
 
@@ -475,6 +587,8 @@ bool CJimBrownTrend::HasBearishSignal()
         return false;
     }
 
+    StorePerfData();
+
     return true;
 
     //if (_prices[1].close <= _longTermTrendData[1] && _prices[1].high >= _shortTermTrendData[1]) {
@@ -525,4 +639,18 @@ string CJimBrownTrend::GetTrendDirection(int index)
     }
 
     return trend;
+}
+
+void CJimBrownTrend::StorePerfData()
+{
+    _ma50 = _shortTermTrendData[1];
+    _ma100 = _mediumTermTrendData[1];
+    _ma240 = _longTermTrendData[1];
+
+    _macd = _macdData[1];
+    _h4MA = _longTermTimeFrameData[1];
+    _h4Rsi = _longTermRsiData[1];
+
+    _h4MA0 = _longTermTimeFrameData[0];
+    _h4Rsi0 = _longTermRsiData[0];
 }
