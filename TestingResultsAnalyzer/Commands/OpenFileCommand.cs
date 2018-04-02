@@ -3,6 +3,8 @@ using System;
 using System.Linq;
 using System.Windows.Forms;
 using System.Windows.Input;
+using TestingResultsAnalyzer.Model;
+using TestingResultsAnalyzer.ViewModels;
 
 namespace TestingResultsAnalyzer.Commands
 {
@@ -37,15 +39,13 @@ namespace TestingResultsAnalyzer.Commands
 
                 if (result == DialogResult.Cancel) return;
 
-                var engine = new FileHelperEngine<Trade>
-                {
-                };
+                var engine = new FileHelperEngine<Trade>();
 
                 _mainViewModel.Trades.Clear();
                 var trades = engine.ReadFile(dialog.FileName).ToList();
                 foreach (var trade in trades)
                 {
-                    _mainViewModel.Trades.Add(trade);
+                    _mainViewModel.Trades.Add(new TradeViewModel(trade));
                 }
 
                 _mainViewModel.CalculateSummary();

@@ -1,7 +1,7 @@
 ﻿using FileHelpers;
 using System;
 
-namespace TestingResultsAnalyzer
+namespace TestingResultsAnalyzer.Model
 {
     [DelimitedRecord(",")]
     [IgnoreFirst]

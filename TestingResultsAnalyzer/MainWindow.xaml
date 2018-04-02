@@ -5,13 +5,13 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:TestingResultsAnalyzer"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="1200">
+        Title="MainWindow" Height="850" Width="1200">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="auto" />
             <RowDefinition Height="auto" />
             <RowDefinition Height="auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <Menu>
@@ -22,10 +22,15 @@
         </Menu>
 
         <Expander Grid.Row="1" Header="Results Summary" IsExpanded="True" >
+<!--
+                            <Style TargetType="TextBlock" >
+                    <Setter Property="Padding" Value="10" />
+                </Style>
+-->
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="150" />
-                    <ColumnDefinition Width="150" />
+                    <ColumnDefinition Width="100" />
+                    <ColumnDefinition Width="100" />
                 </Grid.ColumnDefinitions>
 
                 <Grid.RowDefinitions>
@@ -39,10 +44,10 @@
                     <RowDefinition />
                     <RowDefinition />
                 </Grid.RowDefinitions>
-                
+
                 <TextBlock>Total Profit/Loss</TextBlock>
                 <TextBlock Grid.Column="1" Text="{Binding ProfitLoss}"></TextBlock>
-                
+
                 <TextBlock Grid.Row="1">Largest Win</TextBlock>
                 <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MaxProfit, UpdateSourceTrigger=PropertyChanged}"></TextBlock>
 
@@ -60,12 +65,22 @@
             </Grid>
         </Expander>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal">
-            <Button>H4 MA</Button>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" >
+            <Button Command="{Binding H4MAFilterCommand}">H4 MA</Button>
             <Button>H4 RSI</Button>
         </StackPanel>
 
         <ListView Grid.Row="3" Margin="8" ItemsSource="{Binding Trades}" >
+            <ListView.ItemContainerStyle>
+                <Style TargetType="{x:Type ListViewItem}">
+                    <Setter Property="Background" Value="Snow" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                            <Setter Property="Background" Value="LightGreen" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ListView.ItemContainerStyle>
             <ListView.View>
                 <GridView>
                     <!-- Deal,Entry Time,S/L,Entry,Exit Time,Exit,Profit,MA50,MA100,MA240,MACD,H4 MA 0,H4 RSI 0,H4 MA 1,H4 RSI 1-->
@@ -85,6 +100,6 @@
                 </GridView>
             </ListView.View>
         </ListView>
-        
+
     </Grid>
 </Window>

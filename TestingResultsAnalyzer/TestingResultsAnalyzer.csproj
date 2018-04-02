@@ -61,9 +61,11 @@
     <Compile Include="Commands\OpenFileCommand.cs" />
     <Compile Include="DirectionConverter.cs" />
     <Compile Include="Enums.cs" />
+    <Compile Include="Commands\H4MAFilterCommand.cs" />
     <Compile Include="MainViewModel.cs" />
-    <Compile Include="Trade.cs" />
-    <Compile Include="TradeCollection.cs" />
+    <Compile Include="Model\Trade.cs" />
+    <Compile Include="ViewModels\TradeCollection.cs" />
+    <Compile Include="ViewModels\TradeViewModel.cs" />
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -104,5 +106,6 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
