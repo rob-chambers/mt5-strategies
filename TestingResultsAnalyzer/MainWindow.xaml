@@ -4,11 +4,16 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:TestingResultsAnalyzer"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="850" Width="1200">
+        xmlns:vms="clr-namespace:TestingResultsAnalyzer.ViewModels"
+        mc:Ignorable="d"        
+        Title="Testing Results Analyzer" Height="850" Width="1200">
+
+    <Window.DataContext>
+        <vms:MainViewModel></vms:MainViewModel>
+    </Window.DataContext>
+    
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="auto" />
             <RowDefinition Height="auto" />
             <RowDefinition Height="auto" />
             <RowDefinition Height="*"/>
@@ -21,56 +26,35 @@
             </MenuItem>
         </Menu>
 
-        <Expander Grid.Row="1" Header="Results Summary" IsExpanded="True" >
-<!--
-                            <Style TargetType="TextBlock" >
-                    <Setter Property="Padding" Value="10" />
+        <Expander Grid.Row="1" Header="Results Summary" HorizontalAlignment="Left" IsExpanded="True" IsEnabled="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" >
+            <ItemsControl ItemsSource="{Binding Filters}"
+                          ItemTemplate="{StaticResource filterTemplate}"                          
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                          ScrollViewer.VerticalScrollBarVisibility="Hidden" >
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="8,8,20,8" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+
+            <ItemsControl.Template>
+                <ControlTemplate>
+                        <ScrollViewer>
+                        <ItemsPresenter />
+                    </ScrollViewer>
+                </ControlTemplate>
+                </ItemsControl.Template>
+                
+            <ItemsControl.ItemContainerStyle>
+                <Style TargetType="ContentPresenter" >
+                    <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
+                    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Visible" />
                 </Style>
--->
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="100" />
-                    <ColumnDefinition Width="100" />
-                </Grid.ColumnDefinitions>
-
-                <Grid.RowDefinitions>
-                    <RowDefinition />
-                    <RowDefinition />
-                    <RowDefinition />
-                    <RowDefinition />
-                    <RowDefinition />
-                    <RowDefinition />
-                    <RowDefinition />
-                    <RowDefinition />
-                    <RowDefinition />
-                </Grid.RowDefinitions>
-
-                <TextBlock>Total Profit/Loss</TextBlock>
-                <TextBlock Grid.Column="1" Text="{Binding ProfitLoss}"></TextBlock>
-
-                <TextBlock Grid.Row="1">Largest Win</TextBlock>
-                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MaxProfit, UpdateSourceTrigger=PropertyChanged}"></TextBlock>
-
-                <TextBlock Grid.Row="2">Largest Loss</TextBlock>
-                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding MaxLoss, UpdateSourceTrigger=PropertyChanged}"></TextBlock>
-
-                <TextBlock Grid.Row="3">Total Trades</TextBlock>
-                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding TotalTrades}"></TextBlock>
-                <TextBlock Grid.Row="4">Total Wins</TextBlock>
-                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding TotalWins}"></TextBlock>
-                <TextBlock Grid.Row="5">Total Losses</TextBlock>
-                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding TotalLosses}"></TextBlock>
-                <TextBlock Grid.Row="6">W/L Ratio</TextBlock>
-                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding WinLossRatio}"></TextBlock>
-            </Grid>
+            </ItemsControl.ItemContainerStyle>
+            </ItemsControl>
         </Expander>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" >
-            <Button Command="{Binding H4MAFilterCommand}">H4 MA</Button>
-            <Button>H4 RSI</Button>
-        </StackPanel>
-
-        <ListView Grid.Row="3" Margin="8" ItemsSource="{Binding Trades}" >
+        <ListView Grid.Row="3" Margin="8" ItemsSource="{Binding Trades}" IsEnabled="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" >
             <ListView.ItemContainerStyle>
                 <Style TargetType="{x:Type ListViewItem}">
                     <Setter Property="Background" Value="Snow" />

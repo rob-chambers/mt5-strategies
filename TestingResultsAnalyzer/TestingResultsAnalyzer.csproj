@@ -59,13 +59,21 @@
       <SubType>Designer</SubType>
     </ApplicationDefinition>
     <Compile Include="Commands\OpenFileCommand.cs" />
+    <Compile Include="Commands\ShowFilteredTradesCommand.cs" />
     <Compile Include="DirectionConverter.cs" />
     <Compile Include="Enums.cs" />
-    <Compile Include="Commands\H4MAFilterCommand.cs" />
-    <Compile Include="MainViewModel.cs" />
+    <Compile Include="Filters\Filter.cs" />
+    <Compile Include="Filters\NullFilter.cs" />
+    <Compile Include="Filters\MACDZeroFilter.cs" />
+    <Compile Include="Filters\H4RsiFilter.cs" />
+    <Compile Include="Filters\H4MAFilter.cs" />
+    <Compile Include="ViewModels\MainViewModel.cs" />
     <Compile Include="Model\Trade.cs" />
+    <Compile Include="ViewModels\FilterViewModel.cs" />
+    <Compile Include="ViewModels\PerformanceData.cs" />
     <Compile Include="ViewModels\TradeCollection.cs" />
     <Compile Include="ViewModels\TradeViewModel.cs" />
+    <Compile Include="ViewModels\ViewModelBase.cs" />
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -78,6 +86,10 @@
       <DependentUpon>MainWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Page Include="Templates.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs">

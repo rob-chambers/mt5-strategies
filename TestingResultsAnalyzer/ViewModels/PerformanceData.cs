@@ -1,18 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Linq;
-using TestingResultsAnalyzer.Commands;
-using TestingResultsAnalyzer.Model;
-using TestingResultsAnalyzer.ViewModels;
-
-namespace TestingResultsAnalyzer
+﻿namespace TestingResultsAnalyzer.ViewModels
 {
-    public class MainViewModel : INotifyPropertyChanged
+    public class PerformanceData : ViewModelBase
     {
-        private readonly OpenFileCommand _openFileCommand;
-        private H4MAFilterCommand _H4MAFilterCommand;
-        private TradeCollection _trades;
         private double _profitLoss;
         private double _maxProfit;
         private double _maxLoss;
@@ -20,29 +9,6 @@ namespace TestingResultsAnalyzer
         private int _totalWins;
         private int _totalLosses;
         private double _winLossRatio;
-        
-
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        public MainViewModel()
-        {
-            _openFileCommand = new OpenFileCommand(this);
-            _H4MAFilterCommand = new H4MAFilterCommand(this);
-            
-            _trades = new TradeCollection();
-        }
-       
-        private void OnPropertyChanged(string propertyName)
-        {
-            if (PropertyChanged == null) return;
-            PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
-        }
-
-        public TradeCollection Trades { get => _trades; }
-
-        public OpenFileCommand OpenFileCommand { get => _openFileCommand; }
-
-        public H4MAFilterCommand H4MAFilterCommand { get => _H4MAFilterCommand; }
 
         public double ProfitLoss
         {
@@ -143,27 +109,6 @@ namespace TestingResultsAnalyzer
                 _winLossRatio = value;
                 OnPropertyChanged(nameof(WinLossRatio));
             }
-        }
-
-        private IEnumerable<TradeViewModel> SelectedTrades
-        {
-            get
-            {
-                return Trades.Where(x => x.IsSelected);
-            }
-        }
-
-        public void CalculateSummary()
-        {
-            ProfitLoss = SelectedTrades.Sum(x => x.Profit);
-            MaxProfit = SelectedTrades.Any() ? SelectedTrades.Max(x => x.Profit) : 0;
-            MaxLoss = SelectedTrades.Any() ? -SelectedTrades.Min(x => x.Profit) : 0;
-            TotalTrades = SelectedTrades.Count();
-            TotalWins = SelectedTrades.Count(x => x.Profit > 0);
-            TotalLosses = SelectedTrades.Count(x => x.Profit <= 0);
-            WinLossRatio = TotalTrades > 0 
-                ? (TotalLosses == 0 ? 100 : (double)TotalWins / TotalLosses * 100) 
-                : 0;
         }
     }
 }
