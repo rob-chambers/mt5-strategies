@@ -13,9 +13,15 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="120" />
                     <ColumnDefinition Width="60" />
+                    <ColumnDefinition Width="60" />
                 </Grid.ColumnDefinitions>
 
                 <Grid.RowDefinitions>
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
                     <RowDefinition />
                     <RowDefinition />
                     <RowDefinition />
@@ -30,23 +36,55 @@
                     <Setter Property="Padding" Value="10" />
                 </Style>
 -->
+
+                <!-- ExcludedPerformanceData -->
                 <TextBlock>Total Profit/Loss</TextBlock>
-                <TextBlock Grid.Column="1" Text="{Binding PerformanceData.ProfitLoss}"></TextBlock>
+                <TextBlock Grid.Column="1" Text="{Binding PerformanceData.ProfitLoss, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Column="2" Text="{Binding ExcludedPerformanceData.ProfitLoss, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
 
-                <TextBlock Grid.Row="1">Largest Win</TextBlock>
-                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PerformanceData.MaxProfit, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Row="1">Gross Profits</TextBlock>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PerformanceData.GrossProfits, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding ExcludedPerformanceData.GrossProfits, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
 
-                <TextBlock Grid.Row="2">Largest Loss</TextBlock>
-                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PerformanceData.MaxLoss, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Row="2">Gross Losses</TextBlock>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PerformanceData.GrossLosses, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding ExcludedPerformanceData.GrossLosses, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
 
-                <TextBlock Grid.Row="3">Total Trades</TextBlock>
-                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PerformanceData.TotalTrades}"></TextBlock>
-                <TextBlock Grid.Row="4">Total Wins</TextBlock>
-                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding PerformanceData.TotalWins}"></TextBlock>
-                <TextBlock Grid.Row="5">Total Losses</TextBlock>
-                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding PerformanceData.TotalLosses}"></TextBlock>
-                <TextBlock Grid.Row="6">W/L Ratio</TextBlock>
-                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding PerformanceData.WinLossRatio, StringFormat='0.00'}"></TextBlock>
+                <TextBlock Grid.Row="3">Largest Win</TextBlock>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PerformanceData.MaxProfit, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding ExcludedPerformanceData.MaxProfit, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+
+                <TextBlock Grid.Row="4">Largest Loss</TextBlock>
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding PerformanceData.MaxLoss, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding ExcludedPerformanceData.MaxLoss, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+
+                <TextBlock Grid.Row="5">Total Trades</TextBlock>
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding PerformanceData.TotalTrades}"></TextBlock>
+                <TextBlock Grid.Row="5" Grid.Column="2" Text="{Binding ExcludedPerformanceData.TotalTrades}"></TextBlock>
+                
+                <TextBlock Grid.Row="6">Total Wins</TextBlock>
+                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding PerformanceData.TotalWins}"></TextBlock>
+                <TextBlock Grid.Row="6" Grid.Column="2" Text="{Binding ExcludedPerformanceData.TotalWins}"></TextBlock>
+                
+                <TextBlock Grid.Row="7">Total Losses</TextBlock>
+                <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding PerformanceData.TotalLosses}"></TextBlock>
+                <TextBlock Grid.Row="7" Grid.Column="2" Text="{Binding ExcludedPerformanceData.TotalLosses}"></TextBlock>
+                
+                <TextBlock Grid.Row="8">W/L Ratio</TextBlock>
+                <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding PerformanceData.WinLossRatio, StringFormat='0.00'}"></TextBlock>
+                <TextBlock Grid.Row="8" Grid.Column="2" Text="{Binding ExcludedPerformanceData.WinLossRatio, StringFormat='0.00'}"></TextBlock>
+
+                <TextBlock Grid.Row="9">Average Win</TextBlock>
+                <TextBlock Grid.Row="9" Grid.Column="1" Text="{Binding PerformanceData.AverageWin, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Row="9" Grid.Column="2" Text="{Binding ExcludedPerformanceData.AverageWin, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+
+                <TextBlock Grid.Row="10">Average Loss</TextBlock>
+                <TextBlock Grid.Row="10" Grid.Column="1" Text="{Binding PerformanceData.AverageLoss, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Row="10" Grid.Column="2" Text="{Binding ExcludedPerformanceData.AverageLoss, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+            
+                <TextBlock Grid.Row="11">Profit Factor</TextBlock>
+                <TextBlock Grid.Row="11" Grid.Column="1" Text="{Binding PerformanceData.ProfitFactor, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Row="11" Grid.Column="2" Text="{Binding ExcludedPerformanceData.ProfitFactor, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
             </Grid>
         </StackPanel>
     </DataTemplate>

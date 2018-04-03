@@ -57,7 +57,11 @@ namespace TestingResultsAnalyzer.ViewModels
                 new FilterViewModel(this, new NullFilter()),
                 new FilterViewModel(this, new H4MAFilter()),
                 new FilterViewModel(this, new H4RsiFilter()),
-                new FilterViewModel(this, new MACDZeroFilter())
+                new FilterViewModel(this, new MACDZeroFilter()),
+                new FilterViewModel(this, new PriceToMacdDivergenceFilter()),
+                new FilterViewModel(this, new MacdDivergenceFilter()),
+                new FilterViewModel(this, new MacdDivergenceCrossFilter()),
+                new FilterViewModel(this, new FlatTrendFilter()),
             };
 
             foreach (var filter in filters)

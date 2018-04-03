@@ -45,5 +45,33 @@ Deal,Entry Time,S/L,Entry,Exit Time,Exit,Profit,MA50,MA100,MA240,MACD,H4 MA 0,H4
         public double H4MA1 { get; set; }
 
         public double H4Rsi1 { get; set; }
+
+        public double Low { get; set; }
+
+        public double High { get; set; }
+
+        public int UpCrossRecentIndex { get; set; }
+
+        public int UpCrossPriorIndex { get; set; }
+
+        public double UpCrossRecentValue { get; set; }
+
+        public double UpCrossPriorValue { get; set; }
+
+        public double UpCrossRecentPrice { get; set; }
+
+        public double UpCrossPriorPrice { get; set; }
+
+        public int DownCrossRecentIndex { get; set; }
+
+        public int DownCrossPriorIndex { get; set; }
+
+        public double DownCrossRecentValue { get; set; }
+
+        public double DownCrossPriorValue { get; set; }
+
+        public double DownCrossRecentPrice { get; set; }
+
+        public double DownCrossPriorPrice { get; set; }
     }
 }

@@ -74,7 +74,9 @@ private:
     // "MA50", "MA100", "MA240", "MACD", "H4 MA", "H4 RSI"
     int _fileHandle;
     double _ma50Data[], _ma100Data[], _ma240Data[];
-    double _ma50, _ma100, _ma240, _macd, _h4MA, _h4Rsi, _h4MA0, _h4Rsi0;
+    double _ma50, _ma100, _ma240, _macd, _h4MA, _h4Rsi, _h4MA0, _h4Rsi0, _low, _high, _upCrossRecentPrice, _upCrossPriorPrice, _downCrossRecentPrice, _downCrossPriorPrice;
+    double _upCrossRecentValue, _upCrossPriorValue, _downCrossRecentValue, _downCrossPriorValue;
+    int _upCrossRecentIndex, _upCrossPriorIndex, _downCrossRecentIndex, _downCrossPriorIndex;
 
     void CheckToMoveLongPositionToBreakEven();
     void CheckToMoveShortPositionToBreakEven();
@@ -198,7 +200,9 @@ int CJimBrownTrend::Init(
             return(INIT_FAILED);
         }
 
-        FileWrite(_fileHandle, "Deal", "Entry Time", "S/L", "Entry", "Exit Time", "Exit", "Profit", "MA50", "MA100", "MA240", "MACD", "H4 MA 0", "H4 RSI 0", "H4 MA 1", "H4 RSI 1");
+        FileWrite(_fileHandle, "Deal", "Entry Time", "S/L", "Entry", "Exit Time", "Exit", "Profit", "MA50", "MA100", "MA240", "MACD", "H4 MA 0", "H4 RSI 0", "H4 MA 1", "H4 RSI 1",
+            "Signal Bar Low", "Signal Bar High", "Up Cross Recent Index","Up Cross Prior Index", "Up Cross Recent Value", "Up Cross Prior Value", "Up Cross Recent Price", "Up Cross Prior Price",
+            "Down Cross Recent Index", "Down Cross Prior Index", "Down Cross Recent Value", "Down Cross Prior Value", "Down Cross Recent Price", "Down Cross Prior Price");
     }
 
     return retCode;
@@ -506,7 +510,10 @@ void CJimBrownTrend::WritePerformanceToFile()
         dealTypeString = "S";
     }
 
-    FileWrite(_fileHandle, dealNumber, entryTime, dealTypeString, entryPrice, exitTime, exitPrice, profit, _ma50, _ma100, _ma240, _macd, _h4MA0, _h4Rsi0, _h4MA, _h4Rsi);
+    FileWrite(_fileHandle, dealNumber, entryTime, dealTypeString, entryPrice, exitTime, exitPrice, profit, _ma50, _ma100, _ma240, _macd, _h4MA0, _h4Rsi0, _h4MA, _h4Rsi,
+        _low, _high,
+        _upCrossRecentIndex,_upCrossPriorIndex,_upCrossRecentValue,_upCrossPriorValue,_upCrossRecentPrice,_upCrossPriorPrice,
+        _downCrossRecentIndex,_downCrossPriorIndex,_downCrossRecentValue,_downCrossPriorValue,_downCrossRecentPrice,_downCrossPriorPrice);
     FileFlush(_fileHandle);
 }
 
@@ -653,4 +660,74 @@ void CJimBrownTrend::StorePerfData()
 
     _h4MA0 = _longTermTimeFrameData[0];
     _h4Rsi0 = _longTermRsiData[0];
+
+    _low = _prices[1].low;
+    _high = _prices[1].high;
+
+    int upFirstIndex = -1;
+    int upSecondIndex = -1;
+    int downFirstIndex = -1;
+    int downSecondIndex = -1;
+
+    for (int index = 0; index < ArraySize(_platinumUpCrossData); index++) {
+        if (_platinumUpCrossData[index] < 1) {
+            if (upFirstIndex == -1) {
+                upFirstIndex = index;
+            }
+            else {
+                upSecondIndex = index;
+            }
+        }
+
+        if (_platinumDownCrossData[index] < 1) {
+            if (downFirstIndex == -1) {
+                downFirstIndex = index;
+            }
+            else {
+                downSecondIndex = index;
+            }
+        }
+    }
+    
+    _upCrossRecentIndex = upFirstIndex;
+    _upCrossPriorIndex = upSecondIndex;
+
+    if (upFirstIndex == -1) {
+        _upCrossRecentValue = 0;        
+        _upCrossRecentPrice = 0;
+    }
+    else {
+        _upCrossRecentValue = _platinumUpCrossData[upFirstIndex];
+        _upCrossRecentPrice = _prices[upFirstIndex].close;
+    }
+
+    if (upSecondIndex == -1) {
+        _upCrossPriorValue = 0;
+        _upCrossPriorPrice = 0;
+    }
+    else {
+        _upCrossPriorValue = _platinumUpCrossData[upSecondIndex];
+        _upCrossPriorPrice = _prices[upSecondIndex].close;
+    }
+
+    _downCrossRecentIndex = downFirstIndex;
+    _downCrossPriorIndex = downSecondIndex;
+
+    if (downFirstIndex == -1) {
+        _downCrossRecentValue = 0;
+        _downCrossRecentPrice = 0;
+    }
+    else {
+        _downCrossRecentValue = _platinumDownCrossData[downFirstIndex];
+        _downCrossRecentPrice = _prices[downFirstIndex].close;
+    }
+    
+    if (downSecondIndex == -1) {
+        _downCrossPriorValue = 0;
+        _downCrossPriorPrice = 0;
+    }
+    else {
+        _downCrossPriorValue = _platinumDownCrossData[downSecondIndex];
+        _downCrossPriorPrice = _prices[downSecondIndex].close;
+    }       
 }

@@ -23,6 +23,10 @@ namespace TestingResultsAnalyzer.ViewModels
             EntryPrice = model.EntryPrice;
             ExitDateTime = model.ExitDateTime;
             ExitPrice = model.ExitPrice;
+
+            Low = model.Low;
+            High = model.High;
+
             H4MA = model.H4MA;
             H4MA1 = model.H4MA1;
             H4Rsi = model.H4Rsi;
@@ -32,6 +36,20 @@ namespace TestingResultsAnalyzer.ViewModels
             MA50 = model.MA50;
             MACD = model.MACD;
             Profit = model.Profit;
+
+            DownCrossPriorIndex = model.DownCrossPriorIndex;
+            DownCrossPriorPrice = model.DownCrossPriorPrice;
+            DownCrossPriorValue = model.DownCrossPriorValue;
+            DownCrossRecentIndex = model.DownCrossRecentIndex;
+            DownCrossRecentPrice = model.DownCrossRecentPrice;
+            DownCrossRecentValue = model.DownCrossRecentValue;
+
+            UpCrossPriorIndex = model.UpCrossPriorIndex;
+            UpCrossPriorPrice = model.UpCrossPriorPrice;
+            UpCrossPriorValue = model.UpCrossPriorValue;
+            UpCrossRecentIndex = model.UpCrossRecentIndex;
+            UpCrossRecentPrice = model.UpCrossRecentPrice;
+            UpCrossRecentValue = model.UpCrossRecentValue;
         }
 
         public bool IsSelected

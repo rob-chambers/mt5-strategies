@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Input;
 using TestingResultsAnalyzer.Commands;
@@ -11,6 +12,7 @@ namespace TestingResultsAnalyzer.ViewModels
         private readonly MainViewModel _mainViewModel;
         private readonly ShowFilteredTradesCommand _showFilteredTradesCommand;
         private PerformanceData _performanceData;
+        private PerformanceData _excludedPerformanceData;
         private TradeCollection _trades;
 
         public FilterViewModel(MainViewModel mainViewModel, Filter filter)
@@ -39,20 +41,47 @@ namespace TestingResultsAnalyzer.ViewModels
             }
         }
 
+        public PerformanceData ExcludedPerformanceData
+        {
+            get
+            {
+                return _excludedPerformanceData ?? (_excludedPerformanceData = new PerformanceData());
+            }
+        }
+
         public void CalculateSummary(TradeCollection trades)
         {
             _trades = trades;
             var includedTrades = trades.Where(x => Filter.IsIncluded(x));
+            var excludedTrades = trades.Where(x => !Filter.IsIncluded(x));
 
-            PerformanceData.ProfitLoss = includedTrades.Sum(x => x.Profit);
-            PerformanceData.MaxProfit = includedTrades.Any() ? includedTrades.Max(x => x.Profit) : 0;
-            PerformanceData.MaxLoss = includedTrades.Any() ? -includedTrades.Min(x => x.Profit) : 0;
-            PerformanceData.TotalTrades = includedTrades.Count();
-            PerformanceData.TotalWins = includedTrades.Count(x => x.Profit > 0);
-            PerformanceData.TotalLosses = includedTrades.Count(x => x.Profit <= 0);
-            PerformanceData.WinLossRatio = PerformanceData.TotalTrades > 0
-                ? (PerformanceData.TotalLosses == 0 ? 100 : (double)PerformanceData.TotalWins / PerformanceData.TotalLosses * 100)
+            CalculateSummary(includedTrades, PerformanceData);
+            CalculateSummary(excludedTrades, ExcludedPerformanceData);
+        }
+
+        private void CalculateSummary(IEnumerable<TradeViewModel> trades, PerformanceData performanceData)
+        {
+            var hasTrades = trades.Any();
+            var profitableTrades = trades.Where(x => x.Profit > 0);
+            var losingTrades = trades.Where(x => x.Profit <= 0);
+
+            performanceData.ProfitLoss = trades.Sum(x => x.Profit);
+            performanceData.GrossProfits = profitableTrades.Sum(x => x.Profit);
+            performanceData.GrossLosses = losingTrades.Sum(x => x.Profit);
+            performanceData.MaxProfit = hasTrades ? trades.Max(x => x.Profit) : 0;
+            performanceData.MaxLoss = hasTrades ? -trades.Min(x => x.Profit) : 0;
+            performanceData.AverageWin = hasTrades ? profitableTrades.Average(x => x.Profit) : 0;
+            performanceData.AverageLoss = hasTrades ? losingTrades.Average(x => x.Profit) : 0;
+            performanceData.TotalTrades = trades.Count();
+            performanceData.TotalWins = profitableTrades.Count();
+            performanceData.TotalLosses = losingTrades.Count();
+            performanceData.WinLossRatio = performanceData.TotalTrades > 0
+                ? (performanceData.TotalLosses == 0 ? 100 : (double)performanceData.TotalWins / performanceData.TotalTrades * 100)
                 : 0;
+            performanceData.ProfitFactor = performanceData.GrossLosses != 0
+                ? performanceData.GrossProfits / -performanceData.GrossLosses
+                : 0;
+
         }
 
         private void ShowFilteredTrades(object source, EventArgs e)

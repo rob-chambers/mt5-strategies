@@ -63,6 +63,10 @@
     <Compile Include="DirectionConverter.cs" />
     <Compile Include="Enums.cs" />
     <Compile Include="Filters\Filter.cs" />
+    <Compile Include="Filters\FlatTrendFilter.cs" />
+    <Compile Include="Filters\MacdDivergenceCrossFilter.cs" />
+    <Compile Include="Filters\MacdDivergenceFilter.cs" />
+    <Compile Include="Filters\PriceToMacdDivergenceFilter.cs" />
     <Compile Include="Filters\NullFilter.cs" />
     <Compile Include="Filters\MACDZeroFilter.cs" />
     <Compile Include="Filters\H4RsiFilter.cs" />
