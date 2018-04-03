@@ -67,6 +67,7 @@
     <Compile Include="Filters\FlatTrendFilter.cs" />
     <Compile Include="Filters\MacdDivergenceCrossFilter.cs" />
     <Compile Include="Filters\MacdDivergenceFilter.cs" />
+    <Compile Include="Filters\FarAwayFilter.cs" />
     <Compile Include="Filters\TwoHundredFortyFilter.cs" />
     <Compile Include="Filters\PriceToMacdDivergenceFilter.cs" />
     <Compile Include="Filters\NullFilter.cs" />
