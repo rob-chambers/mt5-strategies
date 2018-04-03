@@ -8,6 +8,8 @@ namespace TestingResultsAnalyzer.Filters
 
         public override string Description => "Only take trades when the price is higher than the 4 hourly moving average (or lower than the MA when going short)";
 
+        public override bool IsCombinable => true;
+
         public override bool IsIncluded(TradeViewModel trade)
         {
             return trade.Direction == TradeDirection.Long

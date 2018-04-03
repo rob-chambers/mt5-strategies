@@ -8,6 +8,8 @@ namespace TestingResultsAnalyzer.Filters
 
         public override string Description => "Only take trades when the price is above the 240 LMA";
 
+        public override bool IsCombinable => true;
+
         public override bool IsIncluded(TradeViewModel trade)
         {
             return trade.Direction == TradeDirection.Long

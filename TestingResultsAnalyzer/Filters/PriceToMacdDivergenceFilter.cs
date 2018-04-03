@@ -8,6 +8,8 @@ namespace TestingResultsAnalyzer.Filters
 
         public override string Description => "For long trades, only enter when the MACD is moving up but price has moved down.";
 
+        public override bool IsCombinable => true;
+
         public override bool IsIncluded(TradeViewModel trade)
         {
             return trade.Direction == TradeDirection.Long

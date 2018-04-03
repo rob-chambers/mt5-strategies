@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.ComponentModel;
 using TestingResultsAnalyzer.Commands;
 using TestingResultsAnalyzer.Filters;
 
@@ -10,6 +11,7 @@ namespace TestingResultsAnalyzer.ViewModels
         private readonly ObservableCollection<FilterViewModel> _filters;
         private readonly OpenFileCommand _openFileCommand;
         private bool _isEnabled;
+        private FilterViewModel _combinationFilter;
 
         public MainViewModel()
         {
@@ -54,7 +56,7 @@ namespace TestingResultsAnalyzer.ViewModels
         {
             var filters = new[]
             {
-                new FilterViewModel(this, new NullFilter()),
+                new FilterViewModel(this, new NullFilter()),                
                 new FilterViewModel(this, new H4MAFilter()),
                 new FilterViewModel(this, new H4RsiFilter()),
                 new FilterViewModel(this, new MACDZeroFilter()),
@@ -69,6 +71,24 @@ namespace TestingResultsAnalyzer.ViewModels
             {
                 _filters.Add(filter);
             }
+
+            _combinationFilter = new FilterViewModel(this, new CombineFilter(filters));
+            _filters.Insert(1, _combinationFilter);
+            AttachEventHandlers();
+        }
+
+        private void AttachEventHandlers()
+        {
+            foreach (var filter in _filters)
+            {
+                filter.Filter.PropertyChanged += OnPropertyChanged;
+            }
+        }
+
+        private void OnPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(Filter.IsSelected)) return;
+            _combinationFilter.CalculateSummary(Trades);
         }
     }
 }

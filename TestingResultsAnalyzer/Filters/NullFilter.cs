@@ -8,6 +8,8 @@ namespace TestingResultsAnalyzer.Filters
 
         public override string Description => "Clears any existing filters";
 
+        public override bool IsCombinable => false;
+
         public override bool IsIncluded(TradeViewModel trade)
         {
             return true;

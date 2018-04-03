@@ -2,9 +2,18 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:TestingResultsAnalyzer">
 
+    <BooleanToVisibilityConverter x:Key="booleanToVisibilityConverter"/>
+    
     <DataTemplate x:Key="filterTemplate" >
         <StackPanel>
-            <TextBlock Text="{Binding Filter.Name}" FontSize="14" FontWeight="Bold" ></TextBlock>
+            <StackPanel Orientation="Horizontal">
+                <CheckBox IsChecked="{Binding Filter.IsSelected}" 
+                          Visibility="{Binding Filter.IsCombinable, Converter={StaticResource booleanToVisibilityConverter}}" 
+                          Content="{Binding Filter.Name}"
+                          FontSize="14" FontWeight="Bold"
+                          />
+            </StackPanel>
+            
             <TextBlock Text="{Binding Filter.Description}" HorizontalAlignment="Left" TextAlignment="Justify" FontSize="10" FontWeight="Light" TextWrapping="Wrap" Width="150" Height="60" ></TextBlock>
 
             <Button Content="Filter Trades" Margin="0,8,16,8" Padding="5" Command="{Binding ShowFilteredTradesCommand}"></Button>

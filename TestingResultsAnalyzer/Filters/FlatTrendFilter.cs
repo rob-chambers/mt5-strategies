@@ -9,6 +9,8 @@ namespace TestingResultsAnalyzer.Filters
 
         public override string Description => "Avoid taking trades when the trend is flat.";
 
+        public override bool IsCombinable => true;
+
         public override bool IsIncluded(TradeViewModel trade)
         {
             return trade.Direction == TradeDirection.Long

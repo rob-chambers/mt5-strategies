@@ -8,6 +8,8 @@ namespace TestingResultsAnalyzer.Filters
 
         public override string Description => "Only take trades when the MACD is below the zero line (or above the zero line when going short)";
 
+        public override bool IsCombinable => true;
+
         public override bool IsIncluded(TradeViewModel trade)
         {
             return trade.Direction == TradeDirection.Long
