@@ -11,8 +11,9 @@ namespace TestingResultsAnalyzer.Filters
 
         public override bool IsIncluded(TradeViewModel trade)
         {
-            // TODO: Requirements??
-            return true;
+            return trade.Direction == TradeDirection.Long
+                        ? trade.UpCrossRecentIndex > -1 && trade.UpCrossPriorIndex > -1 && Math.Abs(trade.UpCrossRecentPrice - trade.UpCrossPriorPrice) >= 0.0005
+                        : trade.DownCrossRecentIndex > -1 && trade.DownCrossPriorIndex > -1 && Math.Abs(trade.DownCrossRecentPrice - trade.DownCrossPriorPrice) >= 0.0005;
         }
     }
 }

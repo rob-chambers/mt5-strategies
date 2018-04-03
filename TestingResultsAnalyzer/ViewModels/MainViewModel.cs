@@ -62,6 +62,7 @@ namespace TestingResultsAnalyzer.ViewModels
                 new FilterViewModel(this, new MacdDivergenceFilter()),
                 new FilterViewModel(this, new MacdDivergenceCrossFilter()),
                 new FilterViewModel(this, new FlatTrendFilter()),
+                new FilterViewModel(this, new TwoHundredFortyFilter()),
             };
 
             foreach (var filter in filters)
