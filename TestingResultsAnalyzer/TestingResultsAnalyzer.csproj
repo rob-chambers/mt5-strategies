@@ -62,14 +62,15 @@
     <Compile Include="Commands\ShowFilteredTradesCommand.cs" />
     <Compile Include="DirectionConverter.cs" />
     <Compile Include="Enums.cs" />
-    <Compile Include="Filters\BelowFiftyPeriodFilter.cs" />
     <Compile Include="Filters\Filter.cs" />
     <Compile Include="Filters\CombineFilter.cs" />
     <Compile Include="Filters\FlatTrendFilter.cs" />
-    <Compile Include="Filters\MacdDivergenceCrossFilter.cs" />
+    <Compile Include="Filters\MacdSignalIndexFilter.cs" />
     <Compile Include="Filters\MacdDivergenceFilter.cs" />
+    <Compile Include="Filters\MacdDivergenceCrossFilter.cs" />
     <Compile Include="Filters\FarAwayFilter.cs" />
     <Compile Include="Filters\AboveFiftyPeriodFilter.cs" />
+    <Compile Include="Filters\MACDValueFilter.cs" />
     <Compile Include="Filters\TwoHundredFortyFilter.cs" />
     <Compile Include="Filters\PriceToMacdDivergenceFilter.cs" />
     <Compile Include="Filters\NullFilter.cs" />

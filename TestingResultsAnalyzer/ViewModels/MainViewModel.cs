@@ -1,5 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using TestingResultsAnalyzer.Commands;
 using TestingResultsAnalyzer.Filters;
 
@@ -58,16 +59,17 @@ namespace TestingResultsAnalyzer.ViewModels
             {
                 new FilterViewModel(this, new NullFilter()),
                 new FilterViewModel(this, new AboveFiftyPeriodFilter()),
-                new FilterViewModel(this, new BelowFiftyPeriodFilter()),
                 new FilterViewModel(this, new TwoHundredFortyFilter()),
                 new FilterViewModel(this, new H4MAFilter()),
                 new FilterViewModel(this, new H4RsiFilter()),
                 new FilterViewModel(this, new MACDZeroFilter()),
+                new FilterViewModel(this, new MACDValueFilter()),
                 new FilterViewModel(this, new PriceToMacdDivergenceFilter()),
                 new FilterViewModel(this, new MacdDivergenceFilter()),
                 new FilterViewModel(this, new MacdDivergenceCrossFilter()),
                 new FilterViewModel(this, new FlatTrendFilter()),                
                 new FilterViewModel(this, new FarAwayFilter()),
+                new FilterViewModel(this, new MacdSignalIndexFilter())
             };
 
             foreach (var filter in filters)
@@ -90,8 +92,29 @@ namespace TestingResultsAnalyzer.ViewModels
 
         private void OnPropertyChanged(object sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName != nameof(Filter.IsSelected)) return;
-            _combinationFilter.CalculateSummary(Trades);
+            switch (e.PropertyName)
+            {
+                case nameof(Filter.IsSelected):
+                    _combinationFilter.CalculateSummary(Trades);
+                    break;
+
+                case nameof(Filter.ArgumentValue):
+                    var filter = sender as Filter;
+                    if (filter != null)
+                    {
+                        // Which vm does this correspond with?
+                        var vm = _filters.SingleOrDefault(x => x.Filter == filter);
+                        if (vm != null)
+                        {
+                            vm.CalculateSummary(Trades);
+                        }
+
+                        // Update combination filter as well
+                        _combinationFilter.CalculateSummary(Trades);
+                    }
+
+                    break;
+            }
         }
     }
 }

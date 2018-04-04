@@ -30,7 +30,7 @@ namespace TestingResultsAnalyzer.Commands
             {
                 var dialog = new OpenFileDialog
                 {
-                    InitialDirectory = @"C:\Users\rob\AppData\Roaming\MetaQuotes\Tester\D0E8209F77C8CF37AD8BF550E51FF075\Agent-127.0.0.1-3000\MQL5\Files",
+                    InitialDirectory = @"C:\Users\rob\Documents\Trading\Forex Backtesting Results",
                     Filter = "Comma Separated Values File (.csv)|*.csv",
                     Title = "Open backtesting results CSV file",
                     CheckFileExists = true

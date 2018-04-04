@@ -6,34 +6,44 @@
     
     <DataTemplate x:Key="filterTemplate" >
         <StackPanel>
-            <StackPanel Height="70" >
+            <StackPanel Height="40">
                 <CheckBox IsChecked="{Binding Filter.IsSelected}" 
                         Visibility="{Binding Filter.IsCombinable, Converter={StaticResource booleanToVisibilityConverter}}" 
                         Content="{Binding Filter.Name}"
                         FontSize="14" FontWeight="Bold"                        
                         />
-
-                <TextBlock Text="{Binding Filter.Description}"
-                       HorizontalAlignment="Left"
-                       VerticalAlignment="Top" 
-                       TextAlignment="Justify"
-                       FontSize="10"
-                       FontWeight="Light"
-                       TextWrapping="Wrap"
-                       Width="150"
-                       Height="60" >
-                </TextBlock>
             </StackPanel>
             
-            <Button Content="Filter Trades"
-                    Margin="0,8,16,8"
+            <TextBlock Text="{Binding Filter.Description}"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top" 
+                    TextAlignment="Justify"
+                    FontSize="10"
+                    FontWeight="Light"
+                    TextWrapping="Wrap"
+                    Width="150"
+                    Height="60" >
+            </TextBlock>
+
+            <StackPanel Orientation="Horizontal">
+                <TextBox Visibility="{Binding Filter.HasArgument, Converter={StaticResource booleanToVisibilityConverter}}"
+                        HorizontalAlignment="Left"
+                        Margin="0,6,6,6"
+                        Text="{Binding Filter.ArgumentValue, UpdateSourceTrigger=LostFocus}"
+                        Width="70"
+                        Height="24" />
+
+                <Button Content="Filter Trades"
+                    Margin="0,8"
                     MaxWidth="120"
                     HorizontalAlignment="Left"
-                    Padding="5"
+                    Padding="6"
+                    SnapsToDevicePixels="True"
                     Grid.ColumnSpan="2"
                     Command="{Binding ShowFilteredTradesCommand}">
-            </Button>
-            
+                </Button>
+            </StackPanel>
+
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="95" />

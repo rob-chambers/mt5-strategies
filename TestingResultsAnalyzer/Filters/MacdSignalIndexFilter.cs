@@ -2,16 +2,11 @@
 
 namespace TestingResultsAnalyzer.Filters
 {
-    public class H4RsiFilter : Filter
+    public class MacdSignalIndexFilter : Filter
     {
-        public H4RsiFilter()
-        {
-            ArgumentValue = "30";
-        }
+        public override string Name => "MACD Signal Index";
 
-        public override string Name => "H4 RSI";
-
-        public override string Description => "For long trades, only enter when 4 hourly RSI <= 30.  For short trades, only enter when 4 hourly RSI >= 70";
+        public override string Description => "Only enter when there is a MACD signal within the last x number of bars";
 
         public override bool IsCombinable => true;
 
@@ -25,8 +20,8 @@ namespace TestingResultsAnalyzer.Filters
             }
 
             return trade.Direction == TradeDirection.Long
-                ? trade.H4Rsi <= value
-                : trade.H4Rsi >= (100 - value);
+                ? (trade.UpCrossRecentIndex != -1 && trade.UpCrossRecentIndex < value)
+                : (trade.DownCrossRecentIndex != -1 && trade.DownCrossRecentIndex < value);
         }
     }
 }

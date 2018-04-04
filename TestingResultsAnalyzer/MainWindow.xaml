@@ -67,6 +67,7 @@
             </ListView.ItemContainerStyle>
             <ListView.View>
                 <GridView>
+                    <!-- Deal,Entry Time,S/L,Entry,Exit Time,Exit,Profit,MA50,MA100,MA240,MACD,H4 MA 0,H4 RSI 0,H4 MA 1,H4 RSI 1-->
                     <GridViewColumn Width="35" Header="Deal" DisplayMemberBinding="{Binding DealNumber}"  />
                     <GridViewColumn Width="120" Header="Entry" DisplayMemberBinding="{Binding EntryDateTime, StringFormat='dd/MM/yy hh:mm'}" />
                     <GridViewColumn Width="50" Header="S/L" DisplayMemberBinding="{Binding Direction}" />
@@ -74,10 +75,8 @@
                     <GridViewColumn Width="120" Header="Exit" DisplayMemberBinding="{Binding ExitDateTime, StringFormat='dd/MM/yy hh:mm'}" />
                     <GridViewColumn Width="80" Header="Exit Price" DisplayMemberBinding="{Binding ExitPrice}" />
                     <GridViewColumn Width="80" Header="Profit" DisplayMemberBinding="{Binding Profit}" />
-                    
                     <GridViewColumn Width="80" Header="Low" DisplayMemberBinding="{Binding Low}" />
                     <GridViewColumn Width="80" Header="High" DisplayMemberBinding="{Binding High}" />
-                    
                     <GridViewColumn Width="80" Header="MA50" DisplayMemberBinding="{Binding MA50}" />
                     <GridViewColumn Width="80" Header="MA100" DisplayMemberBinding="{Binding MA100}" />
                     <GridViewColumn Width="80" Header="MA240" DisplayMemberBinding="{Binding MA240}" />
@@ -85,19 +84,19 @@
                     <GridViewColumn Width="80" Header="H4MA" DisplayMemberBinding="{Binding H4MA}" />
                     <GridViewColumn Width="80" Header="H4Rsi" DisplayMemberBinding="{Binding H4Rsi}" />
 
-                    <GridViewColumn Width="40" Header="UpCrossRecentIndex" DisplayMemberBinding="{Binding UpCrossRecentIndex}" />
-                    <GridViewColumn Width="40" Header="UpCrossPriorIndex" DisplayMemberBinding="{Binding UpCrossPriorIndex}" />
-                    <GridViewColumn Width="80" Header="UpCrossRecentValue" DisplayMemberBinding="{Binding UpCrossRecentValue}" />
-                    <GridViewColumn Width="80" Header="UpCrossPriorValue" DisplayMemberBinding="{Binding UpCrossPriorValue}" />
-                    <GridViewColumn Width="80" Header="UpCrossRecentPrice" DisplayMemberBinding="{Binding UpCrossRecentPrice}" />
-                    <GridViewColumn Width="80" Header="UpCrossPriorPrice" DisplayMemberBinding="{Binding UpCrossPriorPrice}" />
+                    <GridViewColumn Width="40" Header="UpRctIdx" DisplayMemberBinding="{Binding UpCrossRecentIndex}" />
+                    <GridViewColumn Width="40" Header="UpPriorIdx" DisplayMemberBinding="{Binding UpCrossPriorIndex}" />
+                    <GridViewColumn Width="80" Header="UpRctVal" DisplayMemberBinding="{Binding UpCrossRecentValue}" />
+                    <GridViewColumn Width="80" Header="UpPriorVal" DisplayMemberBinding="{Binding UpCrossPriorValue}" />
+                    <GridViewColumn Width="80" Header="UpRctPrice" DisplayMemberBinding="{Binding UpCrossRecentPrice}" />
+                    <GridViewColumn Width="80" Header="UpPriorPrice" DisplayMemberBinding="{Binding UpCrossPriorPrice}" />
 
-                    <GridViewColumn Width="40" Header="DownCrossRecentIndex" DisplayMemberBinding="{Binding DownCrossRecentIndex}" />
-                    <GridViewColumn Width="40" Header="DownCrossPriorIndex" DisplayMemberBinding="{Binding DownCrossPriorIndex}" />
-                    <GridViewColumn Width="80" Header="DownCrossRecentValue" DisplayMemberBinding="{Binding DownCrossRecentValue}" />
-                    <GridViewColumn Width="80" Header="DownCrossPriorValue" DisplayMemberBinding="{Binding DownCrossPriorValue}" />
-                    <GridViewColumn Width="80" Header="DownCrossRecentPrice" DisplayMemberBinding="{Binding DownCrossRecentPrice}" />
-                    <GridViewColumn Width="80" Header="DownCrossPriorPrice" DisplayMemberBinding="{Binding DownCrossPriorPrice}" />
+                    <GridViewColumn Width="40" Header="DnRctIdx" DisplayMemberBinding="{Binding DownCrossRecentIndex}" />
+                    <GridViewColumn Width="40" Header="DnPriorIdx" DisplayMemberBinding="{Binding DownCrossPriorIndex}" />
+                    <GridViewColumn Width="80" Header="DnRctVal" DisplayMemberBinding="{Binding DownCrossRecentValue}" />
+                    <GridViewColumn Width="80" Header="DnPriorVal" DisplayMemberBinding="{Binding DownCrossPriorValue}" />
+                    <GridViewColumn Width="80" Header="DnRctPrice" DisplayMemberBinding="{Binding DownCrossRecentPrice}" />
+                    <GridViewColumn Width="80" Header="DnPriorPrice" DisplayMemberBinding="{Binding DownCrossPriorPrice}" />
 
                 </GridView>
             </ListView.View>
