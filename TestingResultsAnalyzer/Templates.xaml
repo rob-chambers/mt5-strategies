@@ -6,23 +6,39 @@
     
     <DataTemplate x:Key="filterTemplate" >
         <StackPanel>
-            <StackPanel Orientation="Horizontal">
+            <StackPanel Height="70" >
                 <CheckBox IsChecked="{Binding Filter.IsSelected}" 
-                          Visibility="{Binding Filter.IsCombinable, Converter={StaticResource booleanToVisibilityConverter}}" 
-                          Content="{Binding Filter.Name}"
-                          FontSize="14" FontWeight="Bold"
-                          />
+                        Visibility="{Binding Filter.IsCombinable, Converter={StaticResource booleanToVisibilityConverter}}" 
+                        Content="{Binding Filter.Name}"
+                        FontSize="14" FontWeight="Bold"                        
+                        />
+
+                <TextBlock Text="{Binding Filter.Description}"
+                       HorizontalAlignment="Left"
+                       VerticalAlignment="Top" 
+                       TextAlignment="Justify"
+                       FontSize="10"
+                       FontWeight="Light"
+                       TextWrapping="Wrap"
+                       Width="150"
+                       Height="60" >
+                </TextBlock>
             </StackPanel>
             
-            <TextBlock Text="{Binding Filter.Description}" HorizontalAlignment="Left" TextAlignment="Justify" FontSize="10" FontWeight="Light" TextWrapping="Wrap" Width="150" Height="60" ></TextBlock>
-
-            <Button Content="Filter Trades" Margin="0,8,16,8" Padding="5" Command="{Binding ShowFilteredTradesCommand}"></Button>
+            <Button Content="Filter Trades"
+                    Margin="0,8,16,8"
+                    MaxWidth="120"
+                    HorizontalAlignment="Left"
+                    Padding="5"
+                    Grid.ColumnSpan="2"
+                    Command="{Binding ShowFilteredTradesCommand}">
+            </Button>
             
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="120" />
-                    <ColumnDefinition Width="60" />
-                    <ColumnDefinition Width="60" />
+                    <ColumnDefinition Width="95" />
+                    <ColumnDefinition Width="65" />
+                    <ColumnDefinition Width="65" />
                 </Grid.ColumnDefinitions>
 
                 <Grid.RowDefinitions>

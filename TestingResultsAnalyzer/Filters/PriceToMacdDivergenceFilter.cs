@@ -6,7 +6,7 @@ namespace TestingResultsAnalyzer.Filters
     {
         public override string Name => "Price to MACD Divergence";
 
-        public override string Description => "For long trades, only enter when the MACD is moving up but price has moved down.";
+        public override string Description => "For long trades, only enter when the MACD is moving up but price has moved down";
 
         public override bool IsCombinable => true;
 

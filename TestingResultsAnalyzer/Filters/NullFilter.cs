@@ -6,7 +6,7 @@ namespace TestingResultsAnalyzer.Filters
     {
         public override string Name => "<None>";
 
-        public override string Description => "Clears any existing filters";
+        public override string Description => "No filter applied";
 
         public override bool IsCombinable => false;
 

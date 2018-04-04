@@ -16,7 +16,7 @@ namespace TestingResultsAnalyzer.Filters
 
         public override string Name => "Combination";
 
-        public override string Description => "Select all filters to combine them.";
+        public override string Description => "Select all filters to combine them";
 
         public override bool IsCombinable => false;
 

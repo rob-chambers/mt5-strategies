@@ -70,8 +70,8 @@ namespace TestingResultsAnalyzer.ViewModels
             performanceData.GrossLosses = losingTrades.Sum(x => x.Profit);
             performanceData.MaxProfit = hasTrades ? trades.Max(x => x.Profit) : 0;
             performanceData.MaxLoss = hasTrades ? -trades.Min(x => x.Profit) : 0;
-            performanceData.AverageWin = hasTrades ? profitableTrades.Average(x => x.Profit) : 0;
-            performanceData.AverageLoss = hasTrades ? losingTrades.Average(x => x.Profit) : 0;
+            performanceData.AverageWin = hasTrades && profitableTrades.Any() ? profitableTrades.Average(x => x.Profit) : 0;
+            performanceData.AverageLoss = hasTrades && losingTrades.Any() ? losingTrades.Average(x => x.Profit) : 0;
             performanceData.TotalTrades = trades.Count();
             performanceData.TotalWins = profitableTrades.Count();
             performanceData.TotalLosses = losingTrades.Count();

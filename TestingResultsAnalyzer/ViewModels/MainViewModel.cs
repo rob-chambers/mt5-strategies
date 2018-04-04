@@ -56,15 +56,17 @@ namespace TestingResultsAnalyzer.ViewModels
         {
             var filters = new[]
             {
-                new FilterViewModel(this, new NullFilter()),                
+                new FilterViewModel(this, new NullFilter()),
+                new FilterViewModel(this, new AboveFiftyPeriodFilter()),
+                new FilterViewModel(this, new BelowFiftyPeriodFilter()),
+                new FilterViewModel(this, new TwoHundredFortyFilter()),
                 new FilterViewModel(this, new H4MAFilter()),
                 new FilterViewModel(this, new H4RsiFilter()),
                 new FilterViewModel(this, new MACDZeroFilter()),
                 new FilterViewModel(this, new PriceToMacdDivergenceFilter()),
                 new FilterViewModel(this, new MacdDivergenceFilter()),
                 new FilterViewModel(this, new MacdDivergenceCrossFilter()),
-                new FilterViewModel(this, new FlatTrendFilter()),
-                new FilterViewModel(this, new TwoHundredFortyFilter()),
+                new FilterViewModel(this, new FlatTrendFilter()),                
                 new FilterViewModel(this, new FarAwayFilter()),
             };
 

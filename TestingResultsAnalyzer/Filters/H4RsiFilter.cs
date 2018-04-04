@@ -6,7 +6,7 @@ namespace TestingResultsAnalyzer.Filters
     {
         public override string Name => "H4 RSI";
 
-        public override string Description => "For long trades, only enter when 4 hourly RSI < 70.  For short trades, only enter when 4 hourly RSI > 30.";
+        public override string Description => "For long trades, only enter when 4 hourly RSI < 70.  For short trades, only enter when 4 hourly RSI > 30";
 
         public override bool IsCombinable => true;
 

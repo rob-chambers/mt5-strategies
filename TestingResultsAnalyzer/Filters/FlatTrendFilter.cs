@@ -7,7 +7,7 @@ namespace TestingResultsAnalyzer.Filters
     {
         public override string Name => "Flat Trend";
 
-        public override string Description => "Avoid taking trades when the trend is flat.";
+        public override string Description => "Avoid taking trades when the trend is flat";
 
         public override bool IsCombinable => true;
 

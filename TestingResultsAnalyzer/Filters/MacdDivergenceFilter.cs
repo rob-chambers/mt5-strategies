@@ -6,7 +6,7 @@ namespace TestingResultsAnalyzer.Filters
     {
         public override string Name => "MACD Divergence with cross";
 
-        public override string Description => "For long trades, only enter when the MACD is moving up and has crossed the zero line.";
+        public override string Description => "For long trades, only enter when the MACD is moving up and has crossed the zero line";
 
         public override bool IsCombinable => true;
 

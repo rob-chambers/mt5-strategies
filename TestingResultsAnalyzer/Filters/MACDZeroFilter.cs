@@ -14,7 +14,7 @@ namespace TestingResultsAnalyzer.Filters
         {
             return trade.Direction == TradeDirection.Long
                 ? trade.MACD < 0
-                : trade.MACD < 0;
+                : trade.MACD > 0;
         }
     }
 }
