@@ -43,6 +43,9 @@ namespace TestingResultsAnalyzer.Commands
 
                 _mainViewModel.Trades.Clear();
                 var trades = engine.ReadFile(dialog.FileName).ToList();
+                string fileName = dialog.FileName;
+                _mainViewModel.Title = $"Testing Results Analyzer ({fileName})";
+
                 foreach (var trade in trades)
                 {
                     _mainViewModel.Trades.Add(new TradeViewModel(trade));

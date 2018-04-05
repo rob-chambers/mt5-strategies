@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:TestingResultsAnalyzer"
         xmlns:vms="clr-namespace:TestingResultsAnalyzer.ViewModels"
         mc:Ignorable="d"        
-        Title="Testing Results Analyzer" Height="850" Width="1200">
+        Title="{Binding Title}" Height="850" Width="1200">
 
     <Window.DataContext>
         <vms:MainViewModel></vms:MainViewModel>

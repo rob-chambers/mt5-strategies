@@ -461,7 +461,11 @@ void CJimBrownTrend::OnRecentlyClosedTrade()
 
 void CJimBrownTrend::WritePerformanceToFile()
 {   
-    int minutes = 24 * 60 * 2;
+    const int days = 10;
+    const int minutesInHour = 60;
+    const int hoursInDay = 24;
+
+    int minutes = hoursInDay * minutesInHour * days;
     datetime to = TimeCurrent();
     datetime from = to - 60 * minutes;
 
@@ -495,26 +499,35 @@ void CJimBrownTrend::WritePerformanceToFile()
 
     datetime entryTime = (datetime)HistoryDealGetInteger(inDeal, DEAL_TIME);
     datetime exitTime = (datetime)HistoryDealGetInteger(outDeal, DEAL_TIME);
+    string inSymbol = HistoryDealGetString(inDeal, DEAL_SYMBOL);
+    string outSymbol = HistoryDealGetString(outDeal, DEAL_SYMBOL);
        
     double entryPrice = HistoryDealGetDouble(inDeal, DEAL_PRICE);
     double exitPrice = HistoryDealGetDouble(outDeal, DEAL_PRICE);
     double profit = HistoryDealGetDouble(outDeal, DEAL_PROFIT);
 
-    long dealType = HistoryDealGetInteger(inDeal, DEAL_TYPE);
-    string dealTypeString;
+    if (entryPrice && entryTime && inSymbol == Symbol() && outSymbol == Symbol())
+    {
+        long dealType = HistoryDealGetInteger(inDeal, DEAL_TYPE);
+        string dealTypeString;
 
-    if (dealType == DEAL_TYPE_BUY) {
-        dealTypeString = "L";
-    }
-    else if (dealType == DEAL_TYPE_SELL) {
-        dealTypeString = "S";
-    }
+        if (dealType == DEAL_TYPE_BUY) {
+            dealTypeString = "L";
+        }
+        else if (dealType == DEAL_TYPE_SELL) {
+            dealTypeString = "S";
+        }
 
-    FileWrite(_fileHandle, dealNumber, entryTime, dealTypeString, entryPrice, exitTime, exitPrice, profit, _ma50, _ma100, _ma240, _macd, _h4MA0, _h4Rsi0, _h4MA, _h4Rsi,
-        _low, _high,
-        _upCrossRecentIndex,_upCrossPriorIndex,_upCrossRecentValue,_upCrossPriorValue,_upCrossRecentPrice,_upCrossPriorPrice,
-        _downCrossRecentIndex,_downCrossPriorIndex,_downCrossRecentValue,_downCrossPriorValue,_downCrossRecentPrice,_downCrossPriorPrice);
-    FileFlush(_fileHandle);
+        FileWrite(_fileHandle, dealNumber, entryTime, dealTypeString, entryPrice, exitTime, exitPrice, profit, _ma50, _ma100, _ma240, _macd, _h4MA0, _h4Rsi0, _h4MA, _h4Rsi,
+            _low, _high,
+            _upCrossRecentIndex, _upCrossPriorIndex, _upCrossRecentValue, _upCrossPriorValue, _upCrossRecentPrice, _upCrossPriorPrice,
+            _downCrossRecentIndex, _downCrossPriorIndex, _downCrossRecentValue, _downCrossPriorValue, _downCrossRecentPrice, _downCrossPriorPrice);
+        FileFlush(_fileHandle);
+    }
+    else
+    {
+        Alert("Didn't write trade to performance file");
+    }
 }
 
 bool CJimBrownTrend::HasBullishSignal()

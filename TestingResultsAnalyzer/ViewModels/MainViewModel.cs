@@ -13,6 +13,7 @@ namespace TestingResultsAnalyzer.ViewModels
         private readonly OpenFileCommand _openFileCommand;
         private bool _isEnabled;
         private FilterViewModel _combinationFilter;
+        private string _title;
 
         public MainViewModel()
         {
@@ -20,7 +21,8 @@ namespace TestingResultsAnalyzer.ViewModels
 
             _trades = new TradeCollection();
             _filters = new ObservableCollection<FilterViewModel>();
-            InitFilters();
+            Title = "Testing Results Analyzer";
+            InitFilters();            
         }
 
         public TradeCollection Trades { get => _trades; }
@@ -40,6 +42,20 @@ namespace TestingResultsAnalyzer.ViewModels
                 if (_isEnabled == value) return;
                 _isEnabled = value;
                 OnPropertyChanged(nameof(IsEnabled));
+            }
+        }
+
+        public string Title
+        {
+            get
+            {
+                return _title;
+            }
+            set
+            {
+                if (_title == value) return;
+                _title = value;
+                OnPropertyChanged(nameof(Title));
             }
         }
 
@@ -67,7 +83,7 @@ namespace TestingResultsAnalyzer.ViewModels
                 new FilterViewModel(this, new PriceToMacdDivergenceFilter()),
                 new FilterViewModel(this, new MacdDivergenceFilter()),
                 new FilterViewModel(this, new MacdDivergenceCrossFilter()),
-                new FilterViewModel(this, new FlatTrendFilter()),                
+                new FilterViewModel(this, new FlatTrendFilter()),
                 new FilterViewModel(this, new FarAwayFilter()),
                 new FilterViewModel(this, new MacdSignalIndexFilter())
             };
