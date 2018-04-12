@@ -16,13 +16,13 @@ namespace TestingResultsAnalyzer.Filters
 
         public override string Name => "Combination";
 
-        public override string Description => "Select all filters to combine them";
+        public override string Description => "Check all filters to combine them";
 
         public override bool IsCombinable => false;
 
         public override bool IsIncluded(TradeViewModel trade)
         {
-            return _allFilters.Where(x => x.Filter.IsCombinable && x.Filter.IsSelected).All(x => x.Filter.IsIncluded(trade));
+            return _allFilters.Where(x => x.Filter.IsCombinable && x.Filter.IsChecked).All(x => x.Filter.IsIncluded(trade));
         }
     }
 }

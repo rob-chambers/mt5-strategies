@@ -62,14 +62,19 @@
     <Compile Include="Commands\ShowFilteredTradesCommand.cs" />
     <Compile Include="DirectionConverter.cs" />
     <Compile Include="Enums.cs" />
+    <Compile Include="FilterSummaryWindow.xaml.cs">
+      <DependentUpon>FilterSummaryWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Filters\Filter.cs" />
     <Compile Include="Filters\CombineFilter.cs" />
+    <Compile Include="Filters\ChangingTrendFilter.cs" />
     <Compile Include="Filters\FlatTrendFilter.cs" />
     <Compile Include="Filters\MacdSignalIndexFilter.cs" />
     <Compile Include="Filters\MacdDivergenceFilter.cs" />
     <Compile Include="Filters\MacdDivergenceCrossFilter.cs" />
     <Compile Include="Filters\FarAwayFilter.cs" />
     <Compile Include="Filters\AboveFiftyPeriodFilter.cs" />
+    <Compile Include="Filters\ADXFilter.cs" />
     <Compile Include="Filters\MACDValueFilter.cs" />
     <Compile Include="Filters\TwoHundredFortyFilter.cs" />
     <Compile Include="Filters\PriceToMacdDivergenceFilter.cs" />
@@ -80,10 +85,15 @@
     <Compile Include="ViewModels\MainViewModel.cs" />
     <Compile Include="Model\Trade.cs" />
     <Compile Include="ViewModels\FilterViewModel.cs" />
+    <Compile Include="ViewModels\ComparisonPerformanceData.cs" />
     <Compile Include="ViewModels\PerformanceData.cs" />
     <Compile Include="ViewModels\TradeCollection.cs" />
     <Compile Include="ViewModels\TradeViewModel.cs" />
     <Compile Include="ViewModels\ViewModelBase.cs" />
+    <Page Include="FilterSummaryWindow.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>

@@ -13,6 +13,7 @@ namespace TestingResultsAnalyzer.ViewModels
         private readonly ShowFilteredTradesCommand _showFilteredTradesCommand;
         private PerformanceData _performanceData;
         private PerformanceData _excludedPerformanceData;
+        private ComparisonPerformanceData _comparisonPerformanceData;
         private TradeCollection _trades;
 
         public FilterViewModel(MainViewModel mainViewModel, Filter filter)
@@ -49,6 +50,14 @@ namespace TestingResultsAnalyzer.ViewModels
             }
         }
 
+        public ComparisonPerformanceData ComparisonPerformanceData
+        {
+            get
+            {
+                return _comparisonPerformanceData ?? (_comparisonPerformanceData = new ComparisonPerformanceData());
+            }
+        }
+
         public void CalculateSummary(TradeCollection trades)
         {
             _trades = trades;
@@ -57,6 +66,52 @@ namespace TestingResultsAnalyzer.ViewModels
 
             CalculateSummary(includedTrades, PerformanceData);
             CalculateSummary(excludedTrades, ExcludedPerformanceData);
+
+            var basicStrategyPerformance = new PerformanceData();
+            CalculateSummary(trades, basicStrategyPerformance);
+            CalculateComparisonSummary(basicStrategyPerformance, PerformanceData);
+        }
+
+        private void CalculateComparisonSummary(PerformanceData basicStrategyPerformance, PerformanceData filteredStrategyPerformance)
+        {
+            if (basicStrategyPerformance.ProfitFactor != 0)
+            {
+                var value = Math.Abs((filteredStrategyPerformance.ProfitFactor - basicStrategyPerformance.ProfitFactor) / basicStrategyPerformance.ProfitFactor) * 100;
+                var temp = filteredStrategyPerformance.ProfitFactor > basicStrategyPerformance.ProfitFactor ? "IMPROVED" : "MADE WORSE";
+
+                ComparisonPerformanceData.ProfitFactor = $"{temp} by {value:0.0}%";
+            }
+            else
+            {
+                ComparisonPerformanceData.ProfitFactor = string.Empty;
+            }
+            
+            if (basicStrategyPerformance.WinLossRatio != 0)
+            {
+                var value = Math.Abs((filteredStrategyPerformance.WinLossRatio - basicStrategyPerformance.WinLossRatio) / basicStrategyPerformance.WinLossRatio) * 100;
+                var temp = filteredStrategyPerformance.WinLossRatio > basicStrategyPerformance.WinLossRatio ? "IMPROVED" : "MADE WORSE";
+                ComparisonPerformanceData.WinLossRatio = $"{temp} by {value:0.0}%";
+            }
+            else
+            {
+                ComparisonPerformanceData.WinLossRatio = string.Empty;
+            }
+
+            ComparisonPerformanceData.LosingTradesEliminated = basicStrategyPerformance.TotalLosses - filteredStrategyPerformance.TotalLosses;
+            ComparisonPerformanceData.WinningTradesEliminated = basicStrategyPerformance.TotalWins - filteredStrategyPerformance.TotalWins;
+
+            if (ComparisonPerformanceData.WinningTradesEliminated != 0)
+            {
+                var value = (double)ComparisonPerformanceData.LosingTradesEliminated / ComparisonPerformanceData.WinningTradesEliminated;
+                ComparisonPerformanceData.EliminationRatio = $"{value:0.00}%";
+            }
+            else
+            {
+                ComparisonPerformanceData.EliminationRatio = string.Empty;
+            }
+
+            ComparisonPerformanceData.LossesEliminated = -basicStrategyPerformance.GrossLosses - (-filteredStrategyPerformance.GrossLosses);
+            ComparisonPerformanceData.WinningsEliminated = basicStrategyPerformance.GrossProfits - filteredStrategyPerformance.GrossProfits;
         }
 
         private void CalculateSummary(IEnumerable<TradeViewModel> trades, PerformanceData performanceData)
@@ -86,6 +141,40 @@ namespace TestingResultsAnalyzer.ViewModels
                 ? performanceData.GrossProfits / -performanceData.GrossLosses
                 : 0;
 
+            performanceData.NumberConsecutiveLosses = CalculateConsecutiveLosses(trades);
+            performanceData.AverageHoldingTime = hasTrades 
+                ? TimeSpan.FromMinutes(trades.Average(x => x.HoldingTime.TotalMinutes)) 
+                : TimeSpan.Zero;
+        }
+
+        private int CalculateConsecutiveLosses(IEnumerable<TradeViewModel> trades)
+        {
+            int count = 0;
+            int maxCount = 0;
+            
+            foreach (var trade in trades)
+            {
+                if (trade.Profit <= 0)
+                {
+                    count++;
+                }
+                else
+                {
+                    if (count > maxCount)
+                    {
+                        maxCount = count;
+                    }
+
+                    count = 0;
+                }
+            }
+
+            if (count > maxCount)
+            {
+                maxCount = count;
+            }
+
+            return maxCount;
         }
 
         private void ShowFilteredTrades(object source, EventArgs e)

@@ -73,5 +73,7 @@ Deal,Entry Time,S/L,Entry,Exit Time,Exit,Profit,MA50,MA100,MA240,MACD,H4 MA 0,H4
         public double DownCrossRecentPrice { get; set; }
 
         public double DownCrossPriorPrice { get; set; }
+
+        public double ADX { get; set; }
     }
 }

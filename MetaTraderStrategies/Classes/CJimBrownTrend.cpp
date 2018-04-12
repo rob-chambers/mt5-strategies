@@ -49,6 +49,7 @@ private:
     int _mediumTermTrendHandle;
     int _shortTermTrendHandle;
     int _longTermRsiHandle;
+    int _adxHandle;
     double _platinumUpCrossData[];
     double _platinumDownCrossData[];
     double _macdData[];
@@ -59,6 +60,7 @@ private:
     double _qmpFilterDownData[];
     double _longTermTimeFrameData[];
     double _longTermRsiData[];
+    double _adxData[];
     int _inpFTF_RSI_Period;
     int _inpSmoothPlatinum;
     int _inpSlowPlatinum;
@@ -77,6 +79,7 @@ private:
     double _ma50, _ma100, _ma240, _macd, _h4MA, _h4Rsi, _h4MA0, _h4Rsi0, _low, _high, _upCrossRecentPrice, _upCrossPriorPrice, _downCrossRecentPrice, _downCrossPriorPrice;
     double _upCrossRecentValue, _upCrossPriorValue, _downCrossRecentValue, _downCrossPriorValue;
     int _upCrossRecentIndex, _upCrossPriorIndex, _downCrossRecentIndex, _downCrossPriorIndex;
+    double _adx;
 
     void CheckToMoveLongPositionToBreakEven();
     void CheckToMoveShortPositionToBreakEven();
@@ -143,6 +146,8 @@ int CJimBrownTrend::Init(
         ArraySetAsSeries(_longTermTimeFrameData, true);
         ArraySetAsSeries(_longTermRsiData, true);
 
+        ArraySetAsSeries(_adxData, true);
+
         _platinumHandle = iCustom(_Symbol, PERIOD_CURRENT, "MACD_Platinum", inpFastPlatinum, inpSlowPlatinum, inpSmoothPlatinum, true, true, false, false);
         if (_platinumHandle == INVALID_HANDLE) {
             Print("Error creating MACD Platinum indicator");
@@ -185,6 +190,12 @@ int CJimBrownTrend::Init(
             return(INIT_FAILED);
         }        
 
+        _adxHandle = iADX(_Symbol, PERIOD_CURRENT, 14);
+        if (_adxHandle == INVALID_HANDLE) {
+            Print("Error creating ADX indicator");
+            return(INIT_FAILED);
+        }
+
         _inpSlowPlatinum = inpSlowPlatinum;
         _inpSmoothPlatinum = inpSmoothPlatinum;
         _inpFTF_RSI_Period = inpFTF_RSI_Period;
@@ -202,7 +213,7 @@ int CJimBrownTrend::Init(
 
         FileWrite(_fileHandle, "Deal", "Entry Time", "S/L", "Entry", "Exit Time", "Exit", "Profit", "MA50", "MA100", "MA240", "MACD", "H4 MA 0", "H4 RSI 0", "H4 MA 1", "H4 RSI 1",
             "Signal Bar Low", "Signal Bar High", "Up Cross Recent Index","Up Cross Prior Index", "Up Cross Recent Value", "Up Cross Prior Value", "Up Cross Recent Price", "Up Cross Prior Price",
-            "Down Cross Recent Index", "Down Cross Prior Index", "Down Cross Recent Value", "Down Cross Prior Value", "Down Cross Recent Price", "Down Cross Prior Price");
+            "Down Cross Recent Index", "Down Cross Prior Index", "Down Cross Recent Value", "Down Cross Prior Value", "Down Cross Recent Price", "Down Cross Prior Price", "ADX");
     }
 
     return retCode;
@@ -221,6 +232,7 @@ void CJimBrownTrend::Deinit(void)
     ReleaseIndicator(_mediumTermTrendHandle);
     ReleaseIndicator(_shortTermTrendHandle);
     ReleaseIndicator(_longTermTimeFrameHandle);
+    ReleaseIndicator(_adxHandle);
 
     FileClose(_fileHandle);
 }
@@ -439,6 +451,12 @@ void CJimBrownTrend::NewBarAndNoCurrentPositions()
         Print("Error copying long term RSI data.");
         return;
     }
+
+    count = CopyBuffer(_adxHandle, 0, 0, 14, _adxData);
+    if (count == -1) {
+        Print("Error copying ADX data.");
+        return;
+    }
 }
 
 void CJimBrownTrend::OnTrade(void)
@@ -521,7 +539,7 @@ void CJimBrownTrend::WritePerformanceToFile()
         FileWrite(_fileHandle, dealNumber, entryTime, dealTypeString, entryPrice, exitTime, exitPrice, profit, _ma50, _ma100, _ma240, _macd, _h4MA0, _h4Rsi0, _h4MA, _h4Rsi,
             _low, _high,
             _upCrossRecentIndex, _upCrossPriorIndex, _upCrossRecentValue, _upCrossPriorValue, _upCrossRecentPrice, _upCrossPriorPrice,
-            _downCrossRecentIndex, _downCrossPriorIndex, _downCrossRecentValue, _downCrossPriorValue, _downCrossRecentPrice, _downCrossPriorPrice);
+            _downCrossRecentIndex, _downCrossPriorIndex, _downCrossRecentValue, _downCrossPriorValue, _downCrossRecentPrice, _downCrossPriorPrice, _adx);
         FileFlush(_fileHandle);
     }
     else
@@ -676,6 +694,8 @@ void CJimBrownTrend::StorePerfData()
 
     _low = _prices[1].low;
     _high = _prices[1].high;
+
+    _adx = _adxData[1];
 
     int upFirstIndex = -1;
     int upSecondIndex = -1;

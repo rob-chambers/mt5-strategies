@@ -9,7 +9,7 @@
 #include <Trade\SymbolInfo.mqh> 
 #include <ChartObjects\ChartObjectsTxtControls.mqh>
 
-input double Risk = 0.5;            // Risk per trade as percentage of account size (e.g. 1 for 1%)
+input double Risk = 2;              // Risk per trade as percentage of account size (e.g. 1 for 1%)
 input int PipsFromSignalCandle = 2; // Number of pips the default stop loss should be from the signal candle
 
 CSymbolInfo _symbol;

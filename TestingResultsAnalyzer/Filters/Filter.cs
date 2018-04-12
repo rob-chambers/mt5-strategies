@@ -4,7 +4,7 @@ namespace TestingResultsAnalyzer.Filters
 {
     public abstract class Filter : ViewModelBase
     {
-        private bool _isSelected;
+        private bool _isChecked;
         private string _argumentValue;
 
         public abstract string Name { get; }
@@ -31,17 +31,17 @@ namespace TestingResultsAnalyzer.Filters
             }
         }
 
-        public bool IsSelected
+        public bool IsChecked
         {
             get
             {
-                return _isSelected;
+                return _isChecked;
             }
             set
             {
-                if (_isSelected == value) return;
-                _isSelected = value;
-                OnPropertyChanged(nameof(IsSelected));
+                if (_isChecked == value) return;
+                _isChecked = value;
+                OnPropertyChanged(nameof(IsChecked));
             }
         }
     }

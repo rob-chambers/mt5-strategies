@@ -12,8 +12,10 @@ namespace TestingResultsAnalyzer.ViewModels
         private readonly ObservableCollection<FilterViewModel> _filters;
         private readonly OpenFileCommand _openFileCommand;
         private bool _isEnabled;
+        private FilterViewModel _nullFilter;
         private FilterViewModel _combinationFilter;
         private string _title;
+        private FilterViewModel _selectedFilter;
 
         public MainViewModel()
         {
@@ -28,6 +30,24 @@ namespace TestingResultsAnalyzer.ViewModels
         public TradeCollection Trades { get => _trades; }
 
         public ObservableCollection<FilterViewModel> Filters { get => _filters; }
+
+        public FilterViewModel SelectedFilter
+        {
+            get
+            {
+                return _selectedFilter;
+            }
+            set
+            {
+                if (_selectedFilter == value) return;
+                _selectedFilter = value;
+                OnPropertyChanged(nameof(SelectedFilter));
+            }
+        }
+
+        public FilterViewModel CombinationFilter => _combinationFilter;
+
+        public FilterViewModel NullFilter => _nullFilter;
 
         public OpenFileCommand OpenFileCommand { get => _openFileCommand; }
 
@@ -61,6 +81,7 @@ namespace TestingResultsAnalyzer.ViewModels
 
         public void CalculateSummary()
         {
+            _nullFilter.CalculateSummary(Trades);
             foreach (var filter in _filters)
             {
                 filter.CalculateSummary(Trades);
@@ -71,9 +92,9 @@ namespace TestingResultsAnalyzer.ViewModels
 
         private void InitFilters()
         {
+            _nullFilter = new FilterViewModel(this, new NullFilter());
             var filters = new[]
             {
-                new FilterViewModel(this, new NullFilter()),
                 new FilterViewModel(this, new AboveFiftyPeriodFilter()),
                 new FilterViewModel(this, new TwoHundredFortyFilter()),
                 new FilterViewModel(this, new H4MAFilter()),
@@ -85,7 +106,9 @@ namespace TestingResultsAnalyzer.ViewModels
                 new FilterViewModel(this, new MacdDivergenceCrossFilter()),
                 new FilterViewModel(this, new FlatTrendFilter()),
                 new FilterViewModel(this, new FarAwayFilter()),
-                new FilterViewModel(this, new MacdSignalIndexFilter())
+                new FilterViewModel(this, new MacdSignalIndexFilter()),
+                new FilterViewModel(this, new ADXFilter()),
+                new FilterViewModel(this, new ChangingTrendFilter())
             };
 
             foreach (var filter in filters)
@@ -110,7 +133,7 @@ namespace TestingResultsAnalyzer.ViewModels
         {
             switch (e.PropertyName)
             {
-                case nameof(Filter.IsSelected):
+                case nameof(Filter.IsChecked):
                     _combinationFilter.CalculateSummary(Trades);
                     break;
 

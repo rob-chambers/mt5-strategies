@@ -1,4 +1,6 @@
-﻿namespace TestingResultsAnalyzer.ViewModels
+﻿using System;
+
+namespace TestingResultsAnalyzer.ViewModels
 {
     public class PerformanceData : ViewModelBase
     {
@@ -14,6 +16,8 @@
         private int _totalLosses;
         private double _winLossRatio;
         private double _profitFactor;
+        private int _numberConsecutiveLosses;
+        private TimeSpan _averageHoldingTime;
 
         public double ProfitLoss
         {
@@ -183,6 +187,28 @@
                 if (_profitFactor == value) return;
                 _profitFactor = value;
                 OnPropertyChanged(nameof(ProfitFactor));
+            }
+        }
+        
+        public int NumberConsecutiveLosses
+        {
+            get { return _numberConsecutiveLosses; }
+            set
+            {
+                if (_numberConsecutiveLosses == value) return;
+                _numberConsecutiveLosses = value;
+                OnPropertyChanged(nameof(NumberConsecutiveLosses));
+            }
+        }
+        
+        public TimeSpan AverageHoldingTime
+        {
+            get { return _averageHoldingTime; }
+            set
+            {
+                if (_averageHoldingTime == value) return;
+                _averageHoldingTime = value;
+                OnPropertyChanged(nameof(AverageHoldingTime));
             }
         }
     }

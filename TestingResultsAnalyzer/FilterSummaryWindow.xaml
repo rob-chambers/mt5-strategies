@@ -1,0 +1,61 @@
+﻿<Window x:Class="TestingResultsAnalyzer.FilterSummaryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:TestingResultsAnalyzer"
+        xmlns:vms="clr-namespace:TestingResultsAnalyzer.ViewModels"
+        mc:Ignorable="d"
+        Title="FilterSummaryWindow" Height="450" Width="1200">
+    <Window.DataContext>
+        <vms:MainViewModel />
+    </Window.DataContext>
+    <Grid>
+        <ListView ItemsSource="{Binding Filters}"                          
+                        ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                        ScrollViewer.VerticalScrollBarVisibility="Hidden" >
+            <ListView.View>
+                <GridView>
+                    <GridView.Columns>
+                        <GridViewColumn Header="Combine" Width="60" >
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox Padding="1" />
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
+
+                        <GridViewColumn Width="150" Header="Name" >
+                            <GridViewColumn.DisplayMemberBinding>
+                                <Binding Path="Filter.Name" />
+                            </GridViewColumn.DisplayMemberBinding>
+                        </GridViewColumn>
+                        <GridViewColumn Header="Description" >
+                            <GridViewColumn.DisplayMemberBinding>
+                                <Binding Path="Filter.Description" />
+                            </GridViewColumn.DisplayMemberBinding>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="Total Trades" Width="80" >
+                            <GridViewColumn.DisplayMemberBinding>
+                                <Binding Path="PerformanceData.TotalTrades" />
+                            </GridViewColumn.DisplayMemberBinding>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="W/L Ratio" >
+                            <GridViewColumn.DisplayMemberBinding>
+                                <Binding Path="PerformanceData.WinLossRatio" />
+                            </GridViewColumn.DisplayMemberBinding>
+                        </GridViewColumn>
+
+                        <GridViewColumn Header="Profit Factor" >
+                            <GridViewColumn.DisplayMemberBinding>
+                                <Binding Path="PerformanceData.ProfitFactor" />
+                            </GridViewColumn.DisplayMemberBinding>
+                        </GridViewColumn>
+                    </GridView.Columns>
+                </GridView>
+            </ListView.View>
+        </ListView>
+    </Grid>
+</Window>

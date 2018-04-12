@@ -6,8 +6,8 @@
     
     <DataTemplate x:Key="filterTemplate" >
         <StackPanel>
-            <StackPanel Height="40">
-                <CheckBox IsChecked="{Binding Filter.IsSelected}" 
+            <!--<StackPanel Height="40">
+                <CheckBox IsChecked="{Binding Filter.IsChecked}" 
                         Visibility="{Binding Filter.IsCombinable, Converter={StaticResource booleanToVisibilityConverter}}" 
                         Content="{Binding Filter.Name}"
                         FontSize="14" FontWeight="Bold"                        
@@ -23,7 +23,14 @@
                     TextWrapping="Wrap"
                     Width="150"
                     Height="60" >
-            </TextBlock>
+            </TextBlock>-->
+
+            <TextBlock Text="{Binding Filter.Name}"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top" 
+                    FontSize="14"
+                    FontWeight="Bold"
+                    />
 
             <StackPanel Orientation="Horizontal">
                 <TextBox Visibility="{Binding Filter.HasArgument, Converter={StaticResource booleanToVisibilityConverter}}"
@@ -64,15 +71,17 @@
                     <RowDefinition />
                     <RowDefinition />
                     <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
+                    <RowDefinition />
                 </Grid.RowDefinitions>
 
-                <!--
-                            <Style TargetType="TextBlock" >
-                    <Setter Property="Padding" Value="10" />
-                </Style>
--->
-
-                <!-- ExcludedPerformanceData -->
+                <Grid.Resources>
+                    <Style TargetType="TextBlock" >
+                        <Setter Property="Margin" Value="0,0,3,0" />
+                    </Style>
+                </Grid.Resources>
+                
                 <TextBlock>Total Profit/Loss</TextBlock>
                 <TextBlock Grid.Column="1" Text="{Binding PerformanceData.ProfitLoss, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
                 <TextBlock Grid.Column="2" Text="{Binding ExcludedPerformanceData.ProfitLoss, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
@@ -120,6 +129,14 @@
                 <TextBlock Grid.Row="11">Profit Factor</TextBlock>
                 <TextBlock Grid.Row="11" Grid.Column="1" Text="{Binding PerformanceData.ProfitFactor, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
                 <TextBlock Grid.Row="11" Grid.Column="2" Text="{Binding ExcludedPerformanceData.ProfitFactor, StringFormat='0.00', UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+
+                <TextBlock Grid.Row="12"># Consec. Losses</TextBlock>
+                <TextBlock Grid.Row="12" Grid.Column="1" Text="{Binding PerformanceData.NumberConsecutiveLosses, UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Row="12" Grid.Column="2" Text="{Binding ExcludedPerformanceData.NumberConsecutiveLosses, UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+
+                <TextBlock Grid.Row="13">Avg. Holding Time</TextBlock>
+                <TextBlock Grid.Row="13" Grid.Column="1" Text="{Binding PerformanceData.AverageHoldingTime, UpdateSourceTrigger=PropertyChanged}"></TextBlock>
+                <TextBlock Grid.Row="13" Grid.Column="2" Text="{Binding ExcludedPerformanceData.AverageHoldingTime, UpdateSourceTrigger=PropertyChanged}"></TextBlock>
             </Grid>
         </StackPanel>
     </DataTemplate>

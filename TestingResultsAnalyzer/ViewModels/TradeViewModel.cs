@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using System;
+using System.ComponentModel;
 using TestingResultsAnalyzer.Model;
 
 namespace TestingResultsAnalyzer.ViewModels
@@ -50,6 +51,8 @@ namespace TestingResultsAnalyzer.ViewModels
             UpCrossRecentIndex = model.UpCrossRecentIndex;
             UpCrossRecentPrice = model.UpCrossRecentPrice;
             UpCrossRecentValue = model.UpCrossRecentValue;
+
+            ADX = model.ADX;
         }
 
         public bool IsSelected
@@ -63,6 +66,14 @@ namespace TestingResultsAnalyzer.ViewModels
                 if (_isSelected == value) return;
                 _isSelected = value;
                 OnPropertyChanged(nameof(IsSelected));
+            }
+        }
+
+        public TimeSpan HoldingTime
+        {
+            get
+            {
+                return ExitDateTime.Subtract(EntryDateTime);
             }
         }
     }
