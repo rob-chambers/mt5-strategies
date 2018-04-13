@@ -3,27 +3,32 @@
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright     "Copyright 2018, Robert Chambers"
-#property version       "1.10"
+#property version       "1.20"
 #property description   "Lot Size Calculator"
 
 /* Revision History 
 
 1.10:   * Fix lot size - reduce to proper risk percentage amount by using existing MoneyFixedRisk class.
         * Removed print statements used for debugging
-        * 
+
+1.20    * Added new enter trade button for quickly getting in based on the last signal
 */
 
 
 #include <Trade\SymbolInfo.mqh> 
 #include <ChartObjects\ChartObjectsTxtControls.mqh>
 #include <Expert\Money\MoneyFixedRisk.mqh>
+#include <Trade\Trade.mqh>
 
 input double Risk = 1;              // Risk per trade as percentage of account size (e.g. 1 for 1%)
 input int PipsFromSignalCandle = 2; // Number of pips the default stop loss should be from the signal candle
 
+const string EnterButtonName = "EnterButton";
+
 CSymbolInfo _symbol;
 CChartObjectEdit _inputStopPrice;
 CMoneyFixedRisk _fixedRisk;
+CTrade _trade;
 
 CChartObjectLabel _lotSizeLabel;
 bool _textBoxCreated;
@@ -55,8 +60,11 @@ int OnInit() {
     _fixedRisk.Percent(Risk);
 
     _textBoxCreated = _inputStopPrice.Create(0, "_inputStopPrice", 0, 800, 10, 90, 28);
-
     if (_textBoxCreated) {
+        if (!CreateButton()) {
+            return(INIT_FAILED);
+        }
+
         _inputStopPrice.BackColor(White);
         _inputStopPrice.BorderColor(Black);
 
@@ -113,14 +121,45 @@ int OnInit() {
     return(INIT_SUCCEEDED);
 }
 
+bool CreateButton()
+{
+    if (!ObjectCreate(0, EnterButtonName, OBJ_BUTTON, 0, 0, 0)) {
+        Print("Failed to create the button! Error code = ", GetLastError());
+        return false;
+    }
+
+    ObjectSetInteger(0, EnterButtonName, OBJPROP_XDISTANCE, 800);
+    ObjectSetInteger(0, EnterButtonName, OBJPROP_YDISTANCE, 70);
+    ObjectSetInteger(0, EnterButtonName, OBJPROP_XSIZE, 80);
+    ObjectSetInteger(0, EnterButtonName, OBJPROP_YSIZE, 40);
+
+    ObjectSetString(0, EnterButtonName, OBJPROP_TEXT, "Enter");
+
+    ObjectSetInteger(0, EnterButtonName, OBJPROP_COLOR, White);
+    ObjectSetInteger(0, EnterButtonName, OBJPROP_BGCOLOR, MediumSpringGreen);
+    ObjectSetInteger(0, EnterButtonName, OBJPROP_BORDER_COLOR, Black);
+    ObjectSetInteger(0, EnterButtonName, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+    ObjectSetInteger(0, EnterButtonName, OBJPROP_STATE, false);
+    ObjectSetInteger(0, EnterButtonName, OBJPROP_FONTSIZE, 12);
+
+    //--- set the priority for receiving the event of a mouse click in the chart 
+    ObjectSetInteger(0, EnterButtonName, OBJPROP_ZORDER, 0);
+
+    return true;
+}
+
 void OnDeinit(const int reason)
 {
-    if (_textBoxCreated) {
-        _inputStopPrice.Delete();
-        _lotSizeLabel.Delete();
-
-        ReleaseIndicator(_qmpFilterHandle);
+    if (!_textBoxCreated) {
+        return;
     }
+
+    ObjectDelete(0, EnterButtonName);
+
+    _inputStopPrice.Delete();
+    _lotSizeLabel.Delete();
+
+    ReleaseIndicator(_qmpFilterHandle);
 }
 
 void ReleaseIndicator(int& handle) {
@@ -169,5 +208,87 @@ void OnChartEvent(
 
         _lotSizeLabel.SetString(OBJPROP_TEXT, message);
         ChartRedraw(0);
+    }
+    else if (sparam == EnterButtonName)
+    {
+        ObjectSetInteger(0, EnterButtonName, OBJPROP_STATE, true);
+        ChartRedraw();
+        Sleep(50);
+
+        EnterTrade();
+
+        // Set state back to the released state
+        ObjectSetInteger(0, EnterButtonName, OBJPROP_STATE, true);
+    }
+}
+
+void EnterTrade()
+{
+    double stopLoss = StringToDouble(_inputStopPrice.GetString(OBJPROP_TEXT));
+
+    if (stopLoss <= 0) {
+        MessageBox("Invalid stop loss");
+        return;
+    }
+
+    double price = _symbol.Ask();
+    ENUM_ORDER_TYPE orderType = ORDER_TYPE_BUY;
+    double limitPrice = _symbol.Ask();
+
+    if (stopLoss > price) {
+        price = _symbol.Bid();
+        orderType = ORDER_TYPE_SELL;
+        limitPrice = _symbol.Bid();
+    }
+
+    double sl = NormalizeDouble(stopLoss, _Digits);
+    double lotSize;
+    if (sl < price) {
+        lotSize = _fixedRisk.CheckOpenLong(price, sl);
+    }
+    else {
+        lotSize = _fixedRisk.CheckOpenShort(price, sl);
+    }
+    
+    OpenPosition(_Symbol, orderType, lotSize, limitPrice, sl, 0.0);
+}
+
+void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, double price, double stopLoss, double takeProfit)
+{
+    string message;
+    string orderTypeMsg;
+
+    switch (orderType) {
+        case ORDER_TYPE_BUY:
+            orderTypeMsg = "Buy";
+            message = "Going long. Magic Number #" + (string)_trade.RequestMagic();
+            break;
+
+        case ORDER_TYPE_SELL:
+            orderTypeMsg = "Sell";
+            message = "Going short. Magic Number #" + (string)_trade.RequestMagic();
+            break;
+
+        case ORDER_TYPE_BUY_LIMIT:
+            orderTypeMsg = "Buy limit";
+            message = "Going long at " + (string)price + ". Magic Number #" + (string)_trade.RequestMagic();
+            break;
+
+        case ORDER_TYPE_SELL_LIMIT:
+            orderTypeMsg = "Sell limit";
+            message = "Going short at " + (string)price + ". Magic Number #" + (string)_trade.RequestMagic();
+            break;
+    }
+
+    if (_trade.PositionOpen(symbol, orderType, volume, price, stopLoss, takeProfit, message)) {
+        uint resultCode = _trade.ResultRetcode();
+        if (resultCode == TRADE_RETCODE_PLACED || resultCode == TRADE_RETCODE_DONE) {
+            Print("A ", orderTypeMsg, " order has been successfully placed with Ticket#: ", _trade.ResultOrder());
+        }
+        else {
+            Print("The ", orderTypeMsg, " order request could not be completed.  Result code: ", resultCode, ", Error: ", GetLastError());
+            ResetLastError();
+            return;
+        }
     }
 }
