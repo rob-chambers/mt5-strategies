@@ -3,17 +3,27 @@
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright     "Copyright 2018, Robert Chambers"
-#property version       "1.00"
+#property version       "1.10"
 #property description   "Lot Size Calculator"
+
+/* Revision History 
+
+1.10:   * Fix lot size - reduce to proper risk percentage amount by using existing MoneyFixedRisk class.
+        * Removed print statements used for debugging
+        * 
+*/
+
 
 #include <Trade\SymbolInfo.mqh> 
 #include <ChartObjects\ChartObjectsTxtControls.mqh>
+#include <Expert\Money\MoneyFixedRisk.mqh>
 
-input double Risk = 2;              // Risk per trade as percentage of account size (e.g. 1 for 1%)
+input double Risk = 1;              // Risk per trade as percentage of account size (e.g. 1 for 1%)
 input int PipsFromSignalCandle = 2; // Number of pips the default stop loss should be from the signal candle
 
 CSymbolInfo _symbol;
 CChartObjectEdit _inputStopPrice;
+CMoneyFixedRisk _fixedRisk;
 
 CChartObjectLabel _lotSizeLabel;
 bool _textBoxCreated;
@@ -36,6 +46,13 @@ int OnInit() {
         MessageBox("Couldn't get rates");
         return(INIT_FAILED);
     }
+
+    if (!_fixedRisk.Init(&_symbol, PERIOD_CURRENT, 1)) {
+        Print("Couldn't initialise fixed risk instance");
+        return(INIT_FAILED);
+    }
+
+    _fixedRisk.Percent(Risk);
 
     _textBoxCreated = _inputStopPrice.Create(0, "_inputStopPrice", 0, 800, 10, 90, 28);
 
@@ -67,16 +84,13 @@ int OnInit() {
             return(INIT_FAILED);
         }
 
-        Print("_qmpFilterUpData: ", _qmpFilterUpData[1], ",", _qmpFilterUpData[2]);
-        Print("_qmpFilterDownData: ", _qmpFilterDownData[1], ",", _qmpFilterDownData[2]);
-
         double size = 0.0001;
         if (_symbol.Digits() == 3) {
             size *= 100;
         }
 
         double initialStop = 0;
-        double distance = PipsFromSignalCandle * size;
+        double distance = PipsFromSignalCandle * size;        
 
         for (int index = 1; index <= 2; index++) {
             if (_qmpFilterUpData[index] != 0.0 && MathAbs(_qmpFilterUpData[index]) < 10000) {
@@ -118,31 +132,6 @@ void ReleaseIndicator(int& handle) {
     }
 }
 
-double ComputeRisk(double distance)
-{
-    double accountBalance, riskInMoney;
-    double lotStep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-    double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
-    double tickSize = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
-
-    Print("tickValue: ", tickValue, ", tickSize: ", tickSize);
-
-    int lotdigits = 0;
-    do
-    {
-        lotdigits++;
-        lotStep *= 10;
-    } while (lotStep < 1);
-
-    accountBalance = MathMin(AccountInfoDouble(ACCOUNT_BALANCE), AccountInfoDouble(ACCOUNT_EQUITY));
-    riskInMoney = accountBalance * Risk / 100;
-
-    double lot = NormalizeDouble(riskInMoney / (distance * (tickValue / tickSize)), lotdigits);
-    lot = MathFloor(lot * MathPow(10, lotdigits)) / MathPow(10, lotdigits);
-
-    return NormalizeDouble(lot, lotdigits);
-}
-
 //+------------------------------------------------------------------+
 //| ChartEvent function                                              |
 //+------------------------------------------------------------------+
@@ -159,13 +148,23 @@ void OnChartEvent(
         if (!_symbol.RefreshRates()) {
             message = "Couldn't get latest prices.";
         }
-        else {
-            double price = _symbol.Ask();
+        else {            
             double stopLoss = StringToDouble(_inputStopPrice.GetString(OBJPROP_TEXT));
-            double sl = NormalizeDouble(stopLoss, _Digits);
-            double lot = ComputeRisk(MathAbs(price - sl));
+            double price = _symbol.Ask();
+            if (stopLoss > price) {
+                price = _symbol.Bid();
+            }
 
-            message = "Lot size should be: " + (string)lot;
+            double sl = NormalizeDouble(stopLoss, _Digits);
+            double lotSize;
+            if (sl < price) {
+                lotSize = _fixedRisk.CheckOpenLong(price, sl);
+            }
+            else {
+                lotSize = _fixedRisk.CheckOpenShort(price, sl);
+            }
+
+            message = "Lot size should be: " + (string)lotSize;
         }
 
         _lotSizeLabel.SetString(OBJPROP_TEXT, message);
