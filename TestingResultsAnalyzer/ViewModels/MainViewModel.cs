@@ -108,7 +108,8 @@ namespace TestingResultsAnalyzer.ViewModels
                 new FilterViewModel(this, new FarAwayFilter()),
                 new FilterViewModel(this, new MacdSignalIndexFilter()),
                 new FilterViewModel(this, new ADXFilter()),
-                new FilterViewModel(this, new ChangingTrendFilter())
+                new FilterViewModel(this, new ChangingTrendFilter()),
+                new FilterViewModel(this, new CandlePatternFilter())
             };
 
             foreach (var filter in filters)

@@ -102,8 +102,8 @@ namespace TestingResultsAnalyzer.ViewModels
 
             if (ComparisonPerformanceData.WinningTradesEliminated != 0)
             {
-                var value = (double)ComparisonPerformanceData.LosingTradesEliminated / ComparisonPerformanceData.WinningTradesEliminated;
-                ComparisonPerformanceData.EliminationRatio = $"{value:0.00}%";
+                var value = (double)ComparisonPerformanceData.WinningTradesEliminated / ComparisonPerformanceData.LosingTradesEliminated * 100;
+                ComparisonPerformanceData.EliminationRatio = $"{value:0.00}";
             }
             else
             {

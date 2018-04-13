@@ -65,6 +65,7 @@
     <Compile Include="FilterSummaryWindow.xaml.cs">
       <DependentUpon>FilterSummaryWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="Filters\CandlePatternFilter.cs" />
     <Compile Include="Filters\Filter.cs" />
     <Compile Include="Filters\CombineFilter.cs" />
     <Compile Include="Filters\ChangingTrendFilter.cs" />

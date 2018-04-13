@@ -43,6 +43,8 @@ input int       _inpFTF_WP = 3;                                 // QQE WP
 input ENUM_TIMEFRAMES _inpLongTermTimeFrame = PERIOD_H4;        // Long-term MA timeframe
 input int       _inpLongTermPeriod = 9;                         // Long-term MA Period
 
+input double    _inpMovedTooFarMultiplier = 4;                  // This number is multiplied by the ATR.  If the current move exceeds this number we assume we have missed the move and don't trade
+
 CJimBrownTrend derived;
 
 //+------------------------------------------------------------------+
@@ -73,7 +75,8 @@ int OnInit()
         _inpFTF_RSI_Period,
         _inpFTF_WP,
         _inpLongTermTimeFrame,
-        _inpLongTermPeriod
+        _inpLongTermPeriod,
+        _inpMovedTooFarMultiplier
     );
 }
 //+------------------------------------------------------------------+

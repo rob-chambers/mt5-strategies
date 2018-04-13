@@ -29,7 +29,8 @@ public:
         int             inpFTF_RSI_Period = 8,
         int             inpFTF_WP = 3,
         ENUM_TIMEFRAMES inpLongTermTimeFrame = PERIOD_H4,
-        int             inpLongTermPeriod = 9
+        int             inpLongTermPeriod = 9,
+        double          inpMovedTooFarMultiplier = 3
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -71,6 +72,7 @@ private:
     int _inpLongTermPeriod;
     double _recentHigh;                 // Tracking the most recent high for stop management
     double _recentLow;                  // Tracking the most recent low for stop management
+    double _inpMovedTooFarMultiplier;
 
     // The following are used for optimisation / monitoring performance
     // "MA50", "MA100", "MA240", "MACD", "H4 MA", "H4 RSI"
@@ -119,7 +121,8 @@ int CJimBrownTrend::Init(
     int             inpFTF_RSI_Period,
     int             inpFTF_WP,
     ENUM_TIMEFRAMES inpLongTermTimeFrame,
-    int             inpLongTermPeriod
+    int             inpLongTermPeriod,
+    double          inpMovedTooFarMultiplier
     )
 {
     Print("In derived class CJimBrownTrend OnInit");
@@ -200,6 +203,7 @@ int CJimBrownTrend::Init(
         _inpSmoothPlatinum = inpSmoothPlatinum;
         _inpFTF_RSI_Period = inpFTF_RSI_Period;
         _inpLongTermPeriod = inpLongTermPeriod;
+        _inpMovedTooFarMultiplier = inpMovedTooFarMultiplier;
 
         _trend = "X";
         _sig = "Start";
@@ -557,18 +561,21 @@ bool CJimBrownTrend::HasBullishSignal()
     if (GetTrendDirection(1) != "Up") {
         return false;
     }
-    //if (_prices[1].close >= _longTermTrendData[1] && _prices[1].low <= _shortTermTrendData[1]) {        
-    //    if (_prices[1].close < _longTermTimeFrameData[1]) {
-    //        Print("Rejecting signal due to long-term trend.");
-    //        return false;
-    //    }
-
-    //    return true;
-    //}
 
     StorePerfData();
 
-    return true;
+    if (_upCrossRecentIndex > -1 && _upCrossPriorIndex > -1 && _upCrossRecentValue > _upCrossPriorValue) {
+
+        double range = _prices[1].high - _prices[1].low;
+        if (range > _atrData[0] * _inpMovedTooFarMultiplier) {
+            Print("Rejecting signal due to this being a large move so we assume it has been missed.");
+            return false;
+        }
+
+        return true;
+    }
+
+    return false;
 
     /*int firstIndex = 0;
     int secondIndex = 0;
@@ -627,8 +634,17 @@ bool CJimBrownTrend::HasBearishSignal()
 
     StorePerfData();
 
-    return true;
+    if (_downCrossRecentIndex > -1 && _downCrossPriorIndex > -1 && _downCrossRecentValue < _downCrossPriorValue) {
+        double range = _prices[1].high - _prices[1].low;
+        if (range > _atrData[0] * _inpMovedTooFarMultiplier) {
+            Print("Rejecting signal due to this being a large move so we assume it has been missed.");
+            return false;
+        }
 
+        return true;
+    }
+
+    return false;
     //if (_prices[1].close <= _longTermTrendData[1] && _prices[1].high >= _shortTermTrendData[1]) {
     //    if (_prices[1].close > _longTermTimeFrameData[1]) {
     //        Print("Rejecting signal due to long-term trend.");

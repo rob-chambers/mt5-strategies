@@ -149,7 +149,7 @@
                         <TextBlock Grid.Row="4" Text="Winning trades eliminated" />
                         <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedFilter.ComparisonPerformanceData.WinningTradesEliminated, UpdateSourceTrigger=PropertyChanged}"></TextBlock>
 
-                        <TextBlock Grid.Row="5" Text="Elimination Ratio" />
+                        <TextBlock Grid.Row="5" Text="Elimination W/L Ratio (lower is better)" />
                         <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedFilter.ComparisonPerformanceData.EliminationRatio, UpdateSourceTrigger=PropertyChanged}"></TextBlock>
 
                         <TextBlock Grid.Row="6" Text="Total amount of losing trades eliminated" />
