@@ -153,8 +153,13 @@ int CMyExpertBase::Init(
         Print("Could not refresh rates - init failed.");
         return(INIT_FAILED);
     }
+    
+    if (inpLotSizingRule == Dynamic && inpLots != 0) {
+        Print("Invalid lot size - must be 0 when using dynamic sizing - init failed.");
+        return(INIT_FAILED);
+    }
 
-    if (!(inpLots > 0 && inpLots <= 10)) {
+    if ((inpLotSizingRule == Static) && !(inpLots > 0 && inpLots <= 10)) {
         Print("Invalid lot size - init failed.");
         return(INIT_FAILED);
     }

@@ -9,7 +9,7 @@ public:
     (
         LOTSIZING_RULE  inpLotSizingRule = Dynamic,
         double          inpDynamicSizingRiskPerTrade = 1,
-        double          inpLots = 1,
+        double          inpLots = 0,
         STOPLOSS_RULE   inpStopLossRule = CurrentBarNPips,
         int             inpStopLossPips = 0,
         bool            inpUseTakeProfit = true,
