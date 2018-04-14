@@ -1,6 +1,7 @@
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh> 
 #include <Trade\PositionInfo.mqh>
+#include <Expert\Money\MoneyFixedRisk.mqh>
 
 enum STOPLOSS_RULE
 {
@@ -14,6 +15,12 @@ enum STOPLOSS_RULE
     CurrentBarNPips,
 };
 
+enum LOTSIZING_RULE
+{
+    Static,
+    Dynamic
+};
+
 class CMyExpertBase
 {
 public:
@@ -22,6 +29,8 @@ public:
 
     virtual int Init
     (
+        LOTSIZING_RULE  inpLotSizingRule,
+        double          inpDynamicSizingRiskPerTrade,
         double          inpLots,
         STOPLOSS_RULE   inpInitialStopLossRule,
         int             inpInitialStopLossPips,
@@ -37,7 +46,7 @@ public:
         bool            inpAlertEmailEnabled,
         int             inpMinutesToWaitAfterPositionClosed,
         int             inpMinTradingHour,
-        int             inpMaxTradingHour        
+        int             inpMaxTradingHour
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -56,6 +65,7 @@ protected:
     double _currentBid, _currentAsk;
     double _atrData[];
 
+    LOTSIZING_RULE _inpLotSizingRule;
     double _inpLots;
     STOPLOSS_RULE _inpInitialStopLossRule;
     int _inpInitialStopLossPips;
@@ -104,6 +114,7 @@ private:
     int _eventCount;                    // Counter for OnTrade event
     int _currentPositionType;           // The current type of position (long/short)
     datetime _lastClosedPositionTime;   // The time when a position was most recently closed
+    CMoneyFixedRisk _fixedRisk;         // Fixed risk money management class
 };
 
 CMyExpertBase::CMyExpertBase(void)
@@ -115,6 +126,8 @@ CMyExpertBase::~CMyExpertBase(void)
 }
 
 int CMyExpertBase::Init(
+    LOTSIZING_RULE  inpLotSizingRule,
+    double          inpDynamicSizingRiskPerTrade,
     double          inpLots,
     STOPLOSS_RULE   inpInitialStopLossRule,
     int             inpInitialStopLossPips,
@@ -222,6 +235,7 @@ int CMyExpertBase::Init(
 
     _adjustedPoints = _symbol.Point() * _digits_adjust;
 
+    _inpLotSizingRule = inpLotSizingRule;
     _inpLots = inpLots;
     _inpInitialStopLossRule = inpInitialStopLossRule;
     _inpInitialStopLossPips = inpInitialStopLossPips;
@@ -240,6 +254,13 @@ int CMyExpertBase::Init(
     _inpMinTradingHour = inpMinTradingHour;
     _inpMaxTradingHour = inpMaxTradingHour;
     _inpMoveToBreakEven = inpMoveToBreakEven;
+
+    if (!_fixedRisk.Init(&_symbol, PERIOD_CURRENT, 1)) {
+        Print("Couldn't initialise fixed risk instance");
+        return(INIT_FAILED);
+    }
+
+    _fixedRisk.Percent(inpDynamicSizingRiskPerTrade);
 
     _alreadyMovedToBreakEven = false;
 
@@ -336,6 +357,7 @@ void CMyExpertBase::Processing(void)
         takeProfitPipsFinal = _inpTakeProfitPips;
 
         double limitPrice;
+        double lotSize = _inpLots;
 
         NewBarAndNoCurrentPositions();
         
@@ -356,7 +378,11 @@ void CMyExpertBase::Processing(void)
                 takeProfitLevel = 0.0;
             }
 
-            OpenPosition(_Symbol, ORDER_TYPE_BUY, _inpLots, limitPrice, stopLossLevel, takeProfitLevel);
+            if (_inpLotSizingRule == Dynamic) {
+                lotSize = _fixedRisk.CheckOpenLong(limitPrice, stopLossLevel);
+            }
+
+            OpenPosition(_Symbol, ORDER_TYPE_BUY, lotSize, limitPrice, stopLossLevel, takeProfitLevel);
         }
         else if (_inpGoShort && HasBearishSignal()) {
             limitPrice = _currentBid;
@@ -375,7 +401,11 @@ void CMyExpertBase::Processing(void)
                 takeProfitLevel = 0.0;
             }
 
-            OpenPosition(_Symbol, ORDER_TYPE_SELL, _inpLots, limitPrice, stopLossLevel, takeProfitLevel);
+            if (_inpLotSizingRule == Dynamic) {
+                lotSize = _fixedRisk.CheckOpenShort(limitPrice, stopLossLevel);
+            }
+
+            OpenPosition(_Symbol, ORDER_TYPE_SELL, lotSize, limitPrice, stopLossLevel, takeProfitLevel);
         }
     }
 }

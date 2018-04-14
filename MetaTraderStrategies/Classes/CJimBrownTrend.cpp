@@ -7,6 +7,8 @@ public:
     ~CJimBrownTrend(void);
     virtual int Init
     (
+        LOTSIZING_RULE  inpLotSizingRule = Dynamic,
+        double          inpDynamicSizingRiskPerTrade = 1,
         double          inpLots = 1,
         STOPLOSS_RULE   inpStopLossRule = CurrentBarNPips,
         int             inpStopLossPips = 0,
@@ -44,7 +46,7 @@ protected:
     virtual void OnRecentlyClosedTrade();
     virtual bool CheckToModifyPositions();
 
-private:
+private:    
     int _platinumHandle;
     int _qmpFilterHandle;
     int _longTermTrendHandle;
@@ -100,6 +102,8 @@ CJimBrownTrend::~CJimBrownTrend(void)
 }
 
 int CJimBrownTrend::Init(
+    LOTSIZING_RULE  inpLotSizingRule,
+    double          inpDynamicSizingRiskPerTrade,
     double          inpLots,
     STOPLOSS_RULE   inpStopLossRule,
     int             inpStopLossPips,
@@ -130,7 +134,7 @@ int CJimBrownTrend::Init(
     Print("In derived class CJimBrownTrend OnInit");
 
     // Non-base variables initialised here
-    int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit, 
+    int retCode = CMyExpertBase::Init(inpLotSizingRule, inpDynamicSizingRiskPerTrade, inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit,
         inpTakeProfitPips, inpTakeProfitRiskRewardRatio, inpTrailingStopLossRule, inpTrailingStopPips, inpMoveToBreakEven, inpGoLong, inpGoShort,
         inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, 
         inpMinTradingHour, inpMaxTradingHour);
@@ -201,6 +205,7 @@ int CJimBrownTrend::Init(
             return(INIT_FAILED);
         }
 
+        _inpLotSizingRule = inpLotSizingRule;
         _inpSlowPlatinum = inpSlowPlatinum;
         _inpSmoothPlatinum = inpSmoothPlatinum;
         _inpFTF_RSI_Period = inpFTF_RSI_Period;

@@ -7,6 +7,8 @@ public:
     ~CPinBar(void);
     virtual int Init
     (
+        LOTSIZING_RULE  inpLotSizingRule = Dynamic,
+        double          inpDynamicSizingRiskPerTrade = 1,
         double          inpLots = 1,
         STOPLOSS_RULE   inpStopLossRule = CurrentBarNPips,
         int             inpStopLossPips = 3,
@@ -56,6 +58,8 @@ CPinBar::~CPinBar(void)
 }
 
 int CPinBar::Init(
+    LOTSIZING_RULE  inpLotSizingRule,
+    double          inpDynamicSizingRiskPerTrade,
     double          inpLots,
     STOPLOSS_RULE   inpStopLossRule,
     int             inpStopLossPips,
@@ -81,7 +85,7 @@ int CPinBar::Init(
 {
     Print("In derived class CPinBar OnInit");
 
-    int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit,
+    int retCode = CMyExpertBase::Init(inpLotSizingRule, inpDynamicSizingRiskPerTrade, inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit,
         inpTakeProfitPips, inpTakeProfitRiskRewardRatio, inpTrailingStopLossRule, inpTrailingStopPips, inpMoveToBreakEven, inpGoLong, inpGoShort,
         inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed,
         inpMinTradingHour, inpMaxTradingHour);

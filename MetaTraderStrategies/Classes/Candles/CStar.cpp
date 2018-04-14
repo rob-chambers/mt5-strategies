@@ -7,6 +7,8 @@ public:
     ~CStar(void);
     virtual int Init
     (
+        LOTSIZING_RULE  inpLotSizingRule = Dynamic,
+        double          inpDynamicSizingRiskPerTrade = 1,
         double          inpLots = 1,
         STOPLOSS_RULE   inpStopLossRule = StaticPipsValue,
         int             inpStopLossPips = 15,
@@ -54,6 +56,8 @@ CStar::~CStar(void)
 }
 
 int CStar::Init(
+    LOTSIZING_RULE  inpLotSizingRule,
+    double          inpDynamicSizingRiskPerTrade,
     double          inpLots,
     STOPLOSS_RULE   inpStopLossRule,
     int             inpStopLossPips,
@@ -77,7 +81,7 @@ int CStar::Init(
 {
     Print("In derived class CStar OnInit");
 
-    int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit,
+    int retCode = CMyExpertBase::Init(inpLotSizingRule, inpDynamicSizingRiskPerTrade, inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit,
         inpTakeProfitPips, inpTakeProfitRiskRewardRatio, inpTrailingStopLossRule, inpTrailingStopPips, inpMoveToBreakEven, inpGoLong, inpGoShort,
         inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed,
         inpMinTradingHour, inpMaxTradingHour);

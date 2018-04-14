@@ -7,6 +7,8 @@ public:
     ~CNewTrend(void);
     virtual int Init
     (
+        LOTSIZING_RULE  inpLotSizingRule = Dynamic,
+        double          inpDynamicSizingRiskPerTrade = 1,
         double          inpLots = 1,
         STOPLOSS_RULE   inpStopLossRule = StaticPipsValue,
         int             inpStopLossPips = 15,
@@ -76,6 +78,8 @@ CNewTrend::~CNewTrend(void)
 }
 
 int CNewTrend::Init(
+    LOTSIZING_RULE  inpLotSizingRule,
+    double          inpDynamicSizingRiskPerTrade,
     double          inpLots,
     STOPLOSS_RULE   inpInitialStopLossRule,
     int             inpInitialStopLossPips,
@@ -105,7 +109,7 @@ int CNewTrend::Init(
     Print("In derived class CNewTrend OnInit");
 
     // Non-base variables initialised here
-    int retCode = CMyExpertBase::Init(inpLots, inpInitialStopLossRule, inpInitialStopLossPips, inpUseTakeProfit,
+    int retCode = CMyExpertBase::Init(inpLotSizingRule, inpDynamicSizingRiskPerTrade, inpLots, inpInitialStopLossRule, inpInitialStopLossPips, inpUseTakeProfit,
         inpTakeProfitPips, inpTakeProfitRiskRewardRatio, inpTrailingStopLossRule, inpTrailingStopPips, inpMoveToBreakEven, inpGoLong, inpGoShort,
         inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed,
         inpMinTradingHour, inpMaxTradingHour);

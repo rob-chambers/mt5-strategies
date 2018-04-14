@@ -10,6 +10,8 @@
 //+------------------------------------------------------------------------------------------------------------------------------+
 //| Input variables                                                                                                              |
 //+------------------------------------------------------------------------------------------------------------------------------+
+input LOTSIZING_RULE _inpLotSizingRule = Dynamic;               // Lot sizing rule
+input double   _inpDynamicSizingRiskPerTrade = 1;               // Risk per trade of account balance when using dynamic lot sizing
 input double   _inpLots = 1;                                    // Number of lots to trade
 input STOPLOSS_RULE _inpInitialStopLossRule = CurrentBarNPips;  // Initial Stop Loss Rule
 input int   _inpInitialStopLossPips = 3;                        // Initial stop loss in pips
@@ -46,6 +48,8 @@ CStar derived;
 int OnInit()
 {
     return derived.Init(
+        _inpLotSizingRule,
+        _inpDynamicSizingRiskPerTrade,
         _inpLots,
         _inpInitialStopLossRule,
         _inpInitialStopLossPips,
