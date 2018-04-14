@@ -10,7 +10,8 @@ enum STOPLOSS_RULE
     CurrentBar2ATR,
     PreviousBar5Pips,
     PreviousBar2Pips,
-    CurrentBar5Pips
+    CurrentBar5Pips,
+    CurrentBarNPips,
 };
 
 class CMyExpertBase
@@ -142,12 +143,12 @@ int CMyExpertBase::Init(
         return(INIT_FAILED);
     }
 
-    if (inpInitialStopLossRule != StaticPipsValue && inpInitialStopLossPips != 0) {
-        Print("Invalid initial stop loss rule.  Pips should be 0 when not using StaticPipsValue - init failed.");
+    if (inpInitialStopLossRule != StaticPipsValue && inpInitialStopLossRule != CurrentBarNPips && inpInitialStopLossPips != 0) {
+        Print("Invalid initial stop loss rule.  Pips should be 0 when not using StaticPipsValue or CurrentBarNPips - init failed.");
         return(INIT_FAILED);
     }
 
-    if (inpInitialStopLossRule == StaticPipsValue && inpInitialStopLossPips <= 0) {
+    if ((inpInitialStopLossRule == StaticPipsValue || inpInitialStopLossRule == CurrentBarNPips) && inpInitialStopLossPips <= 0) {
         Print("Invalid initial stop loss pip value.  Pips should be greater than 0 - init failed.");
         return(INIT_FAILED);
     }
@@ -811,6 +812,7 @@ double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
     double stopLevelPips;
     double low;
     double priceFromStop;
+    double pips = 5;
 
     stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
     switch (_inpInitialStopLossRule) {
@@ -831,8 +833,17 @@ double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
 
         case CurrentBar2Pips:
             // Fall-through
-        case CurrentBar5Pips:
-            stopLossLevel = _prices[1].low - _adjustedPoints * (_inpInitialStopLossRule == CurrentBar2Pips ? 2 : 5);
+        case CurrentBarNPips:
+            // Fall-through
+        case CurrentBar5Pips:            
+            if (_inpInitialStopLossRule == CurrentBar2Pips) {
+                pips = 2;
+            }
+            else if (_inpInitialStopLossRule == CurrentBarNPips) {
+                pips = _inpInitialStopLossPips;
+            }
+
+            stopLossLevel = _prices[1].low - _adjustedPoints * pips;
             priceFromStop = (_currentAsk - stopLossLevel) / (_Point * _digits_adjust);
 
             Print("Price from stop: ", priceFromStop);
@@ -880,15 +891,15 @@ double CMyExpertBase::CalculateStopLossLevelForSellOrder()
     double stopLossLevel = 0;
     double stopLevelPips;
     double high;
+    double pips = 5;
 
+    stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
     switch (_inpInitialStopLossRule) {
         case None:
             stopLossLevel = 0;
             break;
 
         case StaticPipsValue:
-            stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
-
             if (_inpInitialStopLossPips < stopLevelPips) {
                 stopLossPipsFinal = stopLevelPips;
             }
@@ -901,8 +912,17 @@ double CMyExpertBase::CalculateStopLossLevelForSellOrder()
 
         case CurrentBar2Pips:
             // Fall-through
-        case CurrentBar5Pips:
-            stopLossLevel = _prices[1].high + _adjustedPoints * (_inpInitialStopLossRule == CurrentBar2Pips ? 2 : 5);
+        case CurrentBarNPips:
+            // Fall-through
+        case CurrentBar5Pips:            
+            if (_inpInitialStopLossRule == CurrentBar2Pips) {
+                pips = 2;
+            }
+            else if (_inpInitialStopLossRule == CurrentBarNPips) {
+                pips = _inpInitialStopLossPips;
+            }
+
+            stopLossLevel = _prices[1].high + _adjustedPoints * pips;
             break;
 
         case CurrentBar2ATR:
@@ -928,8 +948,20 @@ double CMyExpertBase::CalculateStopLossLevelForSellOrder()
             break;
     }
 
-    double sl = NormalizeDouble(stopLossLevel, _symbol.Digits());
-    return sl;
+    double priceFromStop = (stopLossLevel - _currentBid) / (_Point * _digits_adjust);
+
+    Print("Price from stop: ", priceFromStop);
+    if (priceFromStop < stopLevelPips) {
+        printf("calculated stop too close to price.  adjusting from %f to %f", priceFromStop, stopLevelPips);
+        stopLossPipsFinal = stopLevelPips;
+    }
+    else {
+        stopLossPipsFinal = priceFromStop;
+    }
+
+    stopLossLevel = _currentBid + stopLossPipsFinal * _Point * _digits_adjust;
+
+    return NormalizeDouble(stopLossLevel, _symbol.Digits());
 }
 
 bool CMyExpertBase::IsNewBar(datetime currentTime)

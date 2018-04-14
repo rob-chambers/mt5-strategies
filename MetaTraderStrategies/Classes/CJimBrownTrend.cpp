@@ -8,7 +8,7 @@ public:
     virtual int Init
     (
         double          inpLots = 1,
-        STOPLOSS_RULE   inpStopLossRule = PreviousBar5Pips,
+        STOPLOSS_RULE   inpStopLossRule = CurrentBarNPips,
         int             inpStopLossPips = 0,
         bool            inpUseTakeProfit = true,
         int             inpTakeProfitPips = 60,

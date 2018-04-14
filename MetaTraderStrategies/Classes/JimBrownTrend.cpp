@@ -11,7 +11,7 @@
 //| Input variables                                  |
 //+------------------------------------------------------------------+
 input double   _inpLots = 1;                                    // Number of lots to trade
-input STOPLOSS_RULE _inpInitialStopLossRule = PreviousBar5Pips; // Initial Stop Loss Rule
+input STOPLOSS_RULE _inpInitialStopLossRule = CurrentBarNPips;  // Initial Stop Loss Rule
 input int   _inpInitialStopLossPips = 0;                        // Initial stop loss in pips
 input bool     _inpUseTakeProfit = true;                        // Whether to use a take profit order or not
 input int   _inpTakeProfitPips = 60;                            // Take profit level in pips
