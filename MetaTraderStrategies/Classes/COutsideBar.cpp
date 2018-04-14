@@ -7,22 +7,25 @@ public:
     ~COutsideBar(void);
     virtual int Init
     (
-        double   inpLots = 1,
-        STOPLOSS_RULE inpStopLossRule = StaticPipsValue,
-        int      inpStopLossPips = 15,
-        bool     inpUseTakeProfit = true,
-        int      inpTakeProfitPips = 30,
-        int      inpTrailingStopPips = 20,
-        bool     inpGoLong = true,
-        bool     inpGoShort = true,
-        bool     inpAlertTerminalEnabled = true,
-        bool     inpAlertEmailEnabled = false,
-        int      inpMinutesToWaitAfterPositionClosed = 60,
-        int      inpMinTradingHour = 0,
-        int      inpMaxTradingHour = 0,
-        bool     inpFilterByMA = true,
+        double          inpLots = 1,
+        STOPLOSS_RULE   inpStopLossRule = CurrentBarNPips,
+        int             inpStopLossPips = 0,
+        bool            inpUseTakeProfit = true,
+        int             inpTakeProfitPips = 60,
+        double          inpTakeProfitRiskRewardRatio = 0,
+        STOPLOSS_RULE   inpTrailingStopLossRule = StaticPipsValue,
+        int             inpTrailingStopPips = 20,
+        bool            inpMoveToBreakEven = true,
+        bool            inpGoLong = true,
+        bool            inpGoShort = true,
+        bool            inpAlertTerminalEnabled = true,
+        bool            inpAlertEmailEnabled = false,
+        int             inpMinutesToWaitAfterPositionClosed = 60,
+        int             inpMinTradingHour = 0,
+        int             inpMaxTradingHour = 0,
+        bool            inpFilterByMA = true,
         ENUM_TIMEFRAMES inpMAPeriodType = PERIOD_D1,
-        int inpMAPeriodAmount = 8
+        int             inpMAPeriodAmount = 8
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -49,19 +52,22 @@ COutsideBar::~COutsideBar(void)
 }
 
 int COutsideBar::Init(
-    double   inpLots,
-    STOPLOSS_RULE inpStopLossRule,
-    double   inpStopLossPips,
-    bool     inpUseTakeProfit,
-    double   inpTakeProfitPips,
-    int      inpTrailingStopPips,
-    bool     inpGoLong,
-    bool     inpGoShort,
-    bool     inpAlertTerminalEnabled,
-    bool     inpAlertEmailEnabled,
-    int      inpMinutesToWaitAfterPositionClosed,
-    int      inpMinTradingHour,
-    int      inpMaxTradingHour,
+    double          inpLots,
+    STOPLOSS_RULE   inpStopLossRule,
+    int             inpStopLossPips,
+    bool            inpUseTakeProfit,
+    int             inpTakeProfitPips,
+    double          inpTakeProfitRiskRewardRatio,
+    STOPLOSS_RULE   inpTrailingStopLossRule,
+    int             inpTrailingStopPips,
+    bool            inpMoveToBreakEven,
+    bool            inpGoLong,
+    bool            inpGoShort,
+    bool            inpAlertTerminalEnabled,
+    bool            inpAlertEmailEnabled,
+    int             inpMinutesToWaitAfterPositionClosed,
+    int             inpMinTradingHour,
+    int             inpMaxTradingHour,
     bool     inpFilterByMA,
     ENUM_TIMEFRAMES inpMAPeriodType,
     int      inpMAPeriodAmount
@@ -69,8 +75,10 @@ int COutsideBar::Init(
 {
     Print("In derived class COutsideBar OnInit");
 
-    // Non-base variables initialised here
-    int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit, inpTakeProfitPips, inpTrailingStopPips, inpGoLong, inpGoShort, inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, inpMinTradingHour, inpMaxTradingHour);
+    int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit,
+        inpTakeProfitPips, inpTakeProfitRiskRewardRatio, inpTrailingStopLossRule, inpTrailingStopPips, inpMoveToBreakEven, inpGoLong, inpGoShort,
+        inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed,
+        inpMinTradingHour, inpMaxTradingHour);
 
     if (retCode == INIT_SUCCEEDED) {
         Print("Custom initialisation for outside bar EA");

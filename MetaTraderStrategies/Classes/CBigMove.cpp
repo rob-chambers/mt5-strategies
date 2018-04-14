@@ -12,8 +12,10 @@ public:
         int             inpStopLossPips = 15,
         bool            inpUseTakeProfit = true,
         int             inpTakeProfitPips = 30,
+        double          inpTakeProfitRiskRewardRatio = 0,
         STOPLOSS_RULE   inpTrailingStopLossRule = StaticPipsValue,
         int             inpTrailingStopPips = 20,
+        bool            inpMoveToBreakEven = true,
         bool            inpGoLong = true,
         bool            inpGoShort = true,
         bool            inpAlertTerminalEnabled = true,
@@ -63,8 +65,10 @@ int CBigMove::Init(
     int             inpStopLossPips,
     bool            inpUseTakeProfit,
     int             inpTakeProfitPips,
+    double          inpTakeProfitRiskRewardRatio,
     STOPLOSS_RULE   inpTrailingStopLossRule,
     int             inpTrailingStopPips,
+    bool            inpMoveToBreakEven,
     bool            inpGoLong,
     bool            inpGoShort,
     bool            inpAlertTerminalEnabled,
@@ -83,7 +87,7 @@ int CBigMove::Init(
     Print("In derived class CBigMove OnInit");
 
     int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit,
-        inpTakeProfitPips, inpTrailingStopLossRule, inpTrailingStopPips, inpGoLong, inpGoShort,
+        inpTakeProfitPips, inpTakeProfitRiskRewardRatio, inpTrailingStopLossRule, inpTrailingStopPips, inpMoveToBreakEven, inpGoLong, inpGoShort,
         inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed,
         inpMinTradingHour, inpMaxTradingHour);
 

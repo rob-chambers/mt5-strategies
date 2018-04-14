@@ -12,8 +12,9 @@ public:
         int             inpStopLossPips = 0,
         bool            inpUseTakeProfit = true,
         int             inpTakeProfitPips = 60,
+        double          inpTakeProfitRiskRewardRatio = 0,
         STOPLOSS_RULE   inpTrailingStopLossRule = StaticPipsValue,
-        int             inpTrailingStopPips = 20,
+        int             inpTrailingStopPips = 20,        
         bool            inpMoveToBreakEven = true,
         bool            inpGoLong = true,
         bool            inpGoShort = true,
@@ -104,8 +105,9 @@ int CJimBrownTrend::Init(
     int             inpStopLossPips,
     bool            inpUseTakeProfit,
     int             inpTakeProfitPips,
+    double          inpTakeProfitRiskRewardRatio,
     STOPLOSS_RULE   inpTrailingStopLossRule,
-    int             inpTrailingStopPips,
+    int             inpTrailingStopPips,    
     bool            inpMoveToBreakEven,
     bool            inpGoLong,
     bool            inpGoShort,
@@ -129,7 +131,7 @@ int CJimBrownTrend::Init(
 
     // Non-base variables initialised here
     int retCode = CMyExpertBase::Init(inpLots, inpStopLossRule, inpStopLossPips, inpUseTakeProfit, 
-        inpTakeProfitPips, inpTrailingStopLossRule, inpTrailingStopPips, inpMoveToBreakEven, inpGoLong, inpGoShort, 
+        inpTakeProfitPips, inpTakeProfitRiskRewardRatio, inpTrailingStopLossRule, inpTrailingStopPips, inpMoveToBreakEven, inpGoLong, inpGoShort,
         inpAlertTerminalEnabled, inpAlertEmailEnabled, inpMinutesToWaitAfterPositionClosed, 
         inpMinTradingHour, inpMaxTradingHour);
 

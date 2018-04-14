@@ -27,8 +27,9 @@ public:
         int             inpInitialStopLossPips,
         bool            inpUseTakeProfit,
         int             inpTakeProfitPips,
+        double          inpTakeProfitRiskRewardRatio,
         STOPLOSS_RULE   inpTrailingStopLossRule,
-        int             inpTrailingStopPips,
+        int             inpTrailingStopPips,        
         bool            inpMoveToBreakEven,
         bool            inpGoLong,
         bool            inpGoShort,
@@ -60,6 +61,7 @@ protected:
     int _inpInitialStopLossPips;
     bool _inpUseTakeProfit;
     int _inpTakeProfitPips;
+    double _inpTakeProfitRiskRewardRatio;
     STOPLOSS_RULE _inpTrailingStopLossRule;
     bool _inpGoLong;
     bool _inpGoShort;
@@ -118,6 +120,7 @@ int CMyExpertBase::Init(
     int             inpInitialStopLossPips,
     bool            inpUseTakeProfit,
     int             inpTakeProfitPips,
+    double          inpTakeProfitRiskRewardRatio,
     STOPLOSS_RULE   inpTrailingStopLossRule,
     int             inpTrailingStopPips,
     bool            inpMoveToBreakEven,
@@ -163,13 +166,23 @@ int CMyExpertBase::Init(
         return(INIT_FAILED);
     }
 
-    if (inpUseTakeProfit && inpTakeProfitPips <= 0) {
-        Print("Invalid take profit pip value.  Pips should be greater than 0 - init failed.");
+    if (inpUseTakeProfit && inpTakeProfitPips <= 0 && inpTakeProfitRiskRewardRatio <= 0) {
+        Print("Invalid take profit pip value / risk reward ratio.  Pips or risk reward ratio should be greater than 0 - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (inpUseTakeProfit && inpTakeProfitPips > 0 && inpTakeProfitRiskRewardRatio > 0) {
+        Print("Invalid take profit parameters.  Can use only one of either take profit pip value or risk reward ratio - init failed.");
         return(INIT_FAILED);
     }
 
     if (!inpUseTakeProfit && inpTakeProfitPips != 0) {
         Print("Invalid take profit pip value.  Pips should be 0 when not using take profit - init failed.");
+        return(INIT_FAILED);
+    }
+
+    if (!inpUseTakeProfit && inpTakeProfitRiskRewardRatio != 0) {
+        Print("Invalid risk/reward ratio value.  Value should be 0 when not using take profit - init failed.");
         return(INIT_FAILED);
     }
 
@@ -214,6 +227,7 @@ int CMyExpertBase::Init(
     _inpInitialStopLossPips = inpInitialStopLossPips;
     _inpUseTakeProfit = inpUseTakeProfit;
     _inpTakeProfitPips = inpTakeProfitPips;
+    _inpTakeProfitRiskRewardRatio = inpTakeProfitRiskRewardRatio;
     _inpTrailingStopLossRule = inpTrailingStopLossRule;
     _inpGoLong = inpGoLong;
     _inpGoShort = inpGoShort;
@@ -330,7 +344,13 @@ void CMyExpertBase::Processing(void)
             stopLossLevel = CalculateStopLossLevelForBuyOrder();
 
             if (_inpUseTakeProfit) {
-                takeProfitLevel = limitPrice + takeProfitPipsFinal * _Point * _digits_adjust;
+                if (_inpTakeProfitRiskRewardRatio > 0) {
+                    double distance = (limitPrice - stopLossLevel) * _inpTakeProfitRiskRewardRatio;
+                    takeProfitLevel = limitPrice + distance;
+                }
+                else {
+                    takeProfitLevel = limitPrice + takeProfitPipsFinal * _Point * _digits_adjust;
+                }                
             }
             else {
                 takeProfitLevel = 0.0;
@@ -343,7 +363,13 @@ void CMyExpertBase::Processing(void)
             stopLossLevel = CalculateStopLossLevelForSellOrder();
 
             if (_inpUseTakeProfit) {
-                takeProfitLevel = limitPrice - takeProfitPipsFinal * _Point * _digits_adjust;
+                if (_inpTakeProfitRiskRewardRatio > 0) {
+                    double distance = (stopLossLevel - limitPrice) * _inpTakeProfitRiskRewardRatio;
+                    takeProfitLevel = limitPrice - distance;
+                }
+                else {
+                    takeProfitLevel = limitPrice - takeProfitPipsFinal * _Point * _digits_adjust;
+                }                
             }
             else {
                 takeProfitLevel = 0.0;
