@@ -51,6 +51,12 @@ namespace TestingResultsAnalyzer.Commands
                     _mainViewModel.Trades.Add(new TradeViewModel(trade));
                 }
 
+                _mainViewModel.OriginalTrades.Clear();
+                foreach (var trade in trades)
+                {
+                    _mainViewModel.OriginalTrades.Add(new TradeViewModel(trade));
+                }
+
                 _mainViewModel.CalculateSummary();
             }
             catch (Exception ex)

@@ -3,14 +3,20 @@
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright     "Copyright 2018, Robert Chambers"
-#property version       "1.00"
+#property version       "1.10"
 #property description   "Write Deal History from the last day"
+
+/* Revision History
+
+1.10:   * Added new input parameter to specify number of hours of history
+*/
+input int HoursOfHistory = 36; // Number of hours of history to write
 
 int _fileHandle;
 
 int OnInit() {
     int minutesInHour = 60;
-    int minutes = 16 * minutesInHour;
+    int minutes = HoursOfHistory * minutesInHour;
     datetime to = TimeCurrent();
     datetime from = to - 60 * minutes;
 

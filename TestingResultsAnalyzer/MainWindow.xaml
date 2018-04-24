@@ -17,6 +17,7 @@
             <RowDefinition Height="auto" />
             <RowDefinition Height="auto" />
             <RowDefinition Height="auto" />
+            <RowDefinition Height="auto" />
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -161,7 +162,15 @@
                 </StackPanel>
             </StackPanel>
         </Expander>
-        
+
+        <StackPanel Orientation="Horizontal" Grid.Row="2" Margin="10,0" >
+            <Label VerticalAlignment="Center">Filters:</Label>
+            <TextBox Text="{Binding FilterMax}" Height="24" Padding="3" MaxLength="2" HorizontalContentAlignment="Right" />
+            <Button Command="{Binding FilterBestTradesCommand}" Padding="6,3" Margin="10,4" Background="LightGreen">Best</Button>
+            <Button Command="{Binding FilterWorstTradesCommand}" Padding="6,3" Margin="10,4" Background="OrangeRed">Worst</Button>
+            <Button Command="{Binding FilterClearCommand}" Padding="6,3" Margin="10,4" >Clear</Button>
+        </StackPanel>
+
         <ListView Grid.Row="3" Margin="8" ItemsSource="{Binding Trades}" IsEnabled="{Binding IsEnabled, UpdateSourceTrigger=PropertyChanged}" >
             <ListView.ItemContainerStyle>
                 <Style TargetType="{x:Type ListViewItem}">

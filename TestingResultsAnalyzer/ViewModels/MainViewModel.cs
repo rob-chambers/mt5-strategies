@@ -9,25 +9,37 @@ namespace TestingResultsAnalyzer.ViewModels
     public class MainViewModel : ViewModelBase
     {
         private readonly TradeCollection _trades;
+        private readonly TradeCollection _originalTrades;        
         private readonly ObservableCollection<FilterViewModel> _filters;
         private readonly OpenFileCommand _openFileCommand;
+        private readonly FilterBestTradesCommand _filterBestTradesCommand;
+        private readonly FilterWorstTradesCommand _filterWorstTradesCommand;
+        private readonly FilterClearCommand _filterClearCommand;
         private bool _isEnabled;
         private FilterViewModel _nullFilter;
         private FilterViewModel _combinationFilter;
         private string _title;
         private FilterViewModel _selectedFilter;
+        private string _filterMax;
 
         public MainViewModel()
         {
             _openFileCommand = new OpenFileCommand(this);
+            _filterBestTradesCommand = new FilterBestTradesCommand(this);
+            _filterWorstTradesCommand = new FilterWorstTradesCommand(this);
+            _filterClearCommand = new FilterClearCommand(this);
 
             _trades = new TradeCollection();
+            _originalTrades = new TradeCollection();
             _filters = new ObservableCollection<FilterViewModel>();
             Title = "Testing Results Analyzer";
-            InitFilters();            
+            InitFilters();
+            FilterMax = "10";
         }
 
         public TradeCollection Trades { get => _trades; }
+
+        public TradeCollection OriginalTrades { get => _originalTrades; }
 
         public ObservableCollection<FilterViewModel> Filters { get => _filters; }
 
@@ -50,6 +62,12 @@ namespace TestingResultsAnalyzer.ViewModels
         public FilterViewModel NullFilter => _nullFilter;
 
         public OpenFileCommand OpenFileCommand { get => _openFileCommand; }
+
+        public FilterBestTradesCommand FilterBestTradesCommand { get => _filterBestTradesCommand; }
+
+        public FilterWorstTradesCommand FilterWorstTradesCommand { get => _filterWorstTradesCommand; }
+
+        public FilterClearCommand FilterClearCommand { get => _filterClearCommand; }
 
         public bool IsEnabled
         {
@@ -76,6 +94,17 @@ namespace TestingResultsAnalyzer.ViewModels
                 if (_title == value) return;
                 _title = value;
                 OnPropertyChanged(nameof(Title));
+            }
+        }
+        
+        public string FilterMax
+        {
+            get { return _filterMax; }
+            set
+            {
+                if (_filterMax == value) return;
+                _filterMax = value;
+                OnPropertyChanged(nameof(FilterMax));
             }
         }
 

@@ -20,8 +20,8 @@
 #include <Expert\Money\MoneyFixedRisk.mqh>
 #include <Trade\Trade.mqh>
 
-input double Risk = 1;              // Risk per trade as percentage of account size (e.g. 1 for 1%)
-input int PipsFromSignalCandle = 2; // Number of pips the default stop loss should be from the signal candle
+input double Risk = 5;              // Risk per trade as percentage of account size (e.g. 1 for 1%)
+input int PipsFromSignalCandle = 4; // Number of pips the default stop loss should be from the signal candle
 
 const string EnterButtonName = "EnterButton";
 

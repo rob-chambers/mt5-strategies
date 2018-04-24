@@ -235,6 +235,8 @@ void CJimBrownTrend::Deinit(void)
     Print("In derived class CJimBrownTrend OnDeInit");
     CMyExpertBase::Deinit();
 
+    FileClose(_fileHandle);
+
     Print("Releasing indicator handles");
 
     ReleaseIndicator(_platinumHandle);
@@ -243,9 +245,7 @@ void CJimBrownTrend::Deinit(void)
     ReleaseIndicator(_mediumTermTrendHandle);
     ReleaseIndicator(_shortTermTrendHandle);
     ReleaseIndicator(_longTermTimeFrameHandle);
-    ReleaseIndicator(_adxHandle);
-
-    FileClose(_fileHandle);
+    ReleaseIndicator(_adxHandle);    
 }
 
 void CJimBrownTrend::Processing(void)
@@ -403,11 +403,7 @@ void CJimBrownTrend::CheckToMoveShortPositionToBreakEven()
 
 void CJimBrownTrend::NewBarAndNoCurrentPositions()
 {
-    int count = CopyBuffer(_platinumHandle, 0, 0, _inpSlowPlatinum, _macdData);
-    if (count == -1) {
-        Print("Error copying MACD data.");
-        return;
-    }
+    int count;
 
     count = CopyBuffer(_platinumHandle, 2, 0, _inpSlowPlatinum, _platinumUpCrossData);
     if (count == -1) {
@@ -430,6 +426,12 @@ void CJimBrownTrend::NewBarAndNoCurrentPositions()
     count = CopyBuffer(_qmpFilterHandle, 1, 0, 2, _qmpFilterDownData);
     if (count == -1) {
         Print("Error copying QMP Filter data for down buffer.");
+        return;
+    }
+
+    count = CopyBuffer(_platinumHandle, 0, 0, _inpSlowPlatinum, _macdData);
+    if (count == -1) {
+        Print("Error copying MACD data.");
         return;
     }
 
@@ -561,10 +563,6 @@ void CJimBrownTrend::WritePerformanceToFile()
 
 bool CJimBrownTrend::HasBullishSignal()
 {
-    //CheckSignal();
-    //bool basicSignal = _sig == "Buy";
-    //
-    //if (basicSignal) {
     if (GetTrendDirection(1) != "Up") {
         return false;
     }
@@ -631,10 +629,6 @@ bool CJimBrownTrend::HasBullishSignal()
 
 bool CJimBrownTrend::HasBearishSignal()
 {
-    //CheckSignal();
-    //bool basicSignal = _sig == "Sell";
-    //
-    //if (basicSignal) {
     if (GetTrendDirection(1) != "Dn") {
         return false;
     }

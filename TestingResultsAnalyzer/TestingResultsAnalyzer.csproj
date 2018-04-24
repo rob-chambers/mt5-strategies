@@ -58,7 +58,11 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
+    <Compile Include="Commands\FilterClearCommand.cs" />
+    <Compile Include="Commands\FilterWorstTradesCommand.cs" />
+    <Compile Include="Commands\FilterTopTradesCommand.cs" />
     <Compile Include="Commands\OpenFileCommand.cs" />
+    <Compile Include="Commands\FilterBestTradesCommand.cs" />
     <Compile Include="Commands\ShowFilteredTradesCommand.cs" />
     <Compile Include="DirectionConverter.cs" />
     <Compile Include="Enums.cs" />

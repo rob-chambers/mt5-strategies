@@ -907,7 +907,6 @@ double CMyExpertBase::CalculateStopLossLevelForBuyOrder()
             stopLossLevel = _prices[1].low - _adjustedPoints * pips;
             priceFromStop = (_currentAsk - stopLossLevel) / (_Point * _digits_adjust);
 
-            Print("Price from stop: ", priceFromStop);
             if (priceFromStop < stopLevelPips) {
                 printf("calculated stop too close to price.  adjusting from %f to %f", priceFromStop, stopLevelPips);
                 stopLossPipsFinal = stopLevelPips;
