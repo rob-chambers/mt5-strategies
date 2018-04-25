@@ -64,6 +64,8 @@
     <Compile Include="Commands\OpenFileCommand.cs" />
     <Compile Include="Commands\FilterBestTradesCommand.cs" />
     <Compile Include="Commands\ShowFilteredTradesCommand.cs" />
+    <Compile Include="Comparers\WorstLossesComparer.cs" />
+    <Compile Include="Comparers\TopProfitComparer.cs" />
     <Compile Include="DirectionConverter.cs" />
     <Compile Include="Enums.cs" />
     <Compile Include="FilterSummaryWindow.xaml.cs">

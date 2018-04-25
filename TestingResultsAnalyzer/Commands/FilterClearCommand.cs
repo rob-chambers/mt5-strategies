@@ -34,11 +34,7 @@ namespace TestingResultsAnalyzer.Commands
 
         public void Execute(object parameter)
         {
-            _mainViewModel.Trades.Clear();
-            foreach (var trade in _mainViewModel.OriginalTrades)
-            {
-                _mainViewModel.Trades.Add(trade);
-            }
+            _mainViewModel.TopTradesFilter = TopTradesFilter.Off;
         }
     }
 }

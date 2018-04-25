@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using TestingResultsAnalyzer.ViewModels;
+﻿using TestingResultsAnalyzer.ViewModels;
 
 namespace TestingResultsAnalyzer.Commands
 {
@@ -11,12 +8,6 @@ namespace TestingResultsAnalyzer.Commands
         {
         }
 
-        protected override IEnumerable<TradeViewModel> GetFilteredTrades(int limit)
-        {
-            return _mainViewModel.OriginalTrades
-                .Where(x => x.Profit <= 0)
-                .OrderBy(x => x.Profit)
-                .Take(limit);
-        }
+        protected override TopTradesFilter Type => TopTradesFilter.Worst;
     }
 }

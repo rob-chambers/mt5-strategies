@@ -9,7 +9,6 @@ namespace TestingResultsAnalyzer.ViewModels
     public class MainViewModel : ViewModelBase
     {
         private readonly TradeCollection _trades;
-        private readonly TradeCollection _originalTrades;        
         private readonly ObservableCollection<FilterViewModel> _filters;
         private readonly OpenFileCommand _openFileCommand;
         private readonly FilterBestTradesCommand _filterBestTradesCommand;
@@ -21,6 +20,7 @@ namespace TestingResultsAnalyzer.ViewModels
         private string _title;
         private FilterViewModel _selectedFilter;
         private string _filterMax;
+        private TopTradesFilter _topTradesFilter;
 
         public MainViewModel()
         {
@@ -30,7 +30,6 @@ namespace TestingResultsAnalyzer.ViewModels
             _filterClearCommand = new FilterClearCommand(this);
 
             _trades = new TradeCollection();
-            _originalTrades = new TradeCollection();
             _filters = new ObservableCollection<FilterViewModel>();
             Title = "Testing Results Analyzer";
             InitFilters();
@@ -38,8 +37,6 @@ namespace TestingResultsAnalyzer.ViewModels
         }
 
         public TradeCollection Trades { get => _trades; }
-
-        public TradeCollection OriginalTrades { get => _originalTrades; }
 
         public ObservableCollection<FilterViewModel> Filters { get => _filters; }
 
@@ -80,6 +77,17 @@ namespace TestingResultsAnalyzer.ViewModels
                 if (_isEnabled == value) return;
                 _isEnabled = value;
                 OnPropertyChanged(nameof(IsEnabled));
+            }
+        }
+                
+        public TopTradesFilter TopTradesFilter
+        {
+            get { return _topTradesFilter; }
+            set
+            {
+                if (_topTradesFilter == value) return;
+                _topTradesFilter = value;
+                OnPropertyChanged(nameof(TopTradesFilter));
             }
         }
 

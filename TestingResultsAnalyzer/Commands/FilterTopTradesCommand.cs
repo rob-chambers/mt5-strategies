@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Windows.Input;
 using TestingResultsAnalyzer.ViewModels;
@@ -19,7 +18,10 @@ namespace TestingResultsAnalyzer.Commands
             _mainViewModel.PropertyChanged += OnMainViewModelPropertyChanged;
         }
 
-        protected abstract IEnumerable<TradeViewModel> GetFilteredTrades(int limit);
+        protected abstract TopTradesFilter Type
+        {
+            get;
+        }
 
         private void OnMainViewModelPropertyChanged(object sender, PropertyChangedEventArgs e)
         {
@@ -37,22 +39,7 @@ namespace TestingResultsAnalyzer.Commands
 
         public void Execute(object parameter)
         {
-            var limit = GetFilterLimit();
-            _mainViewModel.Trades.Clear();
-            foreach (var trade in GetFilteredTrades(GetFilterLimit()))
-            {
-                _mainViewModel.Trades.Add(trade);
-            }
-        }        
-
-        private int GetFilterLimit()
-        {
-            if (!int.TryParse(_mainViewModel.FilterMax, out int limit))
-            {
-                return 0;
-            }
-
-            return limit;
+            _mainViewModel.TopTradesFilter = Type;
         }
     }
 }

@@ -17,8 +17,4 @@
     <Compile Include="Scripts\CalcLotSize.cpp" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Indicators\" />
-  </ItemGroup>
-
 </Project>
