@@ -215,13 +215,14 @@ int CJimBrownTrend::Init(
         _trend = "X";
         _sig = "Start";
 
-        string FileName = Symbol() + " " + IntegerToString(PeriodSeconds() / 60) + ".csv";
-        _fileHandle = FileOpen(FileName, FILE_WRITE | FILE_ANSI | FILE_CSV, ",");
+        string fileName = Symbol() + " " + IntegerToString(PeriodSeconds() / 60) + ".csv";
+        _fileHandle = FileOpen(fileName, FILE_WRITE | FILE_ANSI | FILE_CSV, ",");
         if (_fileHandle == INVALID_HANDLE) {
             Alert("Error opening file for writing");
             return(INIT_FAILED);
         }
 
+        Print("File name: ", fileName);
         FileWrite(_fileHandle, "Deal", "Entry Time", "S/L", "Entry", "Exit Time", "Exit", "Profit", "MA50", "MA100", "MA240", "MACD", "H4 MA 0", "H4 RSI 0", "H4 MA 1", "H4 RSI 1",
             "Signal Bar Low", "Signal Bar High", "Up Cross Recent Index","Up Cross Prior Index", "Up Cross Recent Value", "Up Cross Prior Value", "Up Cross Recent Price", "Up Cross Prior Price",
             "Down Cross Recent Index", "Down Cross Prior Index", "Down Cross Recent Value", "Down Cross Prior Value", "Down Cross Recent Price", "Down Cross Prior Price", "ADX");
