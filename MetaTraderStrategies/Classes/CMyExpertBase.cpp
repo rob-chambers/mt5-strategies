@@ -21,6 +21,18 @@ enum LOTSIZING_RULE
     Dynamic
 };
 
+//--- constants of identification of trend
+enum TREND_TYPE
+{
+    TREND_TYPE_HARD_DOWN = 0,   // strong down trend
+    TREND_TYPE_DOWN = 1,        // down trend
+    TREND_TYPE_SOFT_DOWN = 2,   // weak down trend
+    TREND_TYPE_FLAT = 3,        // no trend
+    TREND_TYPE_SOFT_UP = 4,     // weak up trend
+    TREND_TYPE_UP = 5,          // up trend
+    TREND_TYPE_HARD_UP = 6      // strong up trend
+};
+
 class CMyExpertBase
 {
 public:
