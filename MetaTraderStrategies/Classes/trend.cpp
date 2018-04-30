@@ -35,6 +35,11 @@ input int       _inpMaxTradingHour = 0;                             // The maxim
 // Technical parameters
 input int       _inpLongTermPeriod = 70;                            // The number of bars on the long term timeframe used to determine the trend
 input int       _inpShortTermPeriod = 25;                           // The number of bars on the short term timeframe used to determine the trend
+input double    _inpShortTermTrendRejectionMultiplier = 1.5;
+
+input double    _inpStrongTrendThreshold = 2;
+input double    _inpStandardTrendThreshold = 0.4;
+input double    _inpWeakTrendThreshold = 0.2;
 
 CTrend derived;
 
@@ -63,7 +68,11 @@ int OnInit()
         _inpMinTradingHour,
         _inpMaxTradingHour,
         _inpLongTermPeriod,
-        _inpShortTermPeriod
+        _inpShortTermPeriod,
+        _inpShortTermTrendRejectionMultiplier,
+        _inpStrongTrendThreshold,
+        _inpStandardTrendThreshold,
+        _inpWeakTrendThreshold
     );
 }
 //+------------------------------------------------------------------+
@@ -80,4 +89,12 @@ void OnDeinit(const int reason)
 void OnTick()
 {
     derived.Processing();
+}
+
+//+------------------------------------------------------------------+
+//| Expert trade event
+//+------------------------------------------------------------------+
+void OnTrade()
+{
+    derived.OnTrade();
 }

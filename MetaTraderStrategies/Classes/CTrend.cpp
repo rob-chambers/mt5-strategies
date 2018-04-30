@@ -26,7 +26,11 @@ public:
         int             inpMinTradingHour = 0,
         int             inpMaxTradingHour = 0,
         int             inpLongTermPeriod = 70,
-        int             inpShortTermPeriod = 25
+        int             inpShortTermPeriod = 25,
+        double          inpShortTermTrendRejectionMultiplier = 1.5,
+        double          inpStrongTrendThreshold = 2,
+        double          inpStandardTrendThreshold = 0.4,
+        double          inpWeakTrendThreshold = 0.2
     );
     virtual void              Deinit(void);
     virtual void              Processing(void);
@@ -45,6 +49,10 @@ private:
     int _shortTermTrendHandle;
     int _shortTermATRHandle;
     int _longTermATRHandle;
+    double _inpShortTermTrendRejectionMultiplier;
+    double _inpStrongTrendThreshold;
+    double _inpStandardTrendThreshold;
+    double _inpWeakTrendThreshold;
 
     double _longTermTimeFrameData[];
     double _longTermTrendData[];
@@ -53,11 +61,6 @@ private:
     double _shortTermATRData[];
     double _longTermATRData[];
 
-    double _recentHigh;                 // Tracking the most recent high for stop management
-    double _recentLow;                  // Tracking the most recent low for stop management
-
-    void CheckToMoveLongPositionToBreakEven();
-    void CheckToMoveShortPositionToBreakEven();
     TREND_TYPE LongTermTrend();
     TREND_TYPE ShortTermTrend();
     TREND_TYPE Trend(double recentValue, double priorValue, double recentATR, double priorATR);
@@ -94,7 +97,11 @@ int CTrend::Init(
     int             inpMinTradingHour,
     int             inpMaxTradingHour,
     int             inpLongTermPeriod,
-    int             inpShortTermPeriod
+    int             inpShortTermPeriod,
+    double          inpShortTermTrendRejectionMultiplier,
+    double          inpStrongTrendThreshold,
+    double          inpStandardTrendThreshold,
+    double          inpWeakTrendThreshold
 )
 {
     Print("In derived class CTrend OnInit");
@@ -152,6 +159,25 @@ int CTrend::Init(
 
         _inpLongTermPeriod = inpLongTermPeriod;
         _inpShortTermPeriod = inpShortTermPeriod;
+
+        if (inpShortTermTrendRejectionMultiplier < 0.5 || inpShortTermTrendRejectionMultiplier > 4) {
+            Print("Invalid value for inpShortTermTrendRejectionMultiplier: must be between 0.5 and 4");
+            return(INIT_FAILED);
+        }
+
+        _inpShortTermTrendRejectionMultiplier = inpShortTermTrendRejectionMultiplier;
+
+        if (inpStrongTrendThreshold > inpStandardTrendThreshold && inpStandardTrendThreshold > inpWeakTrendThreshold && inpWeakTrendThreshold > 0)
+        {
+            _inpStrongTrendThreshold = inpStrongTrendThreshold;
+            _inpStandardTrendThreshold = inpStandardTrendThreshold;
+            _inpWeakTrendThreshold = inpWeakTrendThreshold;
+        }
+        else
+        {
+            Print("Invalid value(s) for trend thresholds");
+            return(INIT_FAILED);
+        }
     }
 
     return retCode;
@@ -260,7 +286,7 @@ Slope of short-term 15M MA is flat or rising
         _prices[1].high > _longTermTrendData[1])
     {
         TREND_TYPE longTrend = LongTermTrend();
-        Print("Long term trend determined to be: ", GetTrendDescription(longTrend));
+        Print("For special case, Long term trend determined to be: ", GetTrendDescription(longTrend));
         switch (longTrend)
         {
             case TREND_TYPE_UP:
@@ -374,107 +400,6 @@ bool CTrend::HasBearishSignal()
     return true;
 }
 
-void CTrend::CheckToMoveLongPositionToBreakEven()
-{
-    if (!_inpMoveToBreakEven) {
-        return;
-    }
-
-    if (!(_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh)) {
-        return;
-    }
-
-    _recentHigh = _prices[1].high;
-
-    if (_alreadyMovedToBreakEven) {
-        return;
-    }
-
-    double breakEvenPoint = 0;
-    double initialRisk = _position.PriceOpen() - _initialStop;
-    breakEvenPoint = _position.PriceOpen() + initialRisk;
-
-    if (_currentAsk <= breakEvenPoint) {
-        return;
-    }
-
-    printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
-    double newStop = _position.PriceOpen();
-
-    double sl = NormalizeDouble(newStop, _symbol.Digits());
-    double tp = _position.TakeProfit();
-    double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
-
-    if (_position.StopLoss() < sl || _position.StopLoss() == 0.0) {
-        double diff = (_currentAsk - sl) / _adjustedPoints;
-        if (diff < stopLevelPips) {
-            printf("Can't set new stop that close to the current price.  Ask = %f, new stop = %f, stop level = %f, diff = %f",
-                _currentAsk, sl, stopLevelPips, diff);
-
-            sl = _currentAsk - stopLevelPips * _adjustedPoints;
-        }
-
-        //--- modify position
-        if (!_trade.PositionModify(Symbol(), sl, tp)) {
-            printf("Error modifying position for %s : '%s'", Symbol(), _trade.ResultComment());
-            printf("Modify parameters : SL=%f,TP=%f", sl, tp);
-        }
-
-        _alreadyMovedToBreakEven = true;
-    }
-
-}
-
-void CTrend::CheckToMoveShortPositionToBreakEven()
-{
-    if (!_inpMoveToBreakEven) {
-        return;
-    }
-
-    if (!(_prices[1].low < _prices[2].low && _prices[1].low < _recentLow)) {
-        return;
-    }
-
-    _recentLow = _prices[1].low;
-
-    if (_alreadyMovedToBreakEven) {
-        return;
-    }
-
-    double breakEvenPoint = 0;
-    double initialRisk = _initialStop - _position.PriceOpen();
-    breakEvenPoint = _position.PriceOpen() - initialRisk;
-
-    if (_currentAsk > breakEvenPoint) {
-        return;
-    }
-
-    printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
-    double newStop = _position.PriceOpen();
-
-    double sl = NormalizeDouble(newStop, _symbol.Digits());
-    double tp = _position.TakeProfit();
-    double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
-
-    if (_position.StopLoss() > sl || _position.StopLoss() == 0.0) {
-        double diff = (sl - _currentBid) / _adjustedPoints;
-        if (diff < stopLevelPips) {
-            printf("Can't set new stop that close to the current price.  Ask = %f, new stop = %f, stop level = %f, diff = %f",
-                _currentAsk, sl, stopLevelPips, diff);
-
-            sl = _currentBid + stopLevelPips * _adjustedPoints;
-        }
-
-        //--- modify position
-        if (!_trade.PositionModify(Symbol(), sl, tp)) {
-            printf("Error modifying position for %s : '%s'", Symbol(), _trade.ResultComment());
-            printf("Modify parameters : SL=%f,TP=%f", sl, tp);
-        }
-
-        _alreadyMovedToBreakEven = true;
-    }
-}
-
 TREND_TYPE CTrend::LongTermTrend() 
 {
     double recentATR = _longTermATRData[0];
@@ -538,27 +463,27 @@ TREND_TYPE CTrend::Trend(double recentValue, double priorValue, double recentATR
 
     Print("Recent = ", recentValue, ", Prior = ", priorValue, ", Diff = ", diff, ", recentATR = ", recentATR, ", priorATR = ", priorATR, ", ratio = ", ratio);
 
-    if (ratio >= 3)
+    if (ratio >= _inpStrongTrendThreshold)
     {
         trend = TREND_TYPE_HARD_UP;
     }
-    else if (ratio >= 1)
+    else if (ratio >= _inpStandardTrendThreshold)
     {
         trend = TREND_TYPE_UP;
     }
-    else if (ratio >= 0.5)
+    else if (ratio >= _inpWeakTrendThreshold)
     {
         trend = TREND_TYPE_SOFT_UP;
     }
-    else if (ratio <= -3)
+    else if (ratio <= -_inpWeakTrendThreshold)
     {
         trend = TREND_TYPE_HARD_DOWN;
     }
-    else if (ratio <= -1)
+    else if (ratio <= -_inpStandardTrendThreshold)
     {
         trend = TREND_TYPE_DOWN;
     }
-    else if (ratio <= -0.5)
+    else if (ratio <= -_inpStrongTrendThreshold)
     {
         trend = TREND_TYPE_SOFT_DOWN;
     }
@@ -576,7 +501,7 @@ bool CTrend::HadRecentHigh()
         }
     }
 
-    if (highest - _prices[1].close > _atrData[0] * 1.5) {
+    if (highest - _prices[1].close > _atrData[0] * _inpShortTermTrendRejectionMultiplier) {
         Print("Signal rejected.  Had a recent high of ", highest);
         return true;
     }
@@ -594,7 +519,7 @@ bool CTrend::HadRecentLow()
         }
     }
 
-    if (_prices[1].close - lowest > _atrData[0] * 1.5) {
+    if (_prices[1].close - lowest > _atrData[0] * _inpShortTermTrendRejectionMultiplier) {
         Print("Signal rejected.  Had a recent low of ", lowest);
         return true;
     }

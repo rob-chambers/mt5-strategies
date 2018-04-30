@@ -13,6 +13,7 @@ enum STOPLOSS_RULE
     PreviousBar2Pips,
     CurrentBar5Pips,
     CurrentBarNPips,
+    ShortTermHighLow
 };
 
 enum LOTSIZING_RULE
@@ -96,6 +97,8 @@ protected:
     bool _alreadyMovedToBreakEven;
     double _initialStop;
     bool _trailingStarted;
+    double _recentTurningPoint;
+    bool _hadRecentTurningPoint;
 
     virtual bool CheckToModifyPositions();
     void ReleaseIndicator(int& handle);
@@ -307,6 +310,8 @@ void CMyExpertBase::ResetState()
     _previousOrderTotal = 0;
     _eventCount = 0;
     _trailingStarted = false;
+    _recentTurningPoint = 0;
+    _hadRecentTurningPoint = false;
 }
 
 void CMyExpertBase::ReleaseIndicator(int& handle) {
@@ -345,7 +350,6 @@ void CMyExpertBase::Processing(void)
     // -------------------- EXITS --------------------
     if (PositionSelect(_Symbol) == true) // We have an open position
     {
-        _barsSincePositionOpened++;
         CheckToModifyPositions();
     }
 
@@ -364,6 +368,10 @@ void CMyExpertBase::Processing(void)
         }
 
         numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 40, _prices);
+        if (numberOfPriceDataPoints == -1) {
+            Print("Error copying rates during processing.");
+            return;
+        }
 
         /*if (_inpTakeProfitPips < stopLevelPips) {
             takeProfitPipsFinal = stopLevelPips;
@@ -433,6 +441,7 @@ void CMyExpertBase::OnTrade(void)
 
     // The OnTrade event fires multiples times.  We're only interested in handling it on the third time.
     if (_eventCount < 3) return;
+    _eventCount = 0;
 
     if (PositionSelect(_Symbol) == true) { // We have an open position
         _currentPositionType = _position.PositionType();
@@ -449,6 +458,7 @@ void CMyExpertBase::OnTrade(void)
 
     int ordersTotal = HistoryOrdersTotal();
     if (ordersTotal <= 0) {
+        Print("Orders total was 0");
         return;
     }
 
@@ -461,10 +471,12 @@ void CMyExpertBase::OnTrade(void)
 
     long orderState = HistoryOrderGetInteger(ticket, ORDER_STATE);
     if (orderState != ORDER_STATE_FILLED) {
+        Print("Order state was not filled");
         return;
     }
 
     if (HistoryOrderGetString(ticket, ORDER_SYMBOL) != _symbol.Name()) {
+        Print("Order was for a different pair");
         return;
     }
 
@@ -512,6 +524,7 @@ void CMyExpertBase::OnTrade(void)
     }
 
     if (reset) {
+        //Print("Resetting");
         _lastClosedPositionTime = TimeCurrent();
         ResetState();
         OnRecentlyClosedTrade();
@@ -604,24 +617,56 @@ bool CMyExpertBase::LongModified()
     //    return false;
     //}
 
-    if (!(_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh)) {
-        return false;
+    // Are we making higher highs?
+    if (_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh) {
+        _recentHigh = _prices[1].high;
+        _recentTurningPoint = _prices[1].low;
+        _hadRecentTurningPoint = false;
     }
+    else {        
+        // Filter on _barsSincePositionOpened to give the position time to "breathe" (i.e. avoid moving SL too early after initial SL)
+        if (_inpTrailingStopLossRule == ShortTermHighLow && !_hadRecentTurningPoint) {
 
-    _recentHigh = _prices[1].high;
+            // For this SL rule we only operate after a new bar forms
+            if (IsNewBar(iTime(0))) {
+                _barsSincePositionOpened++;
+                //Print("New bar found: ", _barsSincePositionOpened);
+            }
+            else {
+                return false;
+            }
 
-    double breakEvenPoint = 0;
-    if (!_trailingStarted) {
-        double initialRisk = _position.PriceOpen() - _initialStop;
-        breakEvenPoint = _position.PriceOpen() + initialRisk;
+            if (_barsSincePositionOpened < 3) return false;
 
-        if (_currentAsk <= breakEvenPoint) {
+            if (_prices[1].low < _recentTurningPoint && _prices[1].high < _recentHigh) {
+                //Print("STH found: ", _recentHigh);
+
+                // We have a short term high (STH).  Set SL to the low of the STH bar plus a margin
+                newStop = _recentTurningPoint - _adjustedPoints * 6;
+                _hadRecentTurningPoint = true;
+            }
+            else {
+                // No new STH - nothing to do
+                return false;
+            }
+        }
+        else {
             return false;
         }
-
-        Print("Initiating trailing as we have hit breakeven");
-        _trailingStarted = true;
     }
+
+    double breakEvenPoint = 0;
+    //if (!_trailingStarted) {
+    double initialRisk = _position.PriceOpen() - _initialStop;
+    breakEvenPoint = _position.PriceOpen() + initialRisk;
+
+    //    if (_currentAsk <= breakEvenPoint) {
+    //        return false;
+    //    }
+
+    //    Print("Initiating trailing as we have hit breakeven");
+    //    _trailingStarted = true;
+    //}
 
     switch (_inpTrailingStopLossRule) {
         case StaticPipsValue:
@@ -658,7 +703,7 @@ bool CMyExpertBase::LongModified()
 
     // Check if we should move to breakeven
     //double risk;
-    if (!_alreadyMovedToBreakEven) {
+    if (_inpMoveToBreakEven && !_alreadyMovedToBreakEven) {
         //risk = _position.PriceOpen() - _initialStop;
         //double breakEvenPoint = _position.PriceOpen() + risk;
         //    
@@ -720,17 +765,17 @@ bool CMyExpertBase::ShortModified()
     _recentLow = _prices[1].low;
 
     double breakEvenPoint = 0;
-    if (!_trailingStarted) {
-        double risk = _initialStop - _position.PriceOpen();
-        breakEvenPoint = _position.PriceOpen() - risk;
+    //if (!_trailingStarted) {
+    //    double risk = _initialStop - _position.PriceOpen();
+    //    breakEvenPoint = _position.PriceOpen() - risk;
 
-        if (_currentAsk > breakEvenPoint) {
-            return false;
-        }
+    //    if (_currentAsk > breakEvenPoint) {
+    //        return false;
+    //    }
 
-        Print("Initiating trailing as we have hit breakeven");
-        _trailingStarted = true;
-    }
+    //    Print("Initiating trailing as we have hit breakeven");
+    //    _trailingStarted = true;
+    //}
 
     switch (_inpTrailingStopLossRule) {
         case StaticPipsValue:
@@ -759,7 +804,7 @@ bool CMyExpertBase::ShortModified()
     }
 
     // Check if we should move to breakeven        
-    if (!_alreadyMovedToBreakEven) {
+    if (_inpMoveToBreakEven && !_alreadyMovedToBreakEven) {
         //double risk = _initialStop - _position.PriceOpen();
         //double breakEvenPoint = _position.PriceOpen() - risk;
         if (_currentAsk < breakEvenPoint) {
