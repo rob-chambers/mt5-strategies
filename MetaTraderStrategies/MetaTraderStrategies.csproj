@@ -6,15 +6,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="Scripts\CalcLotSize.cpp" />
-    <None Remove="Scripts\CalcLotSize2.cpp" />
-    <None Remove="Scripts\WriteTradeHistory.cpp" />
+    <None Remove="MT5\Scripts\CalcLotSize.cpp" />
+    <None Remove="MT5\Scripts\CalcLotSize2.cpp" />
+    <None Remove="MT5\Scripts\WriteTradeHistory.cpp" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="Scripts\WriteTradeHistory.cpp" />
-    <Compile Include="Scripts\CalcLotSize2.cpp" />
-    <Compile Include="Scripts\CalcLotSize.cpp" />
+    <Compile Include="MT5\Scripts\WriteTradeHistory.cpp" />
+    <Compile Include="MT5\Scripts\CalcLotSize2.cpp" />
+    <Compile Include="MT5\Scripts\CalcLotSize.cpp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="MT4\Indicators\" />
   </ItemGroup>
 
 </Project>
