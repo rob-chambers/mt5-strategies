@@ -17,8 +17,4 @@
     <Compile Include="MT5\Scripts\CalcLotSize.cpp" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="MT4\Indicators\" />
-  </ItemGroup>
-
 </Project>

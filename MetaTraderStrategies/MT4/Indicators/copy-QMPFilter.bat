@@ -1,0 +1,1 @@
+copy "QMP Filter 1.02.cpp" "C:\Users\rob\AppData\Roaming\MetaQuotes\Terminal\7D024799C00A011848A10ECEDFE5CBC2\MQL4\Indicators\QMP Filter 1.02.mq4"

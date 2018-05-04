@@ -5,7 +5,7 @@
 //+------------------------------------------------------------------+
 #property copyright     "Programmed by Christina Li, Wise-EA MetaTrader Programming"
 #property link          "www.wix.com/wiseea/wise-ea#! "
-#property version       "1.01"
+#property version       "1.02"
 #property description   "Copyright Jim Brown"
 #property description   "Updated on 05/23/2014"
 #property description   "Initial version, an indicator signals based on MACD Platinum & QQE on multiple time frames"
@@ -28,6 +28,9 @@ input int    Smooth_Platinum          = 9;
 input int    SF                       = 1;
 input int    RSI_Period               = 8;
 input int    WP                       = 3;
+input string AlertSound               = "alert.wav";
+input bool   AlertEnabled             = true;
+
 //+------------------------------------------------------------------+
 //| Global variabels                                                 |
 //+------------------------------------------------------------------+
@@ -85,11 +88,21 @@ int OnCalculate (const int rates_total,
         {
          trend="Up";
          up[i]=Low[i]-atr/2;
+         if (AlertEnabled && isNewBar(Time[i])) {
+             Comment("QMP Filter Long Signal");
+             Print("QMP Filter Long Signal");
+             PlaySound(AlertSound);
+         }
         }
       else if (i>0 && trend!="Dn" && dir(0,i)=="Dn") 
         {
          trend="Dn";
          dn[i]=High[i]+atr/2;
+         if (AlertEnabled && isNewBar(Time[i])) {
+             Comment("QMP Filter Short Signal");
+             Print("QMP Filter Short Signal");
+             PlaySound(AlertSound);
+         }
         }
       //----
       if (HigherTimeFrame>0 && HigherTimeFrame>Period())
