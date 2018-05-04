@@ -3,7 +3,7 @@
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright     "Copyright 2018, Robert Chambers"
-#property version       "1.20"
+#property version       "1.30"
 #property description   "Lot Size Calculator"
 
 /* Revision History 
@@ -12,6 +12,7 @@
         * Removed print statements used for debugging
 
 1.20    * Added new enter trade button for quickly getting in based on the last signal
+1.30    * Display lot size based on automatic stop loss
 */
 
 
@@ -115,7 +116,7 @@ int OnInit() {
         _inputStopPrice.SetString(OBJPROP_TEXT, defaultText);
         _inputStopPrice.SetInteger(OBJPROP_SELECTED, true);
         
-        ChartRedraw(0);
+        DisplayLotSize();
     }
 
     return(INIT_SUCCEEDED);
@@ -182,32 +183,7 @@ void OnChartEvent(
 {
     if (id == CHARTEVENT_OBJECT_ENDEDIT && sparam == "_inputStopPrice")
     {
-        string message;
-
-        if (!_symbol.RefreshRates()) {
-            message = "Couldn't get latest prices.";
-        }
-        else {            
-            double stopLoss = StringToDouble(_inputStopPrice.GetString(OBJPROP_TEXT));
-            double price = _symbol.Ask();
-            if (stopLoss > price) {
-                price = _symbol.Bid();
-            }
-
-            double sl = NormalizeDouble(stopLoss, _Digits);
-            double lotSize;
-            if (sl < price) {
-                lotSize = _fixedRisk.CheckOpenLong(price, sl);
-            }
-            else {
-                lotSize = _fixedRisk.CheckOpenShort(price, sl);
-            }
-
-            message = "Lot size should be: " + (string)lotSize;
-        }
-
-        _lotSizeLabel.SetString(OBJPROP_TEXT, message);
-        ChartRedraw(0);
+        DisplayLotSize();
     }
     else if (sparam == EnterButtonName)
     {
@@ -290,5 +266,34 @@ void OpenPosition(string symbol, ENUM_ORDER_TYPE orderType, double volume, doubl
             ResetLastError();
             return;
         }
+    }
+}
+
+void DisplayLotSize()
+{
+    string message;
+
+    if (!_symbol.RefreshRates()) {
+        message = "Couldn't get latest prices.";
+    }
+    else {
+        double stopLoss = StringToDouble(_inputStopPrice.GetString(OBJPROP_TEXT));
+        double price = _symbol.Ask();
+        if (stopLoss > price) {
+            price = _symbol.Bid();
+        }
+
+        double sl = NormalizeDouble(stopLoss, _Digits);
+        double lotSize;
+        if (sl < price) {
+            lotSize = _fixedRisk.CheckOpenLong(price, sl);
+        }
+        else {
+            lotSize = _fixedRisk.CheckOpenShort(price, sl);
+        }
+
+        message = "Lot size should be: " + (string)lotSize;
+        _lotSizeLabel.SetString(OBJPROP_TEXT, message);
+        ChartRedraw(0);
     }
 }
