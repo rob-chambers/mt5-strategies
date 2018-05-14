@@ -51,6 +51,10 @@ input bool      _inpAlertEmailEnabled = false;                      // Whether t
 input int       _inpMinTradingHour = 0;                             // The minimum hour of the day to trade (e.g. 7 for 7am)
 input int       _inpMaxTradingHour = 0;                             // The maximum hour of the day to trade (e.g. 19 for 7pm)
 
+// Martingale parameters
+input bool      _inpUseMartingale = true;                           // Whether to double down after a losing trade or not
+input int       _inpMartingalePeriod = 20;                          // The maximum number of bars after a losing trade to use the Martingale system
+
 // Technical parameters
 input int       _inpLongTermPeriod = 70;                            // The number of bars on the long term timeframe used to determine the trend
 input int       _inpShortTermPeriod = 25;                           // The number of bars on the short term timeframe used to determine the trend
@@ -105,12 +109,15 @@ datetime _barTime;                  // For detection of a new bar
 double _recentHigh;                 // Tracking the most recent high for stop management
 double _recentLow;                  // Tracking the most recent low for stop management
 int _barsSincePositionOpened;       // Counter of the number of bars since a position was opened
+int _barsSincePositionClosed;       // Counter of the number of bars since a position was closed
 int _GetLastError;                  // Error code
 ulong _lastOrderTicket;             // Ticket of the last processed order
 int _eventCount;                    // Counter for OnTrade event
 int _currentPositionType;           // The current type of position (long/short)
 CMoneyFixedRisk _fixedRisk;         // Fixed risk money management class
 bool _isNewBar;                     // A flag to indicate if this tick is the start of a new bar
+int _losingTradeCount = 0;          // Counter of the number of consecutive losing trades 
+
 
 //+------------------------------------------------------------------+
 //| Expert initialisation function                                   |
@@ -233,6 +240,7 @@ void OnTick()
     // -------------------- ENTRIES --------------------  
     if (PositionSelect(_Symbol) == false) // We have no open positions
     {
+        _barsSincePositionClosed++;
         if (IsOutsideTradingHours()) {
             return;
         }
@@ -250,7 +258,8 @@ void OnTick()
 
         if (_inpGoLong && HasBullishSignal()) {
             stopLossLevel = CalculateStopLossLevelForBuyOrder();
-            lotSize = _fixedRisk.CheckOpenLong(_currentAsk, stopLossLevel);
+            HandleMartingale();
+            lotSize = _fixedRisk.CheckOpenLong(_currentAsk, stopLossLevel);            
             OpenPosition(_Symbol, ORDER_TYPE_BUY, lotSize, _currentAsk, stopLossLevel, 0.0);
         }
         else if (_inpGoShort && HasBearishSignal()) {
@@ -262,6 +271,45 @@ void OnTick()
     else {
         _barsSincePositionOpened++;
     }
+}
+
+void HandleMartingale()
+{
+    if (!_inpUseMartingale) return;
+
+    // Did we have a recently closed position?
+    printf("bars since position closed: %f, losing trade count: %f", _barsSincePositionClosed, _losingTradeCount);
+
+    if (_barsSincePositionClosed <= _inpMartingalePeriod) {
+        if (_losingTradeCount <= 0) {
+            return;
+        }
+
+        int risk = GetFibSeriesNumber(_losingTradeCount + 2);
+        double newRisk = _inpDynamicSizingRiskPerTrade * risk;
+        printf("Increasing risk to %f%% now that we have had %d successive losing trades", newRisk, _losingTradeCount);
+
+        _fixedRisk.Percent(newRisk);
+    }
+    else {
+        Print("Resetting losing trade counter as it's now been too long ago since the last position was closed.");
+        _losingTradeCount = 0;
+        return;
+    }
+}
+
+int GetFibSeriesNumber(int n)
+{
+    int i, t1 = 0, t2 = 1, nextTerm;
+
+    for (i = 1; i <= n; ++i)
+    {
+        nextTerm = t1 + t2;
+        t1 = t2;
+        t2 = nextTerm;
+    }
+
+    return t1;
 }
 
 void CheckTrend()
@@ -347,9 +395,77 @@ void OnTrade()
         reset = true;
     }
 
-    if (reset) {
+    if (_inpUseMartingale) {
+        if (LastTradeMadeProfit()) {
+            _losingTradeCount = 0;
+        }
+        else {
+            _losingTradeCount++;
+        }
+    }
+
+    if (reset) {        
         ResetState();
     }
+}
+
+bool LastTradeMadeProfit()
+{
+    int days = 14; // Assume a position is never held longer than 14 days
+    int minutes = 60 * 24 * days;
+    datetime to = TimeCurrent();
+    datetime from = to - 60 * minutes;
+
+    if (!HistorySelect(from, to)) {
+        Print("Failed to retrieve history for deals");
+    }
+
+    int dealsTotal = HistoryDealsTotal();
+    if (dealsTotal <= 0) {
+        Print("No deals found");
+        return false;
+    }
+
+    for (int dealIndex = dealsTotal - 1; dealIndex >= 0; dealIndex--) {
+        ulong inDeal = HistoryDealGetTicket(dealIndex);
+
+        // type of entry
+        long dealEntry = HistoryDealGetInteger(inDeal, DEAL_ENTRY);
+        if (dealEntry != DEAL_ENTRY_IN) {
+            continue;
+        }
+
+        string inSymbol = HistoryDealGetString(inDeal, DEAL_SYMBOL);
+        datetime entryTime = (datetime)HistoryDealGetInteger(inDeal, DEAL_TIME);
+
+        // Find the corresponding out deal
+        bool foundExit = false;
+        ulong outDeal = 0;
+
+        for (int outDealIndex = dealIndex + 1; outDealIndex < dealsTotal; outDealIndex++) {
+            outDeal = HistoryDealGetTicket(outDealIndex);
+            long exitDealNumber = HistoryDealGetInteger(outDeal, DEAL_TICKET);
+            dealEntry = HistoryDealGetInteger(outDeal, DEAL_ENTRY);
+            if (dealEntry == DEAL_ENTRY_OUT) {
+                string outSymbol = HistoryDealGetString(outDeal, DEAL_SYMBOL);
+                if (inSymbol == outSymbol) {
+                    foundExit = true;
+                    break;
+                }
+            }
+        }
+
+        double profit = 0;
+        if (foundExit) {
+            profit = HistoryDealGetDouble(outDeal, DEAL_PROFIT);
+            Print("Profit from last trade was ", profit);
+            return (profit > 0);
+        } else {
+            Print("Couldn't determine profit from last trade");
+        }
+    }
+
+    return false;
 }
 
 int InitFromBase(
@@ -413,9 +529,7 @@ int InitFromBase(
     if (!_fixedRisk.Init(&_symbol, PERIOD_CURRENT, 1)) {
         Print("Couldn't initialise fixed risk instance");
         return(INIT_FAILED);
-    }
-
-    _fixedRisk.Percent(inpDynamicSizingRiskPerTrade);
+    }    
 
     _alreadyMovedToBreakEven = false;
 
@@ -428,6 +542,7 @@ int InitFromBase(
 
 void ResetState()
 {
+    _fixedRisk.Percent(_inpDynamicSizingRiskPerTrade);
     _currentSignal = "";
     _recentHigh = 0;
     _recentLow = 999999;
@@ -435,6 +550,7 @@ void ResetState()
     _recentSwingHigh = 0;
     _hadRecentSwingHigh = false;
     _initialStop = 0;
+    _barsSincePositionClosed = 0;
 }
 
 void ReleaseIndicator(int& handle) {
@@ -921,7 +1037,7 @@ bool HasBullishSignal()
         _prices[1].high > _shortTermTrendData[1] &&
         _prices[1].close > _shortTermTrendData[1] &&
         _prices[1].high > _mediumTermTrendData[1] &&
-        _prices[1].high > _longTermTrendData[1])
+        _prices[1].close > _longTermTrendData[1])
     {
         TREND_TYPE longTrend = LongTermTrend();
         Print("For special case, Long term trend determined to be: ", GetTrendDescription(longTrend));
