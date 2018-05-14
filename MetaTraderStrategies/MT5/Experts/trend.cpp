@@ -563,7 +563,6 @@ bool LongModified()
 
     // Check if we have got a bearish red signal
     if (_currentSignal == "Dn") {
-        Print("Got a red signal");
         if (_currentAsk <= doubleRiskReward) {
             Print("Moving SL to 11 pips below low of last bar");
             newStop = _prices[1].low - _adjustedPoints * 11;
