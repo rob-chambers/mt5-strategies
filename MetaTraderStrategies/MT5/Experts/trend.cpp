@@ -59,6 +59,7 @@ input int       _inpMartingalePeriod = 20;                          // The maxim
 input int       _inpLongTermPeriod = 70;                            // The number of bars on the long term timeframe used to determine the trend
 input int       _inpShortTermPeriod = 25;                           // The number of bars on the short term timeframe used to determine the trend
 input double    _inpShortTermTrendRejectionMultiplier = 1.5;
+input int       _inpDailyMAPeriod = 9;                              // The daily timeframe MA period
 
 input double    _inpStrongTrendThreshold = 5;
 input double    _inpStandardTrendThreshold = 3;
@@ -68,9 +69,11 @@ input double    _inpWeakTrendThreshold = 1;
 //+------------------------------------------------------------------------------------------------------------------------------+
 //| Private variables                                                                                                            |
 //+------------------------------------------------------------------------------------------------------------------------------+
+
 string _currentSignal;
 
 int _qmpFilterHandle;
+int _platinumHandle;
 int _longTermTimeFrameHandle;
 int _longTermTrendHandle;
 int _mediumTermTrendHandle;
@@ -80,6 +83,8 @@ int _longTermATRHandle;
 
 double _qmpFilterUpData[];
 double _qmpFilterDownData[];
+
+double _macdData[];
 double _longTermTimeFrameData[];
 double _longTermTrendData[];
 double _mediumTermTrendData[];
@@ -117,7 +122,23 @@ int _currentPositionType;           // The current type of position (long/short)
 CMoneyFixedRisk _fixedRisk;         // Fixed risk money management class
 bool _isNewBar;                     // A flag to indicate if this tick is the start of a new bar
 int _losingTradeCount = 0;          // Counter of the number of consecutive losing trades 
+bool _martingaleActive = false;     // A flag to indicate whether we have increased our lot size beyond the default for the current trade
+int _fileHandle;
 
+// Perf data
+int _longTermRsiHandle;
+double _longTermRsiData[];
+
+double _macd;
+string _dailySignal;
+double _dailyMA0, _dailyMA1;
+double _open, _high, _low, _close;
+double _shortTermTrend, _longTermTrend;
+int _upIndex, _downIndex;
+double _longTermRsiDataCurrent, _longTermRsiDataPrior;
+TREND_TYPE _longTimeframeTrend;
+string _signalOnEntry;
+double _highestHigh20, _highestHigh25;
 
 //+------------------------------------------------------------------+
 //| Expert initialisation function                                   |
@@ -131,20 +152,29 @@ int OnInit()
 
         ArraySetAsSeries(_qmpFilterUpData, true);
         ArraySetAsSeries(_qmpFilterDownData, true);
+
+        ArraySetAsSeries(_macdData, true);
         ArraySetAsSeries(_longTermTimeFrameData, true);
         ArraySetAsSeries(_longTermTrendData, true);
         ArraySetAsSeries(_mediumTermTrendData, true);
         ArraySetAsSeries(_shortTermTrendData, true);
         ArraySetAsSeries(_shortTermATRData, true);
         ArraySetAsSeries(_longTermATRData, true);
-
-        _qmpFilterHandle = iCustom(_Symbol, PERIOD_CURRENT, "QMP Filter", PERIOD_CURRENT, 1, 8, 3, true, 1, 8, 3, false, false);
+        ArraySetAsSeries(_longTermRsiData, true);
+        
+        _platinumHandle = iCustom(_Symbol, PERIOD_CURRENT, "MACD_Platinum", 12, 26, 9, true, true, false, false);
+        if (_platinumHandle == INVALID_HANDLE) {
+            Print("Error creating MACD Platinum indicator");
+            return(INIT_FAILED);
+        }
+        
+        _qmpFilterHandle = iCustom(_Symbol, PERIOD_CURRENT, "QMP Filter", PERIOD_CURRENT, 12, 26, 9, true, 1, 8, 3, false, false);
         if (_qmpFilterHandle == INVALID_HANDLE) {
             Print("Error creating QMP Filter indicator");
             return(INIT_FAILED);
         }
 
-        _longTermTimeFrameHandle = iMA(_Symbol, PERIOD_H4, 240, 0, MODE_LWMA, PRICE_CLOSE);
+        _longTermTimeFrameHandle = iMA(_Symbol, PERIOD_D1, _inpDailyMAPeriod, 0, MODE_EMA, PRICE_CLOSE);
         if (_longTermTimeFrameHandle == INVALID_HANDLE) {
             Print("Error creating long term timeframe indicator");
             return(INIT_FAILED);
@@ -174,12 +204,18 @@ int OnInit()
             return(INIT_FAILED);
         }
 
-        //_longTermATRHandle = iATR(_Symbol, PERIOD_H4, inpLongTermPeriod);
-        //if (_longTermATRHandle == INVALID_HANDLE) {
-        //    Print("Error creating long term ATR indicator");
-        //    return(INIT_FAILED);
-        //}
+        _longTermATRHandle = iATR(_Symbol, PERIOD_D1, _inpDailyMAPeriod);
+        if (_longTermATRHandle == INVALID_HANDLE) {
+            Print("Error creating long term ATR indicator");
+            return(INIT_FAILED);
+        }
 
+        _longTermRsiHandle = iRSI(_Symbol, PERIOD_D1, 14, PRICE_CLOSE);
+        if (_longTermRsiHandle == INVALID_HANDLE) {
+            Print("Error creating long term RSI indicator");
+            return(INIT_FAILED);
+        }
+        
         if (_inpShortTermTrendRejectionMultiplier < 0.5 || _inpShortTermTrendRejectionMultiplier > 4) {
             Print("Invalid value for inpShortTermTrendRejectionMultiplier: must be between 0.5 and 4");
             return(INIT_FAILED);
@@ -189,6 +225,13 @@ int OnInit()
             Print("Invalid value(s) for trend thresholds");
             return(INIT_FAILED);
         }
+
+        if (!InitWritingFile()) {
+            return(INIT_FAILED);
+        }
+
+        _upIndex = -1;
+        _downIndex = -1;
     }
 
     return retCode;
@@ -198,13 +241,16 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-    Print("Releasing indicator handles");
+    FileClose(_fileHandle);
 
+    Print("Releasing indicator handles");
+    
     ReleaseIndicator(_qmpFilterHandle);
+    ReleaseIndicator(_platinumHandle);
     ReleaseIndicator(_longTermTrendHandle);
     ReleaseIndicator(_mediumTermTrendHandle);
     ReleaseIndicator(_shortTermTrendHandle);
-    ReleaseIndicator(_longTermTimeFrameHandle);
+    ReleaseIndicator(_longTermTimeFrameHandle);    
 }
 
 //+------------------------------------------------------------------+
@@ -219,7 +265,7 @@ void OnTick()
     }
 
     int numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 40, _prices);
-    if (numberOfPriceDataPoints == -1) {
+    if (numberOfPriceDataPoints <= 0) {
         Print("Error copying rates during processing.");
         return;
     }
@@ -246,7 +292,7 @@ void OnTick()
         }
 
         numberOfPriceDataPoints = CopyRates(_Symbol, 0, 0, 40, _prices);
-        if (numberOfPriceDataPoints == -1) {
+        if (numberOfPriceDataPoints <= 0) {
             Print("Error copying rates during processing.");
             return;
         }
@@ -259,6 +305,7 @@ void OnTick()
         if (_inpGoLong && HasBullishSignal()) {
             stopLossLevel = CalculateStopLossLevelForBuyOrder();
             HandleMartingale();
+            StorePerfData();
             lotSize = _fixedRisk.CheckOpenLong(_currentAsk, stopLossLevel);            
             OpenPosition(_Symbol, ORDER_TYPE_BUY, lotSize, _currentAsk, stopLossLevel, 0.0);
         }
@@ -271,6 +318,31 @@ void OnTick()
     else {
         _barsSincePositionOpened++;
     }
+}
+
+bool InitWritingFile()
+{
+    string fileName = "WaveCatcher-" + Symbol() + " " + IntegerToString(PeriodSeconds() / 60) + ".csv";
+    _fileHandle = FileOpen(fileName, FILE_WRITE | FILE_ANSI | FILE_CSV, ",");
+    if (_fileHandle == INVALID_HANDLE) {
+        Alert("Error opening file for writing");
+        return false;
+    }
+
+    Print("File name: ", fileName);
+
+    FileWrite(_fileHandle, "Deal", "Entry Time", "S/L", "Entry", "Exit Time", "Exit", "Profit",
+        "Open", "High", "Low", "Close",
+        "MA50", "MA240",
+        "Signal",
+        "MACD",
+        "Up Idx", "Dn Idx",
+        "High 20", "High 25",
+        "D Trend",
+        "RSI Current", "RSI Prior",
+        "D MA1", "D MA2");
+
+    return true;
 }
 
 void HandleMartingale()
@@ -290,6 +362,7 @@ void HandleMartingale()
         printf("Increasing risk to %f%% now that we have had %d successive losing trades", newRisk, _losingTradeCount);
 
         _fixedRisk.Percent(newRisk);
+        _martingaleActive = true;
     }
     else {
         Print("Resetting losing trade counter as it's now been too long ago since the last position was closed.");
@@ -314,15 +387,30 @@ int GetFibSeriesNumber(int n)
 
 void CheckTrend()
 {
-    int count = CopyBuffer(_qmpFilterHandle, 0, 0, 2, _qmpFilterUpData);
-    if (count == -1) {
+    // TODO: Change back to 2 once we are finished with perf data
+    int count = CopyBuffer(_qmpFilterHandle, 0, 0, 20, _qmpFilterUpData);
+    if (count <= 0) {
         Print("Error copying QMP Filter data for up buffer.");
         return;
     }
 
-    count = CopyBuffer(_qmpFilterHandle, 1, 0, 2, _qmpFilterDownData);
-    if (count == -1) {
+    count = CopyBuffer(_qmpFilterHandle, 1, 0, 20, _qmpFilterDownData);
+    if (count <= 0) {
         Print("Error copying QMP Filter data for down buffer.");
+        return;
+    }
+
+    // Only needed for perf data
+    count = CopyBuffer(_platinumHandle, 0, 0, 26, _macdData);
+    if (count <= 0) {
+        Print("Error copying MACD data.");
+        return;
+    }
+
+    // Only needed for perf data
+    count = CopyBuffer(_platinumHandle, 0, 0, 26, _macdData);
+    if (count <= 0) {
+        Print("Error copying MACD data.");
         return;
     }
 
@@ -404,8 +492,9 @@ void OnTrade()
         }
     }
 
-    if (reset) {        
-        ResetState();
+    if (reset) {     
+        WritePerformanceToFile();
+        ResetState();        
     }
 }
 
@@ -551,6 +640,7 @@ void ResetState()
     _hadRecentSwingHigh = false;
     _initialStop = 0;
     _barsSincePositionClosed = 0;
+    _martingaleActive = false;
 }
 
 void ReleaseIndicator(int& handle) {
@@ -616,40 +706,46 @@ bool RefreshRates()
 void NewBarAndNoCurrentPositions()
 {
     int count = CopyBuffer(_longTermTrendHandle, 0, 0, _inpLongTermPeriod, _longTermTrendData);
-    if (count == -1) {
+    if (count <= 0) {
         Print("Error copying long term trend data.");
         return;
     }
 
     count = CopyBuffer(_mediumTermTrendHandle, 0, 0, 2, _mediumTermTrendData);
-    if (count == -1) {
+    if (count <= 0) {
         Print("Error copying medium term trend data.");
         return;
     }
 
     count = CopyBuffer(_shortTermTrendHandle, 0, 0, _inpShortTermPeriod, _shortTermTrendData);
-    if (count == -1) {
+    if (count <= 0) {
         Print("Error copying short term trend data.");
         return;
     }
 
-    //count = CopyBuffer(_longTermTimeFrameHandle, 0, 0, _inpLongTermPeriod, _longTermTimeFrameData);
-    //if (count == -1) {
-    //    Print("Error copying long term timeframe data.");
-    //    return;
-    //}
+    count = CopyBuffer(_longTermTimeFrameHandle, 0, 0, _inpDailyMAPeriod, _longTermTimeFrameData);
+    if (count <= 0) {
+        Print("Error copying long term timeframe data.");
+        return;
+    }
 
     count = CopyBuffer(_shortTermATRHandle, 0, 0, _inpShortTermPeriod, _shortTermATRData);
-    if (count == -1) {
+    if (count <= 0) {
         Print("Error copying short term ATR data.");
         return;
     }
 
-    //count = CopyBuffer(_longTermATRHandle, 0, 0, _inpLongTermPeriod, _longTermATRData);
-    //if (count == -1) {
-    //    Print("Error copying long term ATR data.");
-    //    return;
-    //}
+    count = CopyBuffer(_longTermATRHandle, 0, 0, _inpDailyMAPeriod, _longTermATRData);
+    if (count <= 0) {
+        Print("Error copying long term ATR data.");
+        return;
+    }
+
+    count = CopyBuffer(_longTermRsiHandle, 0, 0, 14, _longTermRsiData);
+    if (count <= 0) {
+        Print("Error copying long term RSI data.");
+        return;
+    }
 }
 
 bool CheckToModifyPositions()
@@ -741,7 +837,18 @@ bool LongModified()
                 printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
 
                 // Changing this so we don't actually move the SL
-                //newStop = _position.PriceOpen();
+
+                /* This has changed quite a bit recently.  Historically, we would always move the stop to breakeven.
+                   Then this was removed so we don't move the stop
+                   AND NOW...we move only if Martingale is active, meaning we have increased our risk beyond normal.
+                   This is a way to recover our losses quickly and manage the risk a little better.
+                */
+                //if (_martingaleActive) {
+                //    //newStop = _position.PriceOpen();
+
+                //    newStop = breakEvenPoint;
+                //}
+                
                 _alreadyMovedToBreakEven = true;
             }
         }
@@ -1332,4 +1439,178 @@ string GetTrendDirection(int index)
     }
 
     return trend;
+}
+
+void WritePerformanceToFile()
+{
+    /* Options to write:
+    
+        _currentSignal = "";
+        _recentHigh = 0;
+        _recentLow = 999999;
+        _alreadyMovedToBreakEven = false;
+        _recentSwingHigh = 0;
+        _hadRecentSwingHigh = false;
+        _initialStop = 0;
+        _barsSincePositionClosed = 0;
+        _martingaleActive = false;
+
+        int _barsSincePositionOpened;       // Counter of the number of bars since a position was opened
+        int _barsSincePositionClosed;       // Counter of the number of bars since a position was closed
+        int _losingTradeCount = 0;          // Counter of the number of consecutive losing trades
+        bool _martingaleActive = false;     // A flag to indicate whether we have increased our lot size beyond the default for the current trade
+
+        _shortTermTrendData[1]
+
+
+    */
+
+    const int days = 10;
+    const int minutesInHour = 60;
+    const int hoursInDay = 24;
+
+    int minutes = hoursInDay * minutesInHour * days;
+    datetime to = TimeCurrent();
+    datetime from = to - 60 * minutes;
+
+    if (!HistorySelect(from, to)) {
+        Print("Failed to retrieve order history");
+    }
+
+    int dealsTotal = HistoryDealsTotal();
+    if (dealsTotal <= 0) {
+        return;
+    }
+
+    ulong outDeal = HistoryDealGetTicket(dealsTotal - 1);
+    ulong inDeal = HistoryDealGetTicket(dealsTotal - 2);
+    long dealNumber = HistoryDealGetInteger(inDeal, DEAL_TICKET);
+
+    Print("Deals total: ", dealsTotal, ", in deal: ", inDeal, ", Out deal: ", outDeal);
+
+    // type of entry
+    long dealEntry = HistoryDealGetInteger(inDeal, DEAL_ENTRY);
+    if (dealEntry != DEAL_ENTRY_IN) {
+        Alert("Deal direction was not in");
+        return;
+    }
+
+    dealEntry = HistoryDealGetInteger(outDeal, DEAL_ENTRY);
+    if (dealEntry != DEAL_ENTRY_OUT) {
+        Alert("Deal direction was not out");
+        return;
+    }
+
+    datetime entryTime = (datetime)HistoryDealGetInteger(inDeal, DEAL_TIME);
+    datetime exitTime = (datetime)HistoryDealGetInteger(outDeal, DEAL_TIME);
+    string inSymbol = HistoryDealGetString(inDeal, DEAL_SYMBOL);
+    string outSymbol = HistoryDealGetString(outDeal, DEAL_SYMBOL);
+
+    double entryPrice = HistoryDealGetDouble(inDeal, DEAL_PRICE);
+    double exitPrice = HistoryDealGetDouble(outDeal, DEAL_PRICE);
+    double profit = HistoryDealGetDouble(outDeal, DEAL_PROFIT);
+
+    if (entryPrice && entryTime && inSymbol == Symbol() && outSymbol == Symbol())
+    {
+        long dealType = HistoryDealGetInteger(inDeal, DEAL_TYPE);
+        string dealTypeString;
+
+        if (dealType == DEAL_TYPE_BUY) {
+            dealTypeString = "L";
+        }
+        else if (dealType == DEAL_TYPE_SELL) {
+            dealTypeString = "S";
+        }
+
+        FileWrite(_fileHandle, dealNumber, entryTime, dealTypeString, entryPrice, exitTime, exitPrice, profit,
+            _open, _high, _low, _close,
+            _shortTermTrend,
+            _longTermTrend,
+            _signalOnEntry,
+            _macd,
+            _upIndex,
+            _downIndex,
+            _highestHigh20, _highestHigh25,
+            _longTimeframeTrend,
+            _longTermRsiDataCurrent,
+            _longTermRsiDataPrior,
+            _dailyMA0,
+            _dailyMA1
+        );
+
+        FileFlush(_fileHandle);
+    }
+    else
+    {
+        Alert("Didn't write trade to performance file");
+    }
+}
+
+TREND_TYPE LongTimeframeTrend()
+{
+    double recentATR = _longTermATRData[0];
+    double priorATR = _longTermATRData[_inpDailyMAPeriod - 1];
+
+    TREND_TYPE trend = Trend(_longTermTimeFrameData[1], _longTermTimeFrameData[_inpDailyMAPeriod - 1], recentATR, priorATR);
+    return trend;
+}
+
+void StorePerfData()
+{
+    _dailyMA0 = _longTermTimeFrameData[0];
+    _dailyMA1 = _longTermTimeFrameData[1];
+    
+    _open = _prices[1].open;
+    _high = _prices[1].high;
+    _low = _prices[1].low;    
+    _close = _prices[1].close;
+
+    _macd = _macdData[1];
+
+    _shortTermTrend = _shortTermTrendData[1];
+    _longTermTrend = _longTermTrendData[1];
+
+    _upIndex = -1;
+    _downIndex = -1;
+
+    for (int index = 1; index < 20; index++) {
+        if (_qmpFilterUpData[index] && _qmpFilterUpData[index] != 0.0) {
+            _upIndex = index;
+            break;
+        }
+    }
+
+    for (int index = 1; index < 20; index++) {
+        if (_qmpFilterDownData[index] && _qmpFilterDownData[index] != 0.0) {
+            _downIndex = index;
+            break;
+        }
+    }
+
+    _longTermRsiDataCurrent = _longTermRsiData[1];
+    _longTermRsiDataPrior = _longTermRsiData[13];;
+
+    _longTimeframeTrend = LongTimeframeTrend();
+
+    _signalOnEntry = _currentSignal;
+
+    CalcHighestHighs();
+}
+
+void CalcHighestHighs()
+{
+    _highestHigh20 = _prices[1].high;
+    _highestHigh25 = _highestHigh20;
+
+    for (int index = 1; index < 25; index++) {
+        double h = _prices[index + 1].high;
+        if (index < 20) {
+            if (h > _highestHigh20) {
+                _highestHigh20 = h;
+            }
+        }
+        else if (h > _highestHigh25) {
+            _highestHigh25 = h;
+        }
+    }    
 }

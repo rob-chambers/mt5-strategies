@@ -3,7 +3,7 @@
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright     "Copyright 2018, Robert Chambers"
-#property version       "1.30"
+#property version       "1.31"
 #property description   "Lot Size Calculator"
 
 /* Revision History 
@@ -13,6 +13,7 @@
 
 1.20    * Added new enter trade button for quickly getting in based on the last signal
 1.30    * Display lot size based on automatic stop loss
+1.31    * Increased default risk to 11% so that I risk £500 for live trading
 */
 
 
@@ -21,7 +22,7 @@
 #include <Expert\Money\MoneyFixedRisk.mqh>
 #include <Trade\Trade.mqh>
 
-input double Risk = 5;              // Risk per trade as percentage of account size (e.g. 1 for 1%)
+input double Risk = 11;             // Risk per trade as percentage of account size (e.g. 1 for 1%)
 input int PipsFromSignalCandle = 4; // Number of pips the default stop loss should be from the signal candle
 
 const string EnterButtonName = "EnterButton";
