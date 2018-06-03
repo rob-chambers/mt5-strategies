@@ -2,10 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Input;
-using TestingResultsAnalyzer.Commands;
-using TestingResultsAnalyzer.Filters;
+using TrendTestingResultsAnalyzer.Commands;
+using TrendTestingResultsAnalyzer.Filters;
 
-namespace TestingResultsAnalyzer.ViewModels
+namespace TrendTestingResultsAnalyzer.ViewModels
 {
     public class FilterViewModel : ViewModelBase
     {
@@ -142,8 +142,8 @@ namespace TestingResultsAnalyzer.ViewModels
                 : 0;
 
             performanceData.NumberConsecutiveLosses = CalculateConsecutiveLosses(trades);
-            performanceData.AverageHoldingTime = hasTrades 
-                ? TimeSpan.FromMinutes(trades.Average(x => x.HoldingTime.TotalMinutes)) 
+            performanceData.AverageHoldingTime = hasTrades
+                ? TimeSpan.FromMinutes(trades.Average(x => x.HoldingTime.TotalMinutes))
                 : TimeSpan.Zero;
         }
 

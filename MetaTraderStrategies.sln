@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestingResultsAnalyzer", "T
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "cAlgo.Library", "cAlgo.Library\cAlgo.Library.csproj", "{C3B3D89B-13D0-455A-9C64-FBC31111567F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrendTestingResultsAnalyzer", "TrendTestingResultsAnalyzer\TrendTestingResultsAnalyzer.csproj", "{B499E4C7-60D4-4688-9C94-0036DB723B5E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,6 +28,10 @@ Global
 		{C3B3D89B-13D0-455A-9C64-FBC31111567F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C3B3D89B-13D0-455A-9C64-FBC31111567F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C3B3D89B-13D0-455A-9C64-FBC31111567F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B499E4C7-60D4-4688-9C94-0036DB723B5E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B499E4C7-60D4-4688-9C94-0036DB723B5E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B499E4C7-60D4-4688-9C94-0036DB723B5E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B499E4C7-60D4-4688-9C94-0036DB723B5E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
