@@ -3,8 +3,11 @@
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2018, Robert Chambers"
-#property version   "1.10"
-
+#property version   "1.20"
+//+------------------------------------------------------------------+
+//|VERSION HISTORY
+//|v1.20 - Added ability to go short, mirroring rules for longs
+//+------------------------------------------------------------------+
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh> 
 #include <Trade\PositionInfo.mqh>
@@ -65,6 +68,9 @@ input double    _inpStrongTrendThreshold = 5;
 input double    _inpStandardTrendThreshold = 3;
 input double    _inpWeakTrendThreshold = 1;
 
+input int       _inpTrailAfterGoodProfitPips = 11;                  // Trailing stop after achieving a good profit
+input int       _inpSwingHighLowTrailStopPips = 3;                  // Trailing stop after a swing high/low
+input int       _inpSwingHighLowTPPips = 0;                         // Take Profit margin above swing high/low upon reaching a swing high/low
 
 //+------------------------------------------------------------------------------------------------------------------------------+
 //| Private variables                                                                                                            |
@@ -106,8 +112,8 @@ double _adjustedPoints;
 double _currentBid, _currentAsk;
 bool _alreadyMovedToBreakEven;
 double _initialStop;
-double _recentSwingHigh;
-bool _hadRecentSwingHigh;
+double _recentSwingHigh, _recentSwingLow;
+bool _hadRecentSwingHigh, _hadRecentSwingLow;
 
 // Private
 datetime _barTime;                  // For detection of a new bar
@@ -224,6 +230,17 @@ int OnInit()
         if (!(_inpStrongTrendThreshold > _inpStandardTrendThreshold && _inpStandardTrendThreshold > _inpWeakTrendThreshold && _inpWeakTrendThreshold > 0)) {
             Print("Invalid value(s) for trend thresholds");
             return(INIT_FAILED);
+        }
+
+        if (_inpSwingHighLowTPPips <= 0) {
+            Print("Invalid value for inpSwingHighLowTPPips: must be >= 0");
+            return(INIT_FAILED);
+        }
+
+        if (_inpSwingHighLowTrailStopPips < 0 || _inpSwingHighLowTrailStopPips > 10) {
+            Print("Invalid value for _inpSwingHighLowTrailStopPips: must be between 0 and 10");
+            return(INIT_FAILED);
+
         }
 
         if (!InitWritingFile()) {
@@ -637,7 +654,9 @@ void ResetState()
     _recentLow = 999999;
     _alreadyMovedToBreakEven = false;
     _recentSwingHigh = 0;
+    _recentSwingLow = 0;
     _hadRecentSwingHigh = false;
+    _hadRecentSwingLow = false;
     _initialStop = 0;
     _barsSincePositionClosed = 0;
     _martingaleActive = false;
@@ -758,10 +777,10 @@ bool CheckToModifyPositions()
         if (LongModified())
             return true;
     }
-    //else {
-    //    if (ShortModified())
-    //        return true;
-    //}
+    else {
+        if (ShortModified())
+            return true;
+    }
 
     return false;
 }
@@ -776,8 +795,8 @@ bool LongModified()
     // Check if we have got a bearish red signal
     if (_currentSignal == "Dn") {
         if (_currentAsk <= doubleRiskReward) {
-            Print("Moving SL to 11 pips below low of last bar");
-            newStop = _prices[1].low - _adjustedPoints * 11;
+            printf("Moving SL to %d pips below low of last bar", _inpTrailAfterGoodProfitPips);
+            newStop = _prices[1].low - _adjustedPoints * _inpTrailAfterGoodProfitPips;
             _currentSignal = "";
         }
     }
@@ -811,15 +830,15 @@ bool LongModified()
                 }
 
                 if (_prices[1].close < _recentSwingHigh && _prices[1].high < _recentHigh) {
-                    Print("STH found: ", _recentHigh);
+                    Print("Swing high found: ", _recentHigh);
 
-                    // We have a short term high (STH).  Set SL to the low of the STH bar plus a margin
-                    newStop = _prices[1].low - _adjustedPoints * 3;
-                    takeProfit = _prices[1].high;
+                    // We have a swing high.  Set SL to the low of the swing high bar plus a margin
+                    newStop = _prices[1].low - _adjustedPoints * _inpSwingHighLowTrailStopPips;
+                    takeProfit = _prices[1].high + _inpSwingHighLowTPPips;
                     _hadRecentSwingHigh = true;
                 }
                 else {
-                    // No new STH - nothing to do
+                    // No new swing high - nothing to do
                     return false;
                 }
             }
@@ -858,10 +877,105 @@ bool LongModified()
         return false;
     }
     
-    return ModifyPosition(newStop, takeProfit);
+    return ModifyLongPosition(newStop, takeProfit);
 }
 
-bool ModifyPosition(double newStop, double takeProfit)
+bool ShortModified()
+{
+    double newStop = 0;
+    double breakEvenPoint = _position.PriceOpen() * 2 - _initialStop;
+    double doubleRiskReward = _position.PriceOpen() - 2 * (_initialStop - _position.PriceOpen());
+    double takeProfit = _position.TakeProfit();
+
+    // Check if we have got a bullish green signal
+    if (_currentSignal == "Up") {
+        if (_currentBid >= doubleRiskReward) {
+            printf("Moving SL to %d pips above high of last bar", _inpTrailAfterGoodProfitPips);
+            newStop = _prices[1].high + _adjustedPoints * _inpTrailAfterGoodProfitPips;
+            _currentSignal = "";
+        }
+    }
+    else {
+        if (!_alreadyMovedToBreakEven) {
+            if (_currentBid >= breakEvenPoint) {
+                // Nothing to do
+                return false;
+            }
+        }
+        else {
+            if (_currentBid >= doubleRiskReward) {
+                return false;
+            }
+
+            // We've already reached double risk/reward ratio - check that we're hitting new lows and look for the next swing low
+
+            // Are we making lower lows?
+            if (_prices[1].low < _prices[2].low && _prices[1].low < _recentLow) {
+                _recentLow = _prices[1].low;
+                _recentSwingLow = _prices[1].high;
+                _hadRecentSwingLow = false;
+            }
+
+            // Filter on _barsSincePositionOpened to give the position time to "breathe" (i.e. avoid moving SL too early after initial SL)
+            if (!_hadRecentSwingLow) {
+                // For this SL rule we only operate after a new bar forms
+                //if (IsNewBar(iTime(0))) {
+                if (!(_isNewBar && _barsSincePositionOpened >= 3)) {
+                    return false;
+                }
+
+                if (_prices[1].close > _recentSwingLow && _prices[1].low > _recentLow) {
+                    Print("Swing low found: ", _recentLow);
+
+                    // We have a swing low.  Set SL to the high of the swing low bar plus a margin
+                    newStop = _prices[1].high + _adjustedPoints * _inpSwingHighLowTrailStopPips;
+                    takeProfit = _prices[1].low - _inpSwingHighLowTPPips;
+                    _hadRecentSwingLow = true;
+                }
+                else {
+                    // No new swing low - nothing to do
+                    return false;
+                }
+            }
+            else {
+                // We've had a recent swing low so the stop loss has already been moved
+                return false;
+            }
+        }
+    }
+
+    // Check if we should move to breakeven
+    if (!_alreadyMovedToBreakEven) {
+        if (_currentBid < breakEvenPoint) {
+            if (newStop == 0.0 || breakEvenPoint < newStop) {
+                printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
+
+                // Changing this so we don't actually move the SL
+
+                /* This has changed quite a bit recently.  Historically, we would always move the stop to breakeven.
+                Then this was removed so we don't move the stop
+                AND NOW...we move only if Martingale is active, meaning we have increased our risk beyond normal.
+                This is a way to recover our losses quickly and manage the risk a little better.
+                */
+                //if (_martingaleActive) {
+                //    //newStop = _position.PriceOpen();
+
+                //    newStop = breakEvenPoint;
+                //}
+
+                _alreadyMovedToBreakEven = true;
+            }
+        }
+    }
+
+    if (newStop == 0.0) {
+        return false;
+    }
+
+    return ModifyShortPosition(newStop, takeProfit);
+}
+
+bool ModifyLongPosition(double newStop, double takeProfit)
 {
     double sl = NormalizeDouble(newStop, _symbol.Digits());
     double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
@@ -882,6 +996,36 @@ bool ModifyPosition(double newStop, double takeProfit)
         }
 
         if (!_alreadyMovedToBreakEven && sl >= _position.PriceOpen()) {
+            _alreadyMovedToBreakEven = true;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+bool ModifyShortPosition(double newStop, double takeProfit)
+{
+    double sl = NormalizeDouble(newStop, _symbol.Digits());
+    double stopLevelPips = (double)(SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL) + SymbolInfoInteger(_Symbol, SYMBOL_SPREAD)) / _digits_adjust; // Defining minimum StopLevel
+
+    if (_position.StopLoss() > sl || _position.StopLoss() == 0.0) {
+        double diff = (sl - _currentBid) / _adjustedPoints;
+        if (diff < stopLevelPips) {
+            printf("Can't set new stop that close to the current price.  Bid = %f, new stop = %f, stop level = %f, diff = %f",
+                _currentBid, sl, stopLevelPips, diff);
+
+            sl = _currentBid + stopLevelPips * _adjustedPoints;
+        }
+
+        //--- modify position
+        if (!_trade.PositionModify(Symbol(), sl, takeProfit)) {
+            printf("Error modifying position for %s : '%s'", Symbol(), _trade.ResultComment());
+            printf("Modify parameters : SL=%f,TP=%f", sl, takeProfit);
+        }
+
+        if (!_alreadyMovedToBreakEven && sl <= _position.PriceOpen()) {
             _alreadyMovedToBreakEven = true;
         }
 
