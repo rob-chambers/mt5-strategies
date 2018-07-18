@@ -3,10 +3,11 @@
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2018, Robert Chambers"
-#property version   "1.20"
+#property version   "1.21"
 //+------------------------------------------------------------------+
 //|VERSION HISTORY
 //|v1.20 - Added ability to go short, mirroring rules for longs
+//|v1.21 - Going back to basics
 //+------------------------------------------------------------------+
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh> 
@@ -21,7 +22,8 @@ enum STOPLOSS_RULE
     PreviousBar5Pips,
     PreviousBar2Pips,
     CurrentBar5Pips,
-    CurrentBarNPips
+    CurrentBarNPips,
+    MediumTermMA
 };
 
 enum TREND_TYPE
@@ -39,12 +41,12 @@ enum TREND_TYPE
 //| Input variables                                                                                                              |
 //+------------------------------------------------------------------------------------------------------------------------------+
 input double        _inpDynamicSizingRiskPerTrade = 1;              // Risk per trade of account balance
-input STOPLOSS_RULE _inpInitialStopLossRule = CurrentBarNPips;      // Initial Stop Loss Rule
-input int           _inpInitialStopLossPips = 2;                    // Initial stop loss in pips
+input STOPLOSS_RULE _inpInitialStopLossRule = MediumTermMA;         // Initial Stop Loss Rule
+input int           _inpInitialStopLossPips = 5;                    // Initial stop loss in pips
 
 // Go Long / short parameters
-input bool      _inpGoLong = true;                                  // Whether to enter long trades or not
-input bool      _inpGoShort = true;                                 // Whether to enter short trades or not
+input bool      _inpGoLong = true;                                 // Whether to enter long trades or not
+input bool      _inpGoShort = true;                                // Whether to enter short trades or not
 
 // Alert parameters
 input bool      _inpAlertTerminalEnabled = true;                    // Whether to show terminal alerts or not
@@ -55,22 +57,18 @@ input int       _inpMinTradingHour = 0;                             // The minim
 input int       _inpMaxTradingHour = 0;                             // The maximum hour of the day to trade (e.g. 19 for 7pm)
 
 // Martingale parameters
-input bool      _inpUseMartingale = true;                           // Whether to double down after a losing trade or not
+input bool      _inpUseMartingale = false;                          // Whether to double down after a losing trade or not
 input int       _inpMartingalePeriod = 20;                          // The maximum number of bars after a losing trade to use the Martingale system
 
 // Technical parameters
-input int       _inpLongTermPeriod = 70;                            // The number of bars on the long term timeframe used to determine the trend
-input int       _inpShortTermPeriod = 25;                           // The number of bars on the short term timeframe used to determine the trend
-input double    _inpShortTermTrendRejectionMultiplier = 1.5;
-input int       _inpDailyMAPeriod = 9;                              // The daily timeframe MA period
+input int       _inpH4MAPeriod = 50;                                // The H4 timeframe MA period
+input int       _inpLongTermPeriod = 240;                           // The long term MA period
+input int       _inpMediumTermPeriod = 100;                         // The medium term MA period
+input int       _inpShortTermPeriod = 30;                           // The short term MA period
 
-input double    _inpStrongTrendThreshold = 5;
-input double    _inpStandardTrendThreshold = 3;
-input double    _inpWeakTrendThreshold = 1;
-
-input int       _inpTrailAfterGoodProfitPips = 11;                  // Trailing stop after achieving a good profit
-input int       _inpSwingHighLowTrailStopPips = 3;                  // Trailing stop after a swing high/low
-input int       _inpSwingHighLowTPPips = 0;                         // Take Profit margin above swing high/low upon reaching a swing high/low
+input int       _inpTrailAfterReverseSignalPips = 5;                // Trailing stop on reverse signal
+input int       _inpSwingHighLowTrailStopPips = 5;                  // Trailing stop after a swing high/low
+//input int       _inpSwingHighLowTPPips = 5;                       // TP margin above swing high/low upon reaching a swing high/low
 
 //+------------------------------------------------------------------------------------------------------------------------------+
 //| Private variables                                                                                                            |
@@ -81,21 +79,20 @@ string _currentSignal;
 int _qmpFilterHandle;
 int _platinumHandle;
 int _longTermTimeFrameHandle;
+int _veryLongTermTimeFrameHandle;
 int _longTermTrendHandle;
 int _mediumTermTrendHandle;
 int _shortTermTrendHandle;
-int _shortTermATRHandle;
-int _longTermATRHandle;
 
 double _qmpFilterUpData[];
 double _qmpFilterDownData[];
 
 double _macdData[];
 double _longTermTimeFrameData[];
+double _veryLongTermTimeFrameData[];
 double _longTermTrendData[];
 double _mediumTermTrendData[];
 double _shortTermTrendData[];
-double _shortTermATRData[];
 double _longTermATRData[];
 
 //+------------------------------------------------------------------------------------------------------------------------------+
@@ -131,18 +128,12 @@ int _losingTradeCount = 0;          // Counter of the number of consecutive losi
 bool _martingaleActive = false;     // A flag to indicate whether we have increased our lot size beyond the default for the current trade
 int _fileHandle;
 
-// Perf data
-int _longTermRsiHandle;
-double _longTermRsiData[];
-
 double _macd;
 string _dailySignal;
 double _dailyMA0, _dailyMA1;
 double _open, _high, _low, _close;
 double _shortTermTrend, _longTermTrend;
 int _upIndex, _downIndex;
-double _longTermRsiDataCurrent, _longTermRsiDataPrior;
-TREND_TYPE _longTimeframeTrend;
 string _signalOnEntry;
 double _highestHigh20, _highestHigh25;
 
@@ -161,12 +152,11 @@ int OnInit()
 
         ArraySetAsSeries(_macdData, true);
         ArraySetAsSeries(_longTermTimeFrameData, true);
+        ArraySetAsSeries(_veryLongTermTimeFrameData, true);
         ArraySetAsSeries(_longTermTrendData, true);
         ArraySetAsSeries(_mediumTermTrendData, true);
         ArraySetAsSeries(_shortTermTrendData, true);
-        ArraySetAsSeries(_shortTermATRData, true);
         ArraySetAsSeries(_longTermATRData, true);
-        ArraySetAsSeries(_longTermRsiData, true);
         
         _platinumHandle = iCustom(_Symbol, PERIOD_CURRENT, "MACD_Platinum", 12, 26, 9, true, true, false, false);
         if (_platinumHandle == INVALID_HANDLE) {
@@ -180,62 +170,40 @@ int OnInit()
             return(INIT_FAILED);
         }
 
-        _longTermTimeFrameHandle = iMA(_Symbol, PERIOD_D1, _inpDailyMAPeriod, 0, MODE_EMA, PRICE_CLOSE);
+        _longTermTimeFrameHandle = iMA(_Symbol, PERIOD_H4, _inpH4MAPeriod, 0, MODE_EMA, PRICE_CLOSE);
         if (_longTermTimeFrameHandle == INVALID_HANDLE) {
             Print("Error creating long term timeframe indicator");
             return(INIT_FAILED);
         }
 
-        _longTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, 240, 0, MODE_LWMA, PRICE_CLOSE);
+        _veryLongTermTimeFrameHandle = iMA(_Symbol, PERIOD_H4, _inpLongTermPeriod, 0, MODE_LWMA, PRICE_CLOSE);
+        if (_veryLongTermTimeFrameHandle == INVALID_HANDLE) {
+            Print("Error creating very long term MA indicator");
+            return(INIT_FAILED);
+        }
+
+        _longTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, _inpLongTermPeriod, 0, MODE_LWMA, PRICE_CLOSE);
         if (_longTermTrendHandle == INVALID_HANDLE) {
             Print("Error creating long term MA indicator");
             return(INIT_FAILED);
         }
 
-        _mediumTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, 100, 0, MODE_EMA, PRICE_CLOSE);
+        _mediumTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, _inpMediumTermPeriod, 0, MODE_EMA, PRICE_CLOSE);
         if (_mediumTermTrendHandle == INVALID_HANDLE) {
             Print("Error creating medium term MA indicator");
             return(INIT_FAILED);
         }
 
-        _shortTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, 50, 0, MODE_EMA, PRICE_CLOSE);
+        _shortTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, _inpShortTermPeriod, 0, MODE_EMA, PRICE_CLOSE);
         if (_shortTermTrendHandle == INVALID_HANDLE) {
             Print("Error creating short term MA indicator");
             return(INIT_FAILED);
         }
-
-        _shortTermATRHandle = iATR(_Symbol, PERIOD_CURRENT, _inpShortTermPeriod);
-        if (_shortTermATRHandle == INVALID_HANDLE) {
-            Print("Error creating short term ATR indicator");
-            return(INIT_FAILED);
-        }
-
-        _longTermATRHandle = iATR(_Symbol, PERIOD_D1, _inpDailyMAPeriod);
-        if (_longTermATRHandle == INVALID_HANDLE) {
-            Print("Error creating long term ATR indicator");
-            return(INIT_FAILED);
-        }
-
-        _longTermRsiHandle = iRSI(_Symbol, PERIOD_D1, 14, PRICE_CLOSE);
-        if (_longTermRsiHandle == INVALID_HANDLE) {
-            Print("Error creating long term RSI indicator");
-            return(INIT_FAILED);
-        }
-        
-        if (_inpShortTermTrendRejectionMultiplier < 0.5 || _inpShortTermTrendRejectionMultiplier > 4) {
-            Print("Invalid value for inpShortTermTrendRejectionMultiplier: must be between 0.5 and 4");
-            return(INIT_FAILED);
-        }
-
-        if (!(_inpStrongTrendThreshold > _inpStandardTrendThreshold && _inpStandardTrendThreshold > _inpWeakTrendThreshold && _inpWeakTrendThreshold > 0)) {
-            Print("Invalid value(s) for trend thresholds");
-            return(INIT_FAILED);
-        }
-
-        if (_inpSwingHighLowTPPips <= 0) {
-            Print("Invalid value for inpSwingHighLowTPPips: must be >= 0");
-            return(INIT_FAILED);
-        }
+                
+        //if (_inpSwingHighLowTPPips <= 0) {
+        //    Print("Invalid value for inpSwingHighLowTPPips: must be >= 0");
+        //    return(INIT_FAILED);
+        //}
 
         if (_inpSwingHighLowTrailStopPips < 0 || _inpSwingHighLowTrailStopPips > 10) {
             Print("Invalid value for _inpSwingHighLowTrailStopPips: must be between 0 and 10");
@@ -243,9 +211,9 @@ int OnInit()
 
         }
 
-        if (!InitWritingFile()) {
-            return(INIT_FAILED);
-        }
+        //if (!InitWritingFile()) {
+        //    return(INIT_FAILED);
+        //}
 
         _upIndex = -1;
         _downIndex = -1;
@@ -258,7 +226,7 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
-    FileClose(_fileHandle);
+    //FileClose(_fileHandle);
 
     Print("Releasing indicator handles");
     
@@ -266,8 +234,8 @@ void OnDeinit(const int reason)
     ReleaseIndicator(_platinumHandle);
     ReleaseIndicator(_longTermTrendHandle);
     ReleaseIndicator(_mediumTermTrendHandle);
-    ReleaseIndicator(_shortTermTrendHandle);
     ReleaseIndicator(_longTermTimeFrameHandle);    
+    ReleaseIndicator(_veryLongTermTimeFrameHandle);
 }
 
 //+------------------------------------------------------------------+
@@ -322,7 +290,7 @@ void OnTick()
         if (_inpGoLong && HasBullishSignal()) {
             stopLossLevel = CalculateStopLossLevelForBuyOrder();
             HandleMartingale();
-            StorePerfData();
+            //StorePerfData();
             lotSize = _fixedRisk.CheckOpenLong(_currentAsk, stopLossLevel);            
             OpenPosition(_Symbol, ORDER_TYPE_BUY, lotSize, _currentAsk, stopLossLevel, 0.0);
         }
@@ -404,27 +372,18 @@ int GetFibSeriesNumber(int n)
 
 void CheckTrend()
 {
-    // TODO: Change back to 2 once we are finished with perf data
-    int count = CopyBuffer(_qmpFilterHandle, 0, 0, 20, _qmpFilterUpData);
+    int count = CopyBuffer(_qmpFilterHandle, 0, 0, 2, _qmpFilterUpData);
     if (count <= 0) {
         Print("Error copying QMP Filter data for up buffer.");
         return;
     }
 
-    count = CopyBuffer(_qmpFilterHandle, 1, 0, 20, _qmpFilterDownData);
+    count = CopyBuffer(_qmpFilterHandle, 1, 0, 2, _qmpFilterDownData);
     if (count <= 0) {
         Print("Error copying QMP Filter data for down buffer.");
         return;
     }
 
-    // Only needed for perf data
-    count = CopyBuffer(_platinumHandle, 0, 0, 26, _macdData);
-    if (count <= 0) {
-        Print("Error copying MACD data.");
-        return;
-    }
-
-    // Only needed for perf data
     count = CopyBuffer(_platinumHandle, 0, 0, 26, _macdData);
     if (count <= 0) {
         Print("Error copying MACD data.");
@@ -510,7 +469,7 @@ void OnTrade()
     }
 
     if (reset) {     
-        WritePerformanceToFile();
+        //WritePerformanceToFile();
         ResetState();        
     }
 }
@@ -593,8 +552,8 @@ int InitFromBase(
         return(INIT_FAILED);
     }
 
-    if (inpInitialStopLossRule != StaticPipsValue && inpInitialStopLossRule != CurrentBarNPips && inpInitialStopLossPips != 0) {
-        Print("Invalid initial stop loss rule.  Pips should be 0 when not using StaticPipsValue or CurrentBarNPips - init failed.");
+    if (inpInitialStopLossRule != StaticPipsValue && inpInitialStopLossRule != CurrentBarNPips && inpInitialStopLossRule != MediumTermMA && inpInitialStopLossPips != 0) {
+        Print("Invalid initial stop loss rule.  Pips should be 0 when not using StaticPipsValue, CurrentBarNPips or MediumTermMA - init failed.");
         return(INIT_FAILED);
     }
 
@@ -729,8 +688,7 @@ void NewBarAndNoCurrentPositions()
         Print("Error copying long term trend data.");
         return;
     }
-
-    count = CopyBuffer(_mediumTermTrendHandle, 0, 0, 2, _mediumTermTrendData);
+    count = CopyBuffer(_mediumTermTrendHandle, 0, 0, _inpMediumTermPeriod, _mediumTermTrendData);
     if (count <= 0) {
         Print("Error copying medium term trend data.");
         return;
@@ -742,27 +700,15 @@ void NewBarAndNoCurrentPositions()
         return;
     }
 
-    count = CopyBuffer(_longTermTimeFrameHandle, 0, 0, _inpDailyMAPeriod, _longTermTimeFrameData);
+    count = CopyBuffer(_longTermTimeFrameHandle, 0, 0, _inpH4MAPeriod, _longTermTimeFrameData);
     if (count <= 0) {
         Print("Error copying long term timeframe data.");
         return;
     }
 
-    count = CopyBuffer(_shortTermATRHandle, 0, 0, _inpShortTermPeriod, _shortTermATRData);
+    count = CopyBuffer(_veryLongTermTimeFrameHandle, 0, 0, _inpH4MAPeriod, _veryLongTermTimeFrameData);
     if (count <= 0) {
-        Print("Error copying short term ATR data.");
-        return;
-    }
-
-    count = CopyBuffer(_longTermATRHandle, 0, 0, _inpDailyMAPeriod, _longTermATRData);
-    if (count <= 0) {
-        Print("Error copying long term ATR data.");
-        return;
-    }
-
-    count = CopyBuffer(_longTermRsiHandle, 0, 0, 14, _longTermRsiData);
-    if (count <= 0) {
-        Print("Error copying long term RSI data.");
+        Print("Error copying very long term timeframe data.");
         return;
     }
 }
@@ -795,8 +741,10 @@ bool LongModified()
     // Check if we have got a bearish red signal
     if (_currentSignal == "Dn") {
         if (_currentAsk <= doubleRiskReward) {
-            printf("Moving SL to %d pips below low of last bar", _inpTrailAfterGoodProfitPips);
-            newStop = _prices[1].low - _adjustedPoints * _inpTrailAfterGoodProfitPips;
+            // We only act on this when we're not in a decent profit
+
+            printf("Moving SL to %d pips below low of last bar", _inpTrailAfterReverseSignalPips);
+            newStop = _prices[1].low - _adjustedPoints * _inpTrailAfterReverseSignalPips;
             _currentSignal = "";
         }
     }
@@ -834,7 +782,8 @@ bool LongModified()
 
                     // We have a swing high.  Set SL to the low of the swing high bar plus a margin
                     newStop = _prices[1].low - _adjustedPoints * _inpSwingHighLowTrailStopPips;
-                    takeProfit = _prices[1].high + _inpSwingHighLowTPPips;
+                    //takeProfit = _prices[1].high + _inpSwingHighLowTPPips;
+                    takeProfit = _prices[1].high;
                     _hadRecentSwingHigh = true;
                 }
                 else {
@@ -890,8 +839,10 @@ bool ShortModified()
     // Check if we have got a bullish green signal
     if (_currentSignal == "Up") {
         if (_currentBid >= doubleRiskReward) {
-            printf("Moving SL to %d pips above high of last bar", _inpTrailAfterGoodProfitPips);
-            newStop = _prices[1].high + _adjustedPoints * _inpTrailAfterGoodProfitPips;
+            // We only act on this when we're not in a decent profit
+
+            printf("Moving SL to %d pips above high of last bar", _inpTrailAfterReverseSignalPips);
+            newStop = _prices[1].high + _adjustedPoints * _inpTrailAfterReverseSignalPips;
             _currentSignal = "";
         }
     }
@@ -929,7 +880,8 @@ bool ShortModified()
 
                     // We have a swing low.  Set SL to the high of the swing low bar plus a margin
                     newStop = _prices[1].high + _adjustedPoints * _inpSwingHighLowTrailStopPips;
-                    takeProfit = _prices[1].low - _inpSwingHighLowTPPips;
+                    //takeProfit = _prices[1].low - _inpSwingHighLowTPPips;
+                    takeProfit = _prices[1].low;
                     _hadRecentSwingLow = true;
                 }
                 else {
@@ -950,18 +902,22 @@ bool ShortModified()
             if (newStop == 0.0 || breakEvenPoint < newStop) {
                 printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
 
-                // Changing this so we don't actually move the SL
+                /* ACTUALLY MOVE IT - Needs more thorough testing */
+                            // Changing this so we don't actually move the SL
 
-                /* This has changed quite a bit recently.  Historically, we would always move the stop to breakeven.
-                Then this was removed so we don't move the stop
-                AND NOW...we move only if Martingale is active, meaning we have increased our risk beyond normal.
-                This is a way to recover our losses quickly and manage the risk a little better.
-                */
-                //if (_martingaleActive) {
-                //    //newStop = _position.PriceOpen();
+                            /* This has changed quite a bit recently.  Historically, we would always move the stop to breakeven.
+                            Then this was removed so we don't move the stop
+                            AND NOW...we move only if Martingale is active, meaning we have increased our risk beyond normal.
+                            This is a way to recover our losses quickly and manage the risk a little better.
+                            */
+                            //if (_martingaleActive) {
+                            //    //newStop = _position.PriceOpen();
 
-                //    newStop = breakEvenPoint;
-                //}
+                            //    newStop = breakEvenPoint;
+                            //}
+
+
+                newStop = breakEvenPoint;
 
                 _alreadyMovedToBreakEven = true;
             }
@@ -1163,6 +1119,10 @@ double CalculateStopLossLevelForBuyOrder()
             stopLossLevel = _currentAsk - stopLossPipsFinal * _Point * _digits_adjust;
             break;
 
+        case MediumTermMA:
+            stopLossLevel = _mediumTermTrendData[1];
+            break;
+
         case None:
             stopLossLevel = 0;
             break;
@@ -1229,6 +1189,10 @@ double CalculateStopLossLevelForSellOrder()
 
         stopLossLevel = high + _adjustedPoints * 2;
         break;
+
+    case MediumTermMA:
+        stopLossLevel = _mediumTermTrendData[1];
+        break;
     }
 
     double priceFromStop = (stopLossLevel - _currentBid) / (_Point * _digits_adjust);
@@ -1250,6 +1214,8 @@ double CalculateStopLossLevelForSellOrder()
 bool HasBullishSignal()
 {
     /*
+    OLD RULES...
+
     Rule 1 - We must have closed near the high (i.e. had an up bar)
     Rule 2 - The slope of the long-term trend must be up
     Rule 3 - The current low must be higher than long-term MA (or maybe within 6 pips?)
@@ -1279,86 +1245,99 @@ bool HasBullishSignal()
     TREND_TYPE_UP = 5,          // up trend
     TREND_TYPE_HARD_UP = 6      // strong up trend
     */
+
+
+    /* OLD RULES: 
     if (_prices[1].high - _prices[1].close > _prices[1].close - _prices[1].low) return false;
 
-    if (_prices[1].low < _shortTermTrendData[1] &&
-        _prices[1].open < _shortTermTrendData[1] &&
-        _prices[1].low < _longTermTrendData[1] &&
+    if (_prices[1].low < _longTermTrendData[1] &&
         _prices[1].low < _mediumTermTrendData[1] &&
-        _prices[1].high > _shortTermTrendData[1] &&
-        _prices[1].close > _shortTermTrendData[1] &&
         _prices[1].high > _mediumTermTrendData[1] &&
         _prices[1].close > _longTermTrendData[1])
     {
-        TREND_TYPE longTrend = LongTermTrend();
-        Print("For special case, Long term trend determined to be: ", GetTrendDescription(longTrend));
-        switch (longTrend)
-        {
-            case TREND_TYPE_UP:
-                // Fall-through
-            case TREND_TYPE_HARD_UP:
-                // Fall-through
-            case TREND_TYPE_SOFT_UP:
-                // Fall-through
-            case TREND_TYPE_FLAT:
-                break;
-
-            default:
-                return false;
-        }
-
-        printf("H=%f,L=%f,C=%f", _prices[1].high, _prices[1].low, _prices[1].close);
-
         return true;
+    }
+    */
+
+    /*
+    NEW RULES FOR GOING LONG
+    -------------------------
+
+    Rule 1 - on the 4H timeframe, the price must be higher than the short term MA (default 50 period EMA)
+    Rule 2 - on the 4H timeframe, the price must be higher than the long term MA (default 240 period LWMA)
+    Rule 3 - on the 15M timeframe, The price must be higher than the long term MA
+    Rule 4 - on the 15M timeframe, The MACD must be below 0.001
+    Rule 5 - on the 15M timeframe, the price must go into the MA and then we get a buy (QMP Filter) signal
+    Rule 6 - The price must not have recently closed lower than the medium term MA
+    Rule 7 - The current low must be higher than the medium term MA
+    Rule 8 - The latest candle must be bullish (closed higher than open)
+    Rule 9 - There must be a sufficient gap between the short and long term MAs
+    Rule 10 - Out of the last x (say 10) number of bars, there should be no more than y (say 3) bars that have a high < short term MA
+
+    -- The stop loss should be set to a few pips lower than the bar that recently touched the MA
+    NEW SL rule - Set the SL to the medium term average!!
+    */
+
+    if (_prices[1].close <= _longTermTimeFrameData[1]) return false;
+    if (_prices[1].close <= _veryLongTermTimeFrameData[1]) return false;
+    if (_prices[1].close <= _longTermTrendData[1]) return false;
+    if (_macdData[1] >= 0.001) return false;
+    if (GetTrendDirection(1) != "Up") return false;
+    if (!PriceWentLowerThanMA()) return false;
+    if (PriceClosedLowerThanMediumTermMA()) return false;
+    if (_prices[1].close <= _prices[1].open) return false;
+    if (_shortTermTrendData[1] - _longTermTrendData[1] <= _adjustedPoints * 12) return false;
+    if (PriceRecentlyLowerThanShortTermMA()) return false;
+
+    // has not had a higher high in the last 15 bars by more than 4 pips
+
+    return true;
+}
+
+// Helper methods to detect bullish setup
+bool PriceWentLowerThanMA()
+{
+    for (int i = 2; i <= 4; i++) {
+        if (_prices[i].low < _shortTermTrendData[i]) {
+            return true;
+        }
     }
 
     return false;
+}
 
-    //if (_prices[1].low < _longTermTrendData[1]) return false;
-    //if (_prices[1].low > _shortTermTrendData[1]) return false;
-    //if (_prices[1].close <= _shortTermTrendData[1]) return false;
+bool PriceClosedLowerThanMediumTermMA()
+{
+    for (int i = 2; i <= 4; i++) {
+        if (_prices[i].close < _mediumTermTrendData[i]) {
+            return true;
+        }
+    }
 
-    //TREND_TYPE longTrend = LongTermTrend();
-    //Print("Long term trend determined to be: ", GetTrendDescription(longTrend));
-    //switch (longTrend)
-    //{
-    //case TREND_TYPE_UP:
-    //    // Fall-through
-    //case TREND_TYPE_HARD_UP:
-    //    break;
+    return false;
+}
 
-    //default:
-    //    return false;
-    //}
+bool PriceRecentlyLowerThanShortTermMA()
+{
+    int count = 0;
+    for (int i = 2; i <= 10; i++) {
+        if (_prices[i].high < _shortTermTrendData[i]) {
+            count++;
+        }
+    }
 
-    //Print("Checking short-term trend");
-    //TREND_TYPE shortTrend = ShortTermTrend();
-    //Print("Short term trend determined to be: ", GetTrendDescription(shortTrend));
-    //switch (shortTrend)
-    //{
-    //case TREND_TYPE_FLAT:
-    //    // Fall-through
-    //case TREND_TYPE_SOFT_UP:
-    //    // Fall-through
-    //case TREND_TYPE_UP:
-    //    // Fall-through
-    //case TREND_TYPE_HARD_UP:
-    //    break;
-
-    //default:
-    //    return false;
-    //}
-
-    //if (HadRecentHigh()) {
-    //    return false;
-    //}
-
-    //return true;
+    return count > 3;
 }
 
 bool HasBearishSignal()
 {
+    //_longTermTimeFrameData[1]
+
+
+
     /*
+    OLD RULES
+
     Rule 1 - We must have closed near the low (i.e. had a down bar)
     Rule 2 - The slope of the long-term trend must be down
     Rule 3 - The current high must be lower than the long-term MA (or maybe within 6 pips?)
@@ -1368,178 +1347,76 @@ bool HasBearishSignal()
     Rule 7 - There hasn't been a recent (in the last 15 bars) lowest low that is more than a certain level below the current close (using ATR)
     */
 
-    if (_prices[1].high - _prices[1].close < _prices[1].close - _prices[1].low) return false;
-    if (_prices[1].high > _longTermTrendData[1]) return false;
-    if (_prices[1].high < _shortTermTrendData[1]) return false;
-    if (_prices[1].close >= _shortTermTrendData[1]) return false;
+    /* 
+    NEW RULES FOR GOING SHORT
+    -------------------------
 
-    TREND_TYPE longTrend = LongTermTrend();
-    Print("Long term trend determined to be: ", GetTrendDescription(longTrend));
-    switch (longTrend)
-    {
-        case TREND_TYPE_DOWN:
-            // Fall-through
-        case TREND_TYPE_HARD_DOWN:
-            break;
+    Rule 1 - on the 4H timeframe, the price must be lower than the short term MA (default 50 period EMA)
+    Rule 2 - on the 4H timeframe, the price must be lower than the long term MA (default 240 period LWMA)
+    Rule 3 - on the 15M timeframe, The price must be lower than the long term MA
+    Rule 4 - on the 15M timeframe, The MACD must be above 0.001
+    Rule 5 - on the 15M timeframe, the price must go into the MA and then we get a sell (QMP Filter) signal
+    Rule 6 - The price must not have recently closed higher than the medium term MA
+    Rule 7 - The current high must be lower than the medium term MA
+    Rule 8 - The latest candle must be bearish (closed lower than open)
+    Rule 9 - There must be a sufficient gap between the short and long term MAs
+    Rule 10 - Out of the last x (say 10) number of bars, there should be no more than y (say 3) bars that have a low > short term MA
 
-        default:
-            return false;
-    }
+    -- The stop loss should be set to a few pips higher than the bar that recently touched the MA
+    NEW SL rule - Set the SL to the medium term average!!
+    */
 
-    Print("Checking short-term trend");
-    TREND_TYPE shortTrend = ShortTermTrend();
-    Print("Short term trend determined to be: ", GetTrendDescription(shortTrend));
-    switch (shortTrend)
-    {
-        case TREND_TYPE_FLAT:
-            // Fall-through
-        case TREND_TYPE_SOFT_DOWN:
-            // Fall-through
-        case TREND_TYPE_DOWN:
-            // Fall-through
-        case TREND_TYPE_HARD_DOWN:
-            break;
+    if (_prices[1].close >= _longTermTimeFrameData[1]) return false;
+    if (_prices[1].close >= _veryLongTermTimeFrameData[1]) return false;
+    if (_prices[1].close >= _longTermTrendData[1]) return false;
+    if (_macdData[1] <= 0.001) return false;
+    if (GetTrendDirection(1) != "Dn") return false;
+    if (!PriceWentHigherThanMA()) return false;
+    if (PriceClosedHigherThanMediumTermMA()) return false;
+    if (_prices[1].close >= _prices[1].open) return false;
+    if (_longTermTrendData[1] - _shortTermTrendData[1] <= _adjustedPoints * 12) return false;
+    if (PriceRecentlyHigherThanShortTermMA()) return false;
 
-        default:
-            return false;
-    }
-
-    //if (HadRecentLow()) {
-    //    return false;
-    //}
+    // TEST extra RULE: If recent (say 4 bars) price HIGH > medium term MA then do not enter
+    // Test new rule - set TP at 3xrisk
 
     return true;
 }
 
-TREND_TYPE LongTermTrend()
+// Helper methods to detect bearish setup
+bool PriceWentHigherThanMA()
 {
-    //double recentATR = _longTermATRData[0];
-    //double priorATR = _longTermATRData[_inpLongTermPeriod - 1];    
-    double recentATR = _shortTermATRData[0];
-    double priorATR = _shortTermATRData[_inpShortTermPeriod - 1];
+    for (int i = 2; i <= 4; i++) {
+        if (_prices[i].high > _shortTermTrendData[i]) {
+            return true;
+        }
+    }
 
-    //TREND_TYPE trend = Trend(_longTermTimeFrameData[1], _longTermTimeFrameData[_inpLongTermPeriod - 1], recentATR, priorATR);
-    TREND_TYPE trend = Trend(_longTermTrendData[1], _longTermTrendData[_inpLongTermPeriod - 1], recentATR, priorATR);
-    return trend;
+    return false;
 }
 
-TREND_TYPE ShortTermTrend()
+bool PriceClosedHigherThanMediumTermMA()
 {
-    double recentATR = _shortTermATRData[0];
-    double priorATR = _shortTermATRData[_inpShortTermPeriod - 1];
+    for (int i = 2; i <= 4; i++) {
+        if (_prices[i].close > _mediumTermTrendData[i]) {
+            return true;
+        }
+    }
 
-    TREND_TYPE trend = Trend(_shortTermTrendData[1], _shortTermTrendData[_inpShortTermPeriod - 1], recentATR, priorATR);
-    return trend;
+    return false;
 }
 
-TREND_TYPE Trend(double recentValue, double priorValue, double recentATR, double priorATR)
+bool PriceRecentlyHigherThanShortTermMA()
 {
-    double diff = recentValue - priorValue;
-    double atr = (recentATR + priorATR) / 2;
-
-    // Convert to pips
-    //=IF(C27="L",(J27-D27)*Y27,(D27-J27)*Y27)
-    //=IF(IFERROR(FIND("JPY",B27),-1) = -1, 10000, 100)
-
-    /*
-    int multiplier = 10000;
-    if (StringFind(_Symbol, "JPY") > -1) {
-    multiplier = 100;
+    int count = 0;
+    for (int i = 2; i <= 10; i++) {
+        if (_prices[i].low > _shortTermTrendData[i]) {
+            count++;
+        }
     }
 
-    double pips = diff * multiplier;
-    */
-
-    TREND_TYPE trend = TREND_TYPE_FLAT;
-
-    /*
-    TREND_TYPE_HARD_DOWN = 0,   // strong down trend
-    TREND_TYPE_DOWN = 1,        // down trend
-    TREND_TYPE_SOFT_DOWN = 2,   // weak down trend
-    TREND_TYPE_FLAT = 3,        // no trend
-    TREND_TYPE_SOFT_UP = 4,     // weak up trend
-    TREND_TYPE_UP = 5,          // up trend
-    TREND_TYPE_HARD_UP = 6      // strong up trend
-    */
-
-    /* 1.24449, 1.22.  ATR = 41 - 43.  Diff = 0.02449 (244.9 pips).  Average ATR = 42 pips.  244.9 / 42 = 5.83
-
-    1.18021, 1.11897.  ATR = 35 - 39 pips.  Diff = 0.06124 (612.4 pips). Average ATR = 37 pips.  612.4 / 37 = 16.55
-
-    1.123155, 1.110471.  ATR = 37 - 19.5.  Diff = 0.012684 (126.8 pips). Average ATR = 28 pips.  126.8 / 18 = 7.04
-
-    short-term (25 bar):
-
-    1.11474, 1.11309, ATR = 0.00065 - 0.00178. Diff = 0.00165 (16.5 pips). Average ATR = 11.3 pips. 16.5 / 11.3 = 1.46
-    */
-
-    double ratio = diff / atr;
-
-    Print("Recent = ", recentValue, ", Prior = ", priorValue, ", Diff = ", diff, ", recentATR = ", recentATR, ", priorATR = ", priorATR, ", ratio = ", ratio);
-
-    if (ratio >= _inpStrongTrendThreshold)
-    {
-        trend = TREND_TYPE_HARD_UP;
-    }
-    else if (ratio >= _inpStandardTrendThreshold)
-    {
-        trend = TREND_TYPE_UP;
-    }
-    else if (ratio >= _inpWeakTrendThreshold)
-    {
-        trend = TREND_TYPE_SOFT_UP;
-    }
-    else if (ratio <= -_inpWeakTrendThreshold)
-    {
-        trend = TREND_TYPE_HARD_DOWN;
-    }
-    else if (ratio <= -_inpStandardTrendThreshold)
-    {
-        trend = TREND_TYPE_DOWN;
-    }
-    else if (ratio <= -_inpStrongTrendThreshold)
-    {
-        trend = TREND_TYPE_SOFT_DOWN;
-    }
-
-    return trend;
+    return count > 3;
 }
-
-//bool HadRecentHigh()
-//{
-//    double highest = 0.0;
-//
-//    for (int i = 1; i < _inpShortTermPeriod; i++) {
-//        if (_prices[i].high > highest) {
-//            highest = _prices[i].high;
-//        }
-//    }
-//
-//    if (highest - _prices[1].close > _atrData[0] * _inpShortTermTrendRejectionMultiplier) {
-//        Print("Signal rejected.  Had a recent high of ", highest);
-//        return true;
-//    }
-//
-//    return false;
-//}
-
-//bool HadRecentLow()
-//{
-//    double lowest = 100000.0;
-//
-//    for (int i = 1; i < _inpShortTermPeriod; i++) {
-//        if (_prices[i].low < lowest) {
-//            lowest = _prices[i].low;
-//        }
-//    }
-//
-//    if (_prices[1].close - lowest > _atrData[0] * _inpShortTermTrendRejectionMultiplier) {
-//        Print("Signal rejected.  Had a recent low of ", lowest);
-//        return true;
-//    }
-//
-//    return false;
-//}
 
 string GetTrendDescription(TREND_TYPE trend)
 {
@@ -1675,9 +1552,9 @@ void WritePerformanceToFile()
             _upIndex,
             _downIndex,
             _highestHigh20, _highestHigh25,
-            _longTimeframeTrend,
-            _longTermRsiDataCurrent,
-            _longTermRsiDataPrior,
+            //_longTimeframeTrend,
+            //_longTermRsiDataCurrent,
+            //_longTermRsiDataPrior,
             _dailyMA0,
             _dailyMA1
         );
@@ -1688,15 +1565,6 @@ void WritePerformanceToFile()
     {
         Alert("Didn't write trade to performance file");
     }
-}
-
-TREND_TYPE LongTimeframeTrend()
-{
-    double recentATR = _longTermATRData[0];
-    double priorATR = _longTermATRData[_inpDailyMAPeriod - 1];
-
-    TREND_TYPE trend = Trend(_longTermTimeFrameData[1], _longTermTimeFrameData[_inpDailyMAPeriod - 1], recentATR, priorATR);
-    return trend;
 }
 
 void StorePerfData()
@@ -1730,11 +1598,6 @@ void StorePerfData()
             break;
         }
     }
-
-    _longTermRsiDataCurrent = _longTermRsiData[1];
-    _longTermRsiDataPrior = _longTermRsiData[13];;
-
-    _longTimeframeTrend = LongTimeframeTrend();
 
     _signalOnEntry = _currentSignal;
 
