@@ -74,7 +74,7 @@ input int       _inpSwingHighLowTrailStopPips = 5;                  // Trailing 
 //| Private variables                                                                                                            |
 //+------------------------------------------------------------------------------------------------------------------------------+
 
-string _currentSignal;
+//string _currentSignal;
 
 int _qmpFilterHandle;
 int _platinumHandle;
@@ -372,6 +372,9 @@ int GetFibSeriesNumber(int n)
 
 void CheckTrend()
 {
+    // We only need to do this once a new bar is formed
+    if (!_isNewBar) return;
+
     int count = CopyBuffer(_qmpFilterHandle, 0, 0, 2, _qmpFilterUpData);
     if (count <= 0) {
         Print("Error copying QMP Filter data for up buffer.");
@@ -391,13 +394,18 @@ void CheckTrend()
     }
 
     // Check for a signal
+
+    /*
     string trend = GetTrendDirection(1);
     if (trend == "Dn") {
+        Print("Current signal changed to down");
         _currentSignal = "Dn";
     }
-    else if (_currentSignal == "Dn" && trend == "Up") {
+    else if (trend == "Up") {
+        Print("Current signal changed to up");
         _currentSignal = "Up";
     }
+    */
 }
 
 //+------------------------------------------------------------------+
@@ -413,7 +421,6 @@ void OnTrade()
 
     if (PositionSelect(_Symbol) == true) { // We have an open position
         _currentPositionType = _position.PositionType();
-        _currentSignal = "";
         return;
     }
 
@@ -608,7 +615,6 @@ int InitFromBase(
 void ResetState()
 {
     _fixedRisk.Percent(_inpDynamicSizingRiskPerTrade);
-    _currentSignal = "";
     _recentHigh = 0;
     _recentLow = 999999;
     _alreadyMovedToBreakEven = false;
@@ -737,18 +743,26 @@ bool LongModified()
     double breakEvenPoint = _position.PriceOpen() * 2 - _initialStop;
     double doubleRiskReward = _position.PriceOpen() + 2 * (_position.PriceOpen() - _initialStop);
     double takeProfit = _position.TakeProfit();
+    bool signalReversal = false;
 
     // Check if we have got a bearish red signal
-    if (_currentSignal == "Dn") {
-        if (_currentAsk <= doubleRiskReward) {
-            // We only act on this when we're not in a decent profit
-
-            printf("Moving SL to %d pips below low of last bar", _inpTrailAfterReverseSignalPips);
-            newStop = _prices[1].low - _adjustedPoints * _inpTrailAfterReverseSignalPips;
-            _currentSignal = "";
+    if (_isNewBar) {
+        // We have to check the trend to compare the trend direction because this only gets called after we check current positions
+        // Because our trailing stop is based on the QMP Filter signal, we must look for the latest QMP Filter data
+        CheckTrend();
+        if (GetTrendDirection(1) == "Dn") {
+            signalReversal = true;
+            Print("Got a new red QMP filter signal");
+            if (_currentAsk <= doubleRiskReward) {
+                // We only act on this when we're NOT in a decent profit
+                printf("Moving SL since bid is %f and double risk reward price is %f", _currentBid, doubleRiskReward);
+                printf("Moving SL to %d pips below low of last bar", _inpTrailAfterReverseSignalPips);
+                newStop = _prices[1].low - _adjustedPoints * _inpTrailAfterReverseSignalPips;
+            }
         }
     }
-    else {
+
+    if (!signalReversal) {
         if (!_alreadyMovedToBreakEven) {
             if (_currentAsk <= breakEvenPoint) {
                 // Nothing to do
@@ -797,7 +811,7 @@ bool LongModified()
             }
         }
     }
-        
+     
     // Check if we should move to breakeven
     if (!_alreadyMovedToBreakEven) {
         if (_currentAsk > breakEvenPoint) {
@@ -817,6 +831,7 @@ bool LongModified()
                 //    newStop = breakEvenPoint;
                 //}
                 
+                newStop = _position.PriceOpen();
                 _alreadyMovedToBreakEven = true;
             }
         }
@@ -835,18 +850,26 @@ bool ShortModified()
     double breakEvenPoint = _position.PriceOpen() * 2 - _initialStop;
     double doubleRiskReward = _position.PriceOpen() - 2 * (_initialStop - _position.PriceOpen());
     double takeProfit = _position.TakeProfit();
+    bool signalReversal = false;
 
     // Check if we have got a bullish green signal
-    if (_currentSignal == "Up") {
-        if (_currentBid >= doubleRiskReward) {
-            // We only act on this when we're not in a decent profit
-
-            printf("Moving SL to %d pips above high of last bar", _inpTrailAfterReverseSignalPips);
-            newStop = _prices[1].high + _adjustedPoints * _inpTrailAfterReverseSignalPips;
-            _currentSignal = "";
+    if (_isNewBar) {
+        // We have to check the trend to compare the trend direction because this only gets called after we check current positions
+        // Because our trailing stop is based on the QMP Filter signal, we must look for the latest QMP Filter data
+        CheckTrend();
+        if (GetTrendDirection(1) == "Up") {
+            signalReversal = true;
+            Print("Got a new green QMP filter signal");
+            if (_currentBid >= doubleRiskReward) {                
+                // We only act on this when we're NOT in a decent profit
+                printf("Moving SL since bid is %f and double risk reward price is %f", _currentBid, doubleRiskReward);
+                printf("Moving SL to %d pips above high of last bar", _inpTrailAfterReverseSignalPips);
+                newStop = _prices[1].high + _adjustedPoints * _inpTrailAfterReverseSignalPips;
+            }
         }
     }
-    else {
+
+    if (!signalReversal) {
         if (!_alreadyMovedToBreakEven) {
             if (_currentBid >= breakEvenPoint) {
                 // Nothing to do
@@ -917,7 +940,7 @@ bool ShortModified()
                             //}
 
 
-                newStop = breakEvenPoint;
+                newStop = _position.PriceOpen();
 
                 _alreadyMovedToBreakEven = true;
             }
@@ -1120,7 +1143,7 @@ double CalculateStopLossLevelForBuyOrder()
             break;
 
         case MediumTermMA:
-            stopLossLevel = _mediumTermTrendData[1];
+            stopLossLevel = MathMin(_mediumTermTrendData[1], _prices[1].low - _adjustedPoints * _inpInitialStopLossPips);
             break;
 
         case None:
@@ -1191,7 +1214,7 @@ double CalculateStopLossLevelForSellOrder()
         break;
 
     case MediumTermMA:
-        stopLossLevel = _mediumTermTrendData[1];
+        stopLossLevel = MathMax(_mediumTermTrendData[1], _prices[1].high + _adjustedPoints * _inpInitialStopLossPips);
         break;
     }
 
@@ -1289,7 +1312,19 @@ bool HasBullishSignal()
     if (_shortTermTrendData[1] - _longTermTrendData[1] <= _adjustedPoints * 12) return false;
     if (PriceRecentlyLowerThanShortTermMA()) return false;
 
-    // has not had a higher high in the last 15 bars by more than 4 pips
+    /*  New ideas:
+        Measure distance between short and medium term MA
+        Measure range of latest bar - do it open near low and close near high?
+        Have we made a new high over the last x bars?
+        Measure slope of MAs (use 35 bars on 15M)
+        Ignore double risk reward or increase to 4x
+        Don't trail SL when we get a bad signal
+        Sell half when we move to breakeven
+        Change min initial SL to 5 pips
+        Simply sell when we close below short term MA
+    */
+
+    // has not had a higher high in the last 15 bars by more than 10 pips
 
     return true;
 }
@@ -1328,6 +1363,7 @@ bool PriceRecentlyLowerThanShortTermMA()
 
     return count > 3;
 }
+
 
 bool HasBearishSignal()
 {
@@ -1599,7 +1635,7 @@ void StorePerfData()
         }
     }
 
-    _signalOnEntry = _currentSignal;
+    //_signalOnEntry = _currentSignal;
 
     CalcHighestHighs();
 }
