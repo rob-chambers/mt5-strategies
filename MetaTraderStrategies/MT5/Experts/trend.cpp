@@ -1296,6 +1296,7 @@ bool HasBullishSignal()
     Rule 8 - The latest candle must be bullish (closed higher than open)
     Rule 9 - There must be a sufficient gap between the short and long term MAs
     Rule 10 - Out of the last x (say 10) number of bars, there should be no more than y (say 3) bars that have a high < short term MA
+    Rule 11 - The H4 short term MA must be above the H4 long term MA
 
     -- The stop loss should be set to a few pips lower than the bar that recently touched the MA
     NEW SL rule - Set the SL to the medium term average!!
@@ -1311,6 +1312,7 @@ bool HasBullishSignal()
     if (_prices[1].close <= _prices[1].open) return false;
     if (_shortTermTrendData[1] - _longTermTrendData[1] <= _adjustedPoints * 12) return false;
     if (PriceRecentlyLowerThanShortTermMA()) return false;
+    if (_longTermTimeFrameData[1] <= _veryLongTermTimeFrameData[1]) return false;
 
     /*  New ideas:
         Measure distance between short and medium term MA
@@ -1320,8 +1322,8 @@ bool HasBullishSignal()
         Ignore double risk reward or increase to 4x
         Don't trail SL when we get a bad signal
         Sell half when we move to breakeven
-        Change min initial SL to 5 pips
         Simply sell when we close below short term MA
+        Use a Buy Stop Order a few pips above signal bar as confirmation of trend
     */
 
     // has not had a higher high in the last 15 bars by more than 10 pips
@@ -1397,6 +1399,7 @@ bool HasBearishSignal()
     Rule 8 - The latest candle must be bearish (closed lower than open)
     Rule 9 - There must be a sufficient gap between the short and long term MAs
     Rule 10 - Out of the last x (say 10) number of bars, there should be no more than y (say 3) bars that have a low > short term MA
+    Rule 11 - The H4 short term MA must be below the H4 long term MA
 
     -- The stop loss should be set to a few pips higher than the bar that recently touched the MA
     NEW SL rule - Set the SL to the medium term average!!
@@ -1412,6 +1415,7 @@ bool HasBearishSignal()
     if (_prices[1].close >= _prices[1].open) return false;
     if (_longTermTrendData[1] - _shortTermTrendData[1] <= _adjustedPoints * 12) return false;
     if (PriceRecentlyHigherThanShortTermMA()) return false;
+    if (_longTermTimeFrameData[1] >= _veryLongTermTimeFrameData[1]) return false;
 
     // TEST extra RULE: If recent (say 4 bars) price HIGH > medium term MA then do not enter
     // Test new rule - set TP at 3xrisk
