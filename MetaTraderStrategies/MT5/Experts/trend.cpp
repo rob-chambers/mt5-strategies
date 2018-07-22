@@ -94,6 +94,7 @@ double _longTermTrendData[];
 double _mediumTermTrendData[];
 double _shortTermTrendData[];
 double _longTermATRData[];
+double _doubleRiskRewardPrice;
 
 //+------------------------------------------------------------------------------------------------------------------------------+
 //| Variables from base class                                                                                                    |
@@ -421,6 +422,13 @@ void OnTrade()
 
     if (PositionSelect(_Symbol) == true) { // We have an open position
         _currentPositionType = _position.PositionType();
+        if (_currentPositionType == POSITION_TYPE_BUY) {
+            _doubleRiskRewardPrice = _position.PriceOpen() + 2 * (_position.PriceOpen() - _initialStop);
+        }
+        else {
+            _doubleRiskRewardPrice = _position.PriceOpen() - 2 * (_initialStop - _position.PriceOpen());
+        }
+
         return;
     }
 
@@ -719,59 +727,36 @@ void NewBarAndNoCurrentPositions()
     }
 }
 
-bool CheckToModifyPositions()
+void CheckToModifyPositions()
 {
     if (!_position.Select(Symbol())) {
-        return false;
+        return;
     }
 
     if (_position.PositionType() == POSITION_TYPE_BUY) {
-        if (LongModified())
-            return true;
+        CheckToModifyLong();
     }
     else {
-        if (ShortModified())
-            return true;
+        CheckToModifyShort();
     }
-
-    return false;
 }
 
-bool LongModified()
+void CheckToModifyLong()
 {
     double newStop = 0;
-    double breakEvenPoint = _position.PriceOpen() * 2 - _initialStop;
-    double doubleRiskReward = _position.PriceOpen() + 2 * (_position.PriceOpen() - _initialStop);
     double takeProfit = _position.TakeProfit();
-    bool signalReversal = false;
 
-    // Check if we have got a bearish red signal
-    if (_isNewBar) {
-        // We have to check the trend to compare the trend direction because this only gets called after we check current positions
-        // Because our trailing stop is based on the QMP Filter signal, we must look for the latest QMP Filter data
-        CheckTrend();
-        if (GetTrendDirection(1) == "Dn") {
-            signalReversal = true;
-            Print("Got a new red QMP filter signal");
-            if (_currentAsk <= doubleRiskReward) {
-                // We only act on this when we're NOT in a decent profit
-                printf("Moving SL since bid is %f and double risk reward price is %f", _currentBid, doubleRiskReward);
-                printf("Moving SL to %d pips below low of last bar", _inpTrailAfterReverseSignalPips);
-                newStop = _prices[1].low - _adjustedPoints * _inpTrailAfterReverseSignalPips;
-            }
+    if (GotSellSignalOnExistingLongPosition()) {
+        if (!LongPositionReachedDoubleRiskInProfit()) {
+            // We only act on this when we're NOT in a decent profit
+            printf("Moving SL since bid is %f and double risk reward price is %f", _currentBid, _doubleRiskRewardPrice);
+            printf("Moving SL to %d pips below low of last bar", _inpTrailAfterReverseSignalPips);
+            newStop = _prices[1].low - _adjustedPoints * _inpTrailAfterReverseSignalPips;
         }
-    }
-
-    if (!signalReversal) {
-        if (!_alreadyMovedToBreakEven) {
-            if (_currentAsk <= breakEvenPoint) {
-                // Nothing to do
-                return false;
-            }
-        }
-        else {            
-            if (_currentAsk <= doubleRiskReward) {
-                return false;
+    } else {
+        if (_alreadyMovedToBreakEven) {
+            if (_currentAsk <= _doubleRiskRewardPrice) {
+                return;
             }
 
             // We've already reached double risk/reward ratio - check that we're hitting new highs and look for the next swing high
@@ -783,102 +768,159 @@ bool LongModified()
                 _hadRecentSwingHigh = false;
             }
 
-            // Filter on _barsSincePositionOpened to give the position time to "breathe" (i.e. avoid moving SL too early after initial SL)
-            if (!_hadRecentSwingHigh) {
+            if (_hadRecentSwingHigh) {
+                // We've had a recent swing high so the stop loss has already been moved
+                return;
+            } else {
                 // For this SL rule we only operate after a new bar forms
                 //if (IsNewBar(iTime(0))) {
+
+                // Filter on _barsSincePositionOpened to give the position time to "breathe" (i.e. avoid moving SL too early after initial SL)
                 if (!(_isNewBar && _barsSincePositionOpened >= 3)) {
-                    return false;
+                    return;
                 }
 
-                if (_prices[1].close < _recentSwingHigh && _prices[1].high < _recentHigh) {
-                    Print("Swing high found: ", _recentHigh);
-
+                if (HadRecentSwingHigh()) {
                     // We have a swing high.  Set SL to the low of the swing high bar plus a margin
                     newStop = _prices[1].low - _adjustedPoints * _inpSwingHighLowTrailStopPips;
                     //takeProfit = _prices[1].high + _inpSwingHighLowTPPips;
                     takeProfit = _prices[1].high;
                     _hadRecentSwingHigh = true;
-                }
-                else {
+                } else {
                     // No new swing high - nothing to do
-                    return false;
+                    return;
                 }
-            }
-            else {
-                // We've had a recent swing high so the stop loss has already been moved
-                return false;
             }
         }
     }
-     
-    // Check if we should move to breakeven
-    if (!_alreadyMovedToBreakEven) {
-        if (_currentAsk > breakEvenPoint) {
-            if (newStop == 0.0 || breakEvenPoint > newStop) {
-                printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
 
-                // Changing this so we don't actually move the SL
-
-                /* This has changed quite a bit recently.  Historically, we would always move the stop to breakeven.
-                   Then this was removed so we don't move the stop
-                   AND NOW...we move only if Martingale is active, meaning we have increased our risk beyond normal.
-                   This is a way to recover our losses quickly and manage the risk a little better.
-                */
-                //if (_martingaleActive) {
-                //    //newStop = _position.PriceOpen();
-
-                //    newStop = breakEvenPoint;
-                //}
-                
-                newStop = _position.PriceOpen();
-                _alreadyMovedToBreakEven = true;
-            }
-        }
+    if (ShouldMoveLongToBreakEven(newStop)) {
+        newStop = _position.PriceOpen();
+        _alreadyMovedToBreakEven = true;
     }
 
     if (newStop == 0.0) {
-        return false;
+        return;
     }
     
-    return ModifyLongPosition(newStop, takeProfit);
+    ModifyLongPosition(newStop, takeProfit);
 }
 
-bool ShortModified()
+bool ShouldMoveLongToBreakEven(double newStop)
 {
-    double newStop = 0;
-    double breakEvenPoint = _position.PriceOpen() * 2 - _initialStop;
-    double doubleRiskReward = _position.PriceOpen() - 2 * (_initialStop - _position.PriceOpen());
-    double takeProfit = _position.TakeProfit();
-    bool signalReversal = false;
+    if (_alreadyMovedToBreakEven) return false;
 
-    // Check if we have got a bullish green signal
-    if (_isNewBar) {
-        // We have to check the trend to compare the trend direction because this only gets called after we check current positions
-        // Because our trailing stop is based on the QMP Filter signal, we must look for the latest QMP Filter data
-        CheckTrend();
-        if (GetTrendDirection(1) == "Up") {
-            signalReversal = true;
-            Print("Got a new green QMP filter signal");
-            if (_currentBid >= doubleRiskReward) {                
-                // We only act on this when we're NOT in a decent profit
-                printf("Moving SL since bid is %f and double risk reward price is %f", _currentBid, doubleRiskReward);
-                printf("Moving SL to %d pips above high of last bar", _inpTrailAfterReverseSignalPips);
-                newStop = _prices[1].high + _adjustedPoints * _inpTrailAfterReverseSignalPips;
-            }
-        }
+    double breakEvenPrice = _position.PriceOpen() * 2 - _initialStop;
+    if (_currentAsk > breakEvenPrice && (newStop == 0.0 || breakEvenPrice > newStop)) {
+        printf("Moving to breakeven now that the price has reached %f", breakEvenPrice);
+
+        /* This has changed quite a bit recently.  Historically, we would always move the stop to breakeven.
+        Then this was removed so we don't move the stop
+        AND NOW...we move only if Martingale is active, meaning we have increased our risk beyond normal.
+        This is a way to recover our losses quickly and manage the risk a little better.
+        */
+        //if (_martingaleActive) {
+        //    //newStop = _position.PriceOpen();
+
+        //    newStop = breakEvenPrice;
+        //}
+        return true;
     }
 
-    if (!signalReversal) {
-        if (!_alreadyMovedToBreakEven) {
-            if (_currentBid >= breakEvenPoint) {
-                // Nothing to do
-                return false;
-            }
+    return false;
+}
+
+bool ShouldMoveShortToBreakEven(double newStop)
+{
+    if (_alreadyMovedToBreakEven) return false;
+    
+    double breakEvenPrice = _position.PriceOpen() * 2 - _initialStop;
+    if (_currentBid < breakEvenPrice && (newStop == 0.0 || breakEvenPrice < newStop)) {
+        printf("Moving to breakeven now that the price has reached %f", breakEvenPrice);
+
+        /* ACTUALLY MOVE IT - Needs more thorough testing */
+        // Changing this so we don't actually move the SL
+
+        /* This has changed quite a bit recently.  Historically, we would always move the stop to breakeven.
+        Then this was removed so we don't move the stop
+        AND NOW...we move only if Martingale is active, meaning we have increased our risk beyond normal.
+        This is a way to recover our losses quickly and manage the risk a little better.
+        */
+        //if (_martingaleActive) {
+        //    //newStop = _position.PriceOpen();
+
+        //    newStop = breakEvenPrice;
+        //}
+
+        return true;
+    }
+
+    return false;
+}
+
+bool GotSellSignalOnExistingLongPosition()
+{
+    // Check if we have got a bearish red signal
+    if (!_isNewBar) return false;
+    
+    // We have to check the trend to compare the trend direction because this only gets called after we check current positions
+    // Because our trailing stop is based on the QMP Filter signal, we must look for the latest QMP Filter data
+    CheckTrend();
+    if (GetTrendDirection(1) != "Dn") {
+        return false;
+    }
+
+    Print("Got a new red QMP filter signal");
+    return true;
+}
+
+bool LongPositionReachedDoubleRiskInProfit()
+{
+    if (_currentAsk <= _doubleRiskRewardPrice) {
+        return false;
+    }
+
+    return true;
+}
+
+bool HadRecentSwingHigh()
+{
+    if (_prices[1].close < _recentSwingHigh && _prices[1].high < _recentHigh) {
+        Print("Swing high found: ", _recentHigh);
+        return true;
+    }
+
+    return false;
+}
+
+bool HadRecentSwingLow()
+{
+    if (_prices[1].close > _recentSwingLow && _prices[1].low > _recentLow) {
+        Print("Swing low found: ", _recentLow);
+        return true;
+    }
+
+    return false;
+}
+
+void CheckToModifyShort()
+{
+    double newStop = 0;
+    double takeProfit = _position.TakeProfit();
+
+    // Check if we have got a bullish green signal
+    if (GotBuySignalOnExistingShortPosition()) {
+        if (!ShortPositionReachedDoubleRiskInProfit()) {
+            // We only act on this when we're NOT in a decent profit
+            printf("Moving SL since bid is %f and double risk reward price is %f", _currentBid, _doubleRiskRewardPrice);
+            printf("Moving SL to %d pips above high of last bar", _inpTrailAfterReverseSignalPips);
+            newStop = _prices[1].high + _adjustedPoints * _inpTrailAfterReverseSignalPips;
         }
-        else {
-            if (_currentBid >= doubleRiskReward) {
-                return false;
+    }
+    else {
+        if (_alreadyMovedToBreakEven) {
+            if (_currentBid >= _doubleRiskRewardPrice) {
+                return;
             }
 
             // We've already reached double risk/reward ratio - check that we're hitting new lows and look for the next swing low
@@ -890,17 +932,20 @@ bool ShortModified()
                 _hadRecentSwingLow = false;
             }
 
-            // Filter on _barsSincePositionOpened to give the position time to "breathe" (i.e. avoid moving SL too early after initial SL)
-            if (!_hadRecentSwingLow) {
+            if (_hadRecentSwingLow) {
+                // We've had a recent swing low so the stop loss has already been moved
+                return;
+            }
+            else {
                 // For this SL rule we only operate after a new bar forms
                 //if (IsNewBar(iTime(0))) {
+
+                // Filter on _barsSincePositionOpened to give the position time to "breathe" (i.e. avoid moving SL too early after initial SL)
                 if (!(_isNewBar && _barsSincePositionOpened >= 3)) {
-                    return false;
+                    return;
                 }
 
-                if (_prices[1].close > _recentSwingLow && _prices[1].low > _recentLow) {
-                    Print("Swing low found: ", _recentLow);
-
+                if (HadRecentSwingLow()) {
                     // We have a swing low.  Set SL to the high of the swing low bar plus a margin
                     newStop = _prices[1].high + _adjustedPoints * _inpSwingHighLowTrailStopPips;
                     //takeProfit = _prices[1].low - _inpSwingHighLowTPPips;
@@ -909,49 +954,46 @@ bool ShortModified()
                 }
                 else {
                     // No new swing low - nothing to do
-                    return false;
+                    return;
                 }
-            }
-            else {
-                // We've had a recent swing low so the stop loss has already been moved
-                return false;
             }
         }
     }
 
-    // Check if we should move to breakeven
-    if (!_alreadyMovedToBreakEven) {
-        if (_currentBid < breakEvenPoint) {
-            if (newStop == 0.0 || breakEvenPoint < newStop) {
-                printf("Moving to breakeven now that the price has reached %f", breakEvenPoint);
-
-                /* ACTUALLY MOVE IT - Needs more thorough testing */
-                            // Changing this so we don't actually move the SL
-
-                            /* This has changed quite a bit recently.  Historically, we would always move the stop to breakeven.
-                            Then this was removed so we don't move the stop
-                            AND NOW...we move only if Martingale is active, meaning we have increased our risk beyond normal.
-                            This is a way to recover our losses quickly and manage the risk a little better.
-                            */
-                            //if (_martingaleActive) {
-                            //    //newStop = _position.PriceOpen();
-
-                            //    newStop = breakEvenPoint;
-                            //}
-
-
-                newStop = _position.PriceOpen();
-
-                _alreadyMovedToBreakEven = true;
-            }
-        }
+    if (ShouldMoveShortToBreakEven(newStop)) {
+        newStop = _position.PriceOpen();
+        _alreadyMovedToBreakEven = true;
     }
 
     if (newStop == 0.0) {
+        return;
+    }
+
+    ModifyShortPosition(newStop, takeProfit);
+}
+
+bool GotBuySignalOnExistingShortPosition()
+{
+    if (!_isNewBar) return false;
+    
+    // We have to check the trend to compare the trend direction because this only gets called after we check current positions
+    // Because our trailing stop is based on the QMP Filter signal, we must look for the latest QMP Filter data
+    CheckTrend();
+    if (GetTrendDirection(1) != "Up") {
         return false;
     }
 
-    return ModifyShortPosition(newStop, takeProfit);
+    Print("Got a new green QMP filter signal");    
+    return true;
+}
+
+bool ShortPositionReachedDoubleRiskInProfit()
+{
+    if (_currentBid >= _doubleRiskRewardPrice) {
+        return false;
+    }
+
+    return true;
 }
 
 bool ModifyLongPosition(double newStop, double takeProfit)
@@ -1288,15 +1330,15 @@ bool HasBullishSignal()
 
     Rule 1 - on the 4H timeframe, the price must be higher than the short term MA (default 50 period EMA)
     Rule 2 - on the 4H timeframe, the price must be higher than the long term MA (default 240 period LWMA)
-    Rule 3 - on the 15M timeframe, The price must be higher than the long term MA
-    Rule 4 - on the 15M timeframe, The MACD must be below 0.001
-    Rule 5 - on the 15M timeframe, the price must go into the MA and then we get a buy (QMP Filter) signal
-    Rule 6 - The price must not have recently closed lower than the medium term MA
-    Rule 7 - The current low must be higher than the medium term MA
-    Rule 8 - The latest candle must be bullish (closed higher than open)
-    Rule 9 - There must be a sufficient gap between the short and long term MAs
-    Rule 10 - Out of the last x (say 10) number of bars, there should be no more than y (say 3) bars that have a high < short term MA
-    Rule 11 - The H4 short term MA must be above the H4 long term MA
+    Rule 3 - The H4 short term MA must be above the H4 long term MA
+    Rule 4 - on the 15M timeframe, The price must be higher than the long term MA
+    Rule 5 - on the 15M timeframe, The MACD must be below 0.001
+    Rule 6 - on the 15M timeframe, the price must go into the MA and then we get a buy (QMP Filter) signal
+    Rule 7 - The price must not have recently closed lower than the medium term MA
+    Rule 8 - The current low must be higher than the medium term MA
+    Rule 9 - The latest candle must be bullish (closed higher than open)
+    Rule 10 - There must be a sufficient gap between the short and long term MAs
+    Rule 11 - Out of the last x (say 10) number of bars, there should be no more than y (say 3) bars that have a high < short term MA
 
     -- The stop loss should be set to a few pips lower than the bar that recently touched the MA
     NEW SL rule - Set the SL to the medium term average!!
@@ -1304,6 +1346,7 @@ bool HasBullishSignal()
 
     if (_prices[1].close <= _longTermTimeFrameData[1]) return false;
     if (_prices[1].close <= _veryLongTermTimeFrameData[1]) return false;
+    if (_longTermTimeFrameData[1] <= _veryLongTermTimeFrameData[1]) return false;
     if (_prices[1].close <= _longTermTrendData[1]) return false;
     if (_macdData[1] >= 0.001) return false;
     if (GetTrendDirection(1) != "Up") return false;
@@ -1312,7 +1355,6 @@ bool HasBullishSignal()
     if (_prices[1].close <= _prices[1].open) return false;
     if (_shortTermTrendData[1] - _longTermTrendData[1] <= _adjustedPoints * 12) return false;
     if (PriceRecentlyLowerThanShortTermMA()) return false;
-    if (_longTermTimeFrameData[1] <= _veryLongTermTimeFrameData[1]) return false;
 
     /*  New ideas:
         Measure distance between short and medium term MA
@@ -1391,15 +1433,15 @@ bool HasBearishSignal()
 
     Rule 1 - on the 4H timeframe, the price must be lower than the short term MA (default 50 period EMA)
     Rule 2 - on the 4H timeframe, the price must be lower than the long term MA (default 240 period LWMA)
-    Rule 3 - on the 15M timeframe, The price must be lower than the long term MA
-    Rule 4 - on the 15M timeframe, The MACD must be above 0.001
-    Rule 5 - on the 15M timeframe, the price must go into the MA and then we get a sell (QMP Filter) signal
-    Rule 6 - The price must not have recently closed higher than the medium term MA
-    Rule 7 - The current high must be lower than the medium term MA
-    Rule 8 - The latest candle must be bearish (closed lower than open)
-    Rule 9 - There must be a sufficient gap between the short and long term MAs
-    Rule 10 - Out of the last x (say 10) number of bars, there should be no more than y (say 3) bars that have a low > short term MA
-    Rule 11 - The H4 short term MA must be below the H4 long term MA
+    Rule 3 - The H4 short term MA must be below the H4 long term MA
+    Rule 4 - on the 15M timeframe, The price must be lower than the long term MA
+    Rule 5 - on the 15M timeframe, The MACD must be above 0.001
+    Rule 6 - on the 15M timeframe, the price must go into the MA and then we get a sell (QMP Filter) signal
+    Rule 7 - The price must not have recently closed higher than the medium term MA
+    Rule 8 - The current high must be lower than the medium term MA
+    Rule 9 - The latest candle must be bearish (closed lower than open)
+    Rule 10 - There must be a sufficient gap between the short and long term MAs
+    Rule 11 - Out of the last x (say 10) number of bars, there should be no more than y (say 3) bars that have a low > short term MA
 
     -- The stop loss should be set to a few pips higher than the bar that recently touched the MA
     NEW SL rule - Set the SL to the medium term average!!
@@ -1407,6 +1449,7 @@ bool HasBearishSignal()
 
     if (_prices[1].close >= _longTermTimeFrameData[1]) return false;
     if (_prices[1].close >= _veryLongTermTimeFrameData[1]) return false;
+    if (_longTermTimeFrameData[1] >= _veryLongTermTimeFrameData[1]) return false;
     if (_prices[1].close >= _longTermTrendData[1]) return false;
     if (_macdData[1] <= 0.001) return false;
     if (GetTrendDirection(1) != "Dn") return false;
@@ -1415,7 +1458,6 @@ bool HasBearishSignal()
     if (_prices[1].close >= _prices[1].open) return false;
     if (_longTermTrendData[1] - _shortTermTrendData[1] <= _adjustedPoints * 12) return false;
     if (PriceRecentlyHigherThanShortTermMA()) return false;
-    if (_longTermTimeFrameData[1] >= _veryLongTermTimeFrameData[1]) return false;
 
     // TEST extra RULE: If recent (say 4 bars) price HIGH > medium term MA then do not enter
     // Test new rule - set TP at 3xrisk
