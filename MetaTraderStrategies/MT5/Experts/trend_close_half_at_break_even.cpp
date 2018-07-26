@@ -752,68 +752,26 @@ void CheckToModifyPositions()
 
 void CheckToModifyLong()
 {
-    double newStop = 0;
-    double takeProfit = _position.TakeProfit();
-
-    if (GotSellSignalOnExistingLongPosition()) {
-        if (!LongPositionReachedDoubleRiskInProfit()) {
-            // We only act on this when we're NOT in a decent profit
-            printf("Moving SL since bid is %f and double risk reward price is %f", _currentBid, _doubleRiskRewardPrice);
-            printf("Moving SL to %d pips below low of last bar", _inpTrailAfterReverseSignalPips);
-            newStop = _prices[1].low - _adjustedPoints * _inpTrailAfterReverseSignalPips;
-        }
-    } else {
-        if (_alreadyMovedToBreakEven) {
-            if (_currentAsk <= _doubleRiskRewardPrice) {
-                return;
-            }
-
-            // We've already reached double risk/reward ratio - check that we're hitting new highs and look for the next swing high
-
-            // Are we making higher highs?
-            if (_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh) {
-                _recentHigh = _prices[1].high;
-                _recentSwingHigh = _prices[1].low;
-                _hadRecentSwingHigh = false;
-            }
-
-            if (_hadRecentSwingHigh) {
-                // We've had a recent swing high so the stop loss has already been moved
-                return;
-            } else {
-                // For this SL rule we only operate after a new bar forms
-                //if (IsNewBar(iTime(0))) {
-
-                // Filter on _barsSincePositionOpened to give the position time to "breathe" (i.e. avoid moving SL too early after initial SL)
-                if (!(_isNewBar && _barsSincePositionOpened >= 3)) {
-                    return;
-                }
-
-                if (HadRecentSwingHigh()) {
-                    // We have a swing high.  Set SL to the low of the swing high bar plus a margin
-                    newStop = _prices[1].low - _adjustedPoints * _inpSwingHighLowTrailStopPips;
-                    //takeProfit = _prices[1].high + _inpSwingHighLowTPPips;
-                    takeProfit = _prices[1].high;
-                    _hadRecentSwingHigh = true;
-                } else {
-                    // No new swing high - nothing to do
-                    return;
-                }
-            }
-        }
-    }
-
-    if (ShouldMoveLongToBreakEven(newStop)) {
-        newStop = _position.PriceOpen();
-        CloseHalf(true);       
+    if (ShouldMoveLongToBreakEven(0.0)) {
+        CloseHalf(true);
         _alreadyMovedToBreakEven = true;
-    }
-
-    if (newStop == 0.0) {
+        ModifyLongPosition(_position.PriceOpen(), _position.TakeProfit());
         return;
     }
-    
-    ModifyLongPosition(newStop, takeProfit);
+
+    if (!(_isNewBar && _barsSincePositionOpened >= 3)) {
+        return;
+    }
+
+    int count = CopyBuffer(_mediumTermTrendHandle, 0, 0, _inpMediumTermPeriod, _mediumTermTrendData);
+    if (count <= 0) {
+        Print("Error copying medium term trend data.");
+        return;
+    }
+
+    if (_prices[1].close < _mediumTermTrendData[1]) {
+        ClosePosition();
+    }
 }
 
 bool ShouldMoveLongToBreakEven(double newStop)
@@ -915,72 +873,26 @@ bool HadRecentSwingLow()
 
 void CheckToModifyShort()
 {
-    double newStop = 0;
-    double takeProfit = _position.TakeProfit();
-
-    // Check if we have got a bullish green signal
-    if (GotBuySignalOnExistingShortPosition()) {
-        if (!ShortPositionReachedDoubleRiskInProfit()) {
-            // We only act on this when we're NOT in a decent profit
-            printf("Moving SL since bid is %f and double risk reward price is %f", _currentBid, _doubleRiskRewardPrice);
-            printf("Moving SL to %d pips above high of last bar", _inpTrailAfterReverseSignalPips);
-            newStop = _prices[1].high + _adjustedPoints * _inpTrailAfterReverseSignalPips;
-        }
-    }
-    else {
-        if (_alreadyMovedToBreakEven) {
-            if (_currentBid >= _doubleRiskRewardPrice) {
-                return;
-            }
-
-            // We've already reached double risk/reward ratio - check that we're hitting new lows and look for the next swing low
-
-            // Are we making lower lows?
-            if (_prices[1].low < _prices[2].low && _prices[1].low < _recentLow) {
-                _recentLow = _prices[1].low;
-                _recentSwingLow = _prices[1].high;
-                _hadRecentSwingLow = false;
-            }
-
-            if (_hadRecentSwingLow) {
-                // We've had a recent swing low so the stop loss has already been moved
-                return;
-            }
-            else {
-                // For this SL rule we only operate after a new bar forms
-                //if (IsNewBar(iTime(0))) {
-
-                // Filter on _barsSincePositionOpened to give the position time to "breathe" (i.e. avoid moving SL too early after initial SL)
-                if (!(_isNewBar && _barsSincePositionOpened >= 3)) {
-                    return;
-                }
-
-                if (HadRecentSwingLow()) {
-                    // We have a swing low.  Set SL to the high of the swing low bar plus a margin
-                    newStop = _prices[1].high + _adjustedPoints * _inpSwingHighLowTrailStopPips;
-                    //takeProfit = _prices[1].low - _inpSwingHighLowTPPips;
-                    takeProfit = _prices[1].low;
-                    _hadRecentSwingLow = true;
-                }
-                else {
-                    // No new swing low - nothing to do
-                    return;
-                }
-            }
-        }
-    }
-
-    if (ShouldMoveShortToBreakEven(newStop)) {
-        newStop = _position.PriceOpen();
-        CloseHalf(false);
-        _alreadyMovedToBreakEven = true;        
-    }
-
-    if (newStop == 0.0) {
+    if (ShouldMoveShortToBreakEven(0.0)) {
+        CloseHalf(true);
+        _alreadyMovedToBreakEven = true;
+        ModifyShortPosition(_position.PriceOpen(), _position.TakeProfit());
         return;
     }
 
-    ModifyShortPosition(newStop, takeProfit);
+    if (!(_isNewBar && _barsSincePositionOpened >= 3)) {
+        return;
+    }
+
+    int count = CopyBuffer(_mediumTermTrendHandle, 0, 0, _inpMediumTermPeriod, _mediumTermTrendData);
+    if (count <= 0) {
+        Print("Error copying medium term trend data.");
+        return;
+    }
+
+    if (_prices[1].close > _mediumTermTrendData[1]) {
+        ClosePosition();
+    }
 }
 
 void CloseHalf(bool isLong)
@@ -1014,6 +926,16 @@ void CloseHalf(bool isLong)
         printf("Failed to close half position for volume of %f", halfVolume);
         Print("Return code=", _trade.ResultRetcode(),
             ". Code description: ", _trade.ResultRetcodeDescription());
+    }
+}
+
+void ClosePosition()
+{
+    Print("Closing position");
+    bool success = _trade.PositionClose(_Symbol);
+    if (!success) {
+        Print("Failed to close position");
+        Print("Return code=", _trade.ResultRetcode(), ". Code description: ", _trade.ResultRetcodeDescription());
     }
 }
 
