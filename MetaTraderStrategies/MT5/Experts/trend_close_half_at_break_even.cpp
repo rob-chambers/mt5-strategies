@@ -96,6 +96,7 @@ double _mediumTermTrendData[];
 double _shortTermTrendData[];
 double _longTermATRData[];
 double _doubleRiskRewardPrice;
+long _accountMarginMode;
 
 //+------------------------------------------------------------------------------------------------------------------------------+
 //| Variables from base class                                                                                                    |
@@ -219,6 +220,11 @@ int OnInit()
 
         _upIndex = -1;
         _downIndex = -1;
+
+        _accountMarginMode = AccountInfoInteger(ACCOUNT_MARGIN_MODE);
+        if (_accountMarginMode == ACCOUNT_MARGIN_MODE_RETAIL_HEDGING) {
+            Print("Headging mode set");
+        }
 
         PrintAccountInfo();
     }
@@ -987,11 +993,21 @@ void CloseHalf(bool isLong)
 
     if (isLong) {
         comment = "Closed half long at profit";
-        success = _trade.Sell(halfVolume, _Symbol, 0.0, 0.0, 0.0, comment);
+        if (_accountMarginMode == ACCOUNT_MARGIN_MODE_RETAIL_HEDGING) {
+            success = _trade.PositionClosePartial(_Symbol, halfVolume);
+        }
+        else {
+            success = _trade.Sell(halfVolume, _Symbol, 0.0, 0.0, 0.0, comment);
+        }        
     }
     else {
         comment = "Closed half short at profit";
-        success = _trade.Buy(halfVolume, _Symbol, 0.0, 0.0, 0.0, comment);
+        if (_accountMarginMode == ACCOUNT_MARGIN_MODE_RETAIL_HEDGING) {
+            success = _trade.PositionClosePartial(_Symbol, halfVolume);
+        }
+        else {
+            success = _trade.Buy(halfVolume, _Symbol, 0.0, 0.0, 0.0, comment);
+        }        
     }
 
     if (!success) {
@@ -1766,7 +1782,6 @@ void PrintAccountInfo()
     //--- Get the value of the levels when Margin Call and Stop Out occur 
     double margin_call = AccountInfoDouble(ACCOUNT_MARGIN_SO_CALL);
     double stop_out = AccountInfoDouble(ACCOUNT_MARGIN_SO_SO);
-    long margin_mode = AccountInfoInteger(ACCOUNT_MARGIN_MODE);
 
     //--- Show brief account information 
     PrintFormat("The account of the client '%s' #%d %s opened in '%s' on the server '%s'",
@@ -1774,8 +1789,5 @@ void PrintAccountInfo()
     PrintFormat("Account currency - %s, MarginCall and StopOut levels are set in %s",
         currency, (stop_out_mode == ACCOUNT_STOPOUT_MODE_PERCENT) ? "percentage" : " money");
     PrintFormat("MarginCall=%G, StopOut=%G", margin_call, stop_out);
-    PrintFormat("Margin mode=%d", margin_mode);
-    if (margin_mode == ACCOUNT_MARGIN_MODE_RETAIL_HEDGING) {
-        Print("Hedging mode is set");
-    }
+    PrintFormat("Margin mode=%d", _accountMarginMode);
 }
