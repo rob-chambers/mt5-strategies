@@ -1,14 +1,13 @@
 //+------------------------------------------------------------------+
-//|                                 trend_close_half_at_break_even.mq5 
+//|                                                    ShortMAHigh.mq5 
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2018, Robert Chambers"
-#property version   "1.30"
+#property version   "1.22"
 //+------------------------------------------------------------------+
 //|VERSION HISTORY
 //|v1.20 - Added ability to go short, mirroring rules for longs
-//|v1.21 - Going back to basics
-//|v1.30 - Close half the position when we reach breakeven
+//|v1.22 - Move SL when we get a low below the short term MA
 //+------------------------------------------------------------------+
 #include <Trade\Trade.mqh>
 #include <Trade\SymbolInfo.mqh> 
@@ -41,7 +40,7 @@ enum TREND_TYPE
 //+------------------------------------------------------------------------------------------------------------------------------+
 //| Input variables                                                                                                              |
 //+------------------------------------------------------------------------------------------------------------------------------+
-input double        _inpDynamicSizingRiskPerTrade = 1;              // Risk per trade of account balance
+input double        _inpDynamicSizingRiskPerTrade = 2;              // Risk per trade of account balance
 input STOPLOSS_RULE _inpInitialStopLossRule = MediumTermMA;         // Initial Stop Loss Rule
 input int           _inpInitialStopLossPips = 5;                    // Initial stop loss in pips
 
@@ -65,7 +64,7 @@ input int       _inpMartingalePeriod = 20;                          // The maxim
 input int       _inpH4MAPeriod = 50;                                // The H4 timeframe MA period
 input int       _inpLongTermPeriod = 240;                           // The long term MA period
 input int       _inpMediumTermPeriod = 100;                         // The medium term MA period
-input int       _inpShortTermPeriod = 30;                           // The short term MA period
+input int       _inpShortTermPeriod = 20;                           // The short term MA period
 
 input int       _inpTrailAfterReverseSignalPips = 5;                // Trailing stop on reverse signal
 input int       _inpSwingHighLowTrailStopPips = 5;                  // Trailing stop after a swing high/low
@@ -96,7 +95,6 @@ double _mediumTermTrendData[];
 double _shortTermTrendData[];
 double _longTermATRData[];
 double _doubleRiskRewardPrice;
-long _accountMarginMode;
 
 //+------------------------------------------------------------------------------------------------------------------------------+
 //| Variables from base class                                                                                                    |
@@ -220,13 +218,6 @@ int OnInit()
 
         _upIndex = -1;
         _downIndex = -1;
-
-        _accountMarginMode = AccountInfoInteger(ACCOUNT_MARGIN_MODE);
-        if (_accountMarginMode == ACCOUNT_MARGIN_MODE_RETAIL_HEDGING) {
-            Print("Headging mode set");
-        }
-
-        PrintAccountInfo();
     }
 
     return retCode;
@@ -752,26 +743,33 @@ void CheckToModifyPositions()
 
 void CheckToModifyLong()
 {
-    if (ShouldMoveLongToBreakEven(0.0)) {
-        CloseHalf(true);
-        _alreadyMovedToBreakEven = true;
-        ModifyLongPosition(_position.PriceOpen(), _position.TakeProfit());
-        return;
-    }
-
     if (!(_isNewBar && _barsSincePositionOpened >= 3)) {
         return;
     }
 
-    int count = CopyBuffer(_mediumTermTrendHandle, 0, 0, _inpMediumTermPeriod, _mediumTermTrendData);
+    int count = CopyBuffer(_shortTermTrendHandle, 0, 0, _inpShortTermPeriod, _shortTermTrendData);
     if (count <= 0) {
-        Print("Error copying medium term trend data.");
+        Print("Error copying short term trend data.");
         return;
     }
 
-    if (_prices[1].close < _mediumTermTrendData[1]) {
-        ClosePosition();
+    double newStop = 0;
+    if (_prices[1].low < _shortTermTrendData[1]) {
+        newStop = _prices[1].low - _adjustedPoints * _inpTrailAfterReverseSignalPips;
     }
+
+    if (ShouldMoveLongToBreakEven(newStop)) {
+        newStop = _position.PriceOpen();
+        CloseHalf(true);
+        _alreadyMovedToBreakEven = true;
+    }
+
+    if (newStop == 0.0) {
+        return;
+    }
+
+    double takeProfit = _position.TakeProfit();
+    ModifyLongPosition(newStop, takeProfit);
 }
 
 bool ShouldMoveLongToBreakEven(double newStop)
@@ -873,26 +871,33 @@ bool HadRecentSwingLow()
 
 void CheckToModifyShort()
 {
-    if (ShouldMoveShortToBreakEven(0.0)) {
-        CloseHalf(false);
-        _alreadyMovedToBreakEven = true;
-        ModifyShortPosition(_position.PriceOpen(), _position.TakeProfit());
-        return;
-    }
-
     if (!(_isNewBar && _barsSincePositionOpened >= 3)) {
         return;
     }
-
-    int count = CopyBuffer(_mediumTermTrendHandle, 0, 0, _inpMediumTermPeriod, _mediumTermTrendData);
+    
+    int count = CopyBuffer(_shortTermTrendHandle, 0, 0, _inpShortTermPeriod, _shortTermTrendData);
     if (count <= 0) {
-        Print("Error copying medium term trend data.");
+        Print("Error copying short term trend data.");
         return;
     }
 
-    if (_prices[1].close > _mediumTermTrendData[1]) {
-        ClosePosition();
+    double newStop = 0;
+    if (_prices[1].high > _shortTermTrendData[1]) {
+        newStop = _prices[1].high + _adjustedPoints * _inpTrailAfterReverseSignalPips;
     }
+
+    if (ShouldMoveShortToBreakEven(newStop)) {
+        newStop = _position.PriceOpen();
+        CloseHalf(false);
+        _alreadyMovedToBreakEven = true;
+    }
+
+    if (newStop == 0.0) {
+        return;
+    }
+
+    double takeProfit = _position.TakeProfit();
+    ModifyShortPosition(newStop, takeProfit);
 }
 
 void CloseHalf(bool isLong)
@@ -905,37 +910,17 @@ void CloseHalf(bool isLong)
 
     if (isLong) {
         comment = "Closed half long at profit";
-        if (_accountMarginMode == ACCOUNT_MARGIN_MODE_RETAIL_HEDGING) {
-            success = _trade.PositionClosePartial(_Symbol, halfVolume);
-        }
-        else {
-            success = _trade.Sell(halfVolume, _Symbol, 0.0, 0.0, 0.0, comment);
-        }        
+        success = _trade.Sell(halfVolume, _Symbol, 0.0, 0.0, 0.0, comment);
     }
     else {
         comment = "Closed half short at profit";
-        if (_accountMarginMode == ACCOUNT_MARGIN_MODE_RETAIL_HEDGING) {
-            success = _trade.PositionClosePartial(_Symbol, halfVolume);
-        }
-        else {
-            success = _trade.Buy(halfVolume, _Symbol, 0.0, 0.0, 0.0, comment);
-        }        
+        success = _trade.Buy(halfVolume, _Symbol, 0.0, 0.0, 0.0, comment);
     }
 
     if (!success) {
         printf("Failed to close half position for volume of %f", halfVolume);
         Print("Return code=", _trade.ResultRetcode(),
             ". Code description: ", _trade.ResultRetcodeDescription());
-    }
-}
-
-void ClosePosition()
-{
-    Print("Closing position");
-    bool success = _trade.PositionClose(_Symbol);
-    if (!success) {
-        Print("Failed to close position");
-        Print("Return code=", _trade.ResultRetcode(), ". Code description: ", _trade.ResultRetcodeDescription());
     }
 }
 
@@ -1306,7 +1291,6 @@ bool HasBullishSignal()
     Rule 9 - The latest candle must be bullish (closed higher than open)
     Rule 10 - There must be a sufficient gap between the short and long term MAs
     Rule 11 - Out of the last x (say 10) number of bars, there should be no more than y (say 3) bars that have a high < short term MA
-    Rule 12 - The difference between the short term MA and medium term MA must not be more than 20 pips
 
     -- The stop loss should be set to a few pips lower than the bar that recently touched the MA
     NEW SL rule - Set the SL to the medium term average!!
@@ -1323,7 +1307,6 @@ bool HasBullishSignal()
     if (_prices[1].close <= _prices[1].open) return false;
     if (_shortTermTrendData[1] - _longTermTrendData[1] <= _adjustedPoints * 12) return false;
     if (PriceRecentlyLowerThanShortTermMA()) return false;
-    if (MediumMinusShortMA() >= 20) return false;
 
     /*  New ideas:
         Measure distance between short and medium term MA
@@ -1340,12 +1323,6 @@ bool HasBullishSignal()
     // has not had a higher high in the last 15 bars by more than 10 pips
 
     return true;
-}
-
-double MediumMinusShortMA()
-{
-    double diff = MathAbs(_mediumTermTrendData[1] - _shortTermTrendData[1]) / _adjustedPoints;
-    return diff;
 }
 
 // Helper methods to detect bullish setup
@@ -1433,7 +1410,6 @@ bool HasBearishSignal()
     if (_prices[1].close >= _prices[1].open) return false;
     if (_longTermTrendData[1] - _shortTermTrendData[1] <= _adjustedPoints * 12) return false;
     if (PriceRecentlyHigherThanShortTermMA()) return false;
-    if (MediumMinusShortMA() >= 20) return false;
 
     // TEST extra RULE: If recent (say 4 bars) price HIGH > medium term MA then do not enter
     // Test new rule - set TP at 3xrisk
@@ -1678,47 +1654,4 @@ void CalcHighestHighs()
             _highestHigh25 = h;
         }
     }    
-}
-
-void PrintAccountInfo()
-{
-    //--- Name of the company 
-    string company = AccountInfoString(ACCOUNT_COMPANY);
-    //--- Name of the client 
-    string name = AccountInfoString(ACCOUNT_NAME);
-    //--- Account number 
-    long login = AccountInfoInteger(ACCOUNT_LOGIN);
-    //--- Name of the server 
-    string server = AccountInfoString(ACCOUNT_SERVER);
-    //--- Account currency 
-    string currency = AccountInfoString(ACCOUNT_CURRENCY);
-    //--- Demo, contest or real account 
-    ENUM_ACCOUNT_TRADE_MODE account_type = (ENUM_ACCOUNT_TRADE_MODE)AccountInfoInteger(ACCOUNT_TRADE_MODE);
-    //--- Now transform the value of  the enumeration into an understandable form 
-    string trade_mode;
-    switch (account_type)
-    {
-    case  ACCOUNT_TRADE_MODE_DEMO:
-        trade_mode = "demo";
-        break;
-    case  ACCOUNT_TRADE_MODE_CONTEST:
-        trade_mode = "contest";
-        break;
-    default:
-        trade_mode = "real";
-        break;
-    }
-    //--- Stop Out is set in percentage or money 
-    ENUM_ACCOUNT_STOPOUT_MODE stop_out_mode = (ENUM_ACCOUNT_STOPOUT_MODE)AccountInfoInteger(ACCOUNT_MARGIN_SO_MODE);
-    //--- Get the value of the levels when Margin Call and Stop Out occur 
-    double margin_call = AccountInfoDouble(ACCOUNT_MARGIN_SO_CALL);
-    double stop_out = AccountInfoDouble(ACCOUNT_MARGIN_SO_SO);
-
-    //--- Show brief account information 
-    PrintFormat("The account of the client '%s' #%d %s opened in '%s' on the server '%s'",
-        name, login, trade_mode, company, server);
-    PrintFormat("Account currency - %s, MarginCall and StopOut levels are set in %s",
-        currency, (stop_out_mode == ACCOUNT_STOPOUT_MODE_PERCENT) ? "percentage" : " money");
-    PrintFormat("MarginCall=%G, StopOut=%G", margin_call, stop_out);
-    PrintFormat("Margin mode=%d", _accountMarginMode);
 }
