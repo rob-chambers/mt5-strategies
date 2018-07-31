@@ -235,6 +235,7 @@ void OnDeinit(const int reason)
     ReleaseIndicator(_platinumHandle);
     ReleaseIndicator(_longTermTrendHandle);
     ReleaseIndicator(_mediumTermTrendHandle);
+    ReleaseIndicator(_shortTermTrendHandle);
     ReleaseIndicator(_longTermTimeFrameHandle);    
     ReleaseIndicator(_veryLongTermTimeFrameHandle);
 }
