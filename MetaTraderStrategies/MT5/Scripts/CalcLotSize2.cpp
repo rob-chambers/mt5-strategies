@@ -3,7 +3,7 @@
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright     "Copyright 2018, Robert Chambers"
-#property version       "1.31"
+#property version       "1.32"
 #property description   "Lot Size Calculator"
 
 /* Revision History 
@@ -14,6 +14,7 @@
 1.20    * Added new enter trade button for quickly getting in based on the last signal
 1.30    * Display lot size based on automatic stop loss
 1.31    * Increased default risk to 11% so that I risk £500 for live trading
+1.32    * Fix for position sizing to handle metals
 */
 
 
@@ -95,7 +96,7 @@ int OnInit() {
         }
 
         double size = 0.0001;
-        if (_symbol.Digits() == 3) {
+        if (_symbol.Digits() == 2 || _symbol.Digits() == 3) {
             size *= 100;
         }
 

@@ -1,0 +1,1 @@
+copy "close_half_position.cpp" "C:\Users\rob\AppData\Roaming\MetaQuotes\Terminal\7D024799C00A011848A10ECEDFE5CBC2\MQL4\Scripts\close_half_position.mq4"
