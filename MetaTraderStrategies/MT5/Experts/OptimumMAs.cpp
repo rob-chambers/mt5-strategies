@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                                    wavecatcher.mq5 
+//|                                                     optimumMAs.mq5 
 //|                                    Copyright 2018, Robert Chambers
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2018, Robert Chambers"
@@ -31,12 +31,12 @@ enum STOPLOSS_RULE
 //+------------------------------------------------------------------------------------------------------------------------------+
 input double        _inpDynamicSizingRiskPerTrade = 2;              // Risk per trade of account balance
 input STOPLOSS_RULE _inpInitialStopLossRule = LongTermMA;           // Initial Stop Loss Rule
-input int           _inpInitialStopLossPips = 0;                    // Initial stop loss in pips
-input int           _inpTrailingStopLossPips = 8;                   // Trailing stop loss in pips
+input int           _inpInitialStopLossPips = 5;                    // Initial stop loss in pips
+input int           _inpTrailingStopLossPips = 5;                   // Trailing stop loss in pips
 
 // Go Long / short parameters
 input bool      _inpGoLong = true;                                  // Whether to enter long trades or not
-input bool      _inpGoShort = true;                                 // Whether to enter short trades or not
+input bool      _inpGoShort = false;                                // Whether to enter short trades or not
 
 // Alert parameters
 input bool      _inpAlertTerminalEnabled = true;                    // Whether to show terminal alerts or not
@@ -47,11 +47,11 @@ input int       _inpMinTradingHour = 0;                             // The minim
 input int       _inpMaxTradingHour = 0;                             // The maximum hour of the day to trade (e.g. 19 for 7pm)
 
 // Technical parameters
-input int       _inpH4MAPeriod = 50;                                // The H4 timeframe MA period
-input int       _inpLongTermPeriod = 240;                           // The long term MA period
-input int       _inpMediumTermPeriod = 100;                         // The medium term MA period
-input int       _inpShortTermPeriod = 20;                           // The short term MA period
-input int       _inpHighestHighNumBars = 20;                        // Period over which we have the highest high
+input int       _inpH4MAPeriod = 21;                                // The H4 timeframe MA period
+input int       _inpLongTermPeriod = 89;                            // The long term MA period
+input int       _inpMediumTermPeriod = 55;                          // The medium term MA period
+input int       _inpShortTermPeriod = 21;                           // The short term MA period
+input int       _inpHighestHighNumBars = 15;                        // Period over which we have the highest high
 input int       _inpSweetSpot1Lower = 4;
 input int       _inpSweetSpot1Upper = 8;
 input int       _inpSweetSpot2Lower = 2;
@@ -63,6 +63,7 @@ input int       _inpSweetSpot2Upper = 6;
 
 int _longTermTimeFrameHandle;
 int _veryLongTermTimeFrameHandle;
+
 int _longTermTrendHandle;
 int _mediumTermTrendHandle;
 int _shortTermTrendHandle;
@@ -92,6 +93,7 @@ double _initialStop;
 
 // Private
 datetime _barTime;                  // For detection of a new bar
+double _recentHigh;                 // Tracking the most recent high for stop management
 int _barsSincePositionOpened;       // Counter of the number of bars since a position was opened
 int _barsSincePositionClosed;       // Counter of the number of bars since a position was closed
 int _eventCount;                    // Counter for OnTrade event
@@ -107,6 +109,21 @@ int OnInit()
     int retCode = InitFromBase(_inpDynamicSizingRiskPerTrade, _inpInitialStopLossRule, _inpInitialStopLossPips, _inpGoLong, _inpGoShort, _inpAlertTerminalEnabled, _inpAlertEmailEnabled, _inpMinTradingHour, _inpMaxTradingHour);
 
     if (retCode == INIT_SUCCEEDED) {
+        if (_inpSweetSpot1Upper <= 0 || _inpSweetSpot2Upper <= 0 || _inpSweetSpot1Lower <= 0 || _inpSweetSpot2Lower <= 0) {
+            Print("Invalid sweet spot pip values must be > 0");
+            return(INIT_FAILED);
+        }
+
+        if (_inpSweetSpot1Upper < _inpSweetSpot1Lower) {
+            Print("Invalid sweet spot 1 pip value - upper must exceed lower");
+            return(INIT_FAILED);
+        }
+
+        if (_inpSweetSpot2Upper < _inpSweetSpot2Lower) {
+            Print("Invalid sweet spot 2 pip value - upper must exceed lower");
+            return(INIT_FAILED);
+        }
+
         Print("Custom initialisation for trend EA");
 
         ArraySetAsSeries(_longTermTimeFrameData, true);
@@ -121,13 +138,13 @@ int OnInit()
             return(INIT_FAILED);
         }
 
-        _veryLongTermTimeFrameHandle = iMA(_Symbol, PERIOD_H4, _inpLongTermPeriod, 0, MODE_LWMA, PRICE_CLOSE);
+        _veryLongTermTimeFrameHandle = iMA(_Symbol, PERIOD_H4, _inpLongTermPeriod, 0, MODE_SMA, PRICE_CLOSE);
         if (_veryLongTermTimeFrameHandle == INVALID_HANDLE) {
             Print("Error creating very long term MA indicator");
             return(INIT_FAILED);
         }
 
-        _longTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, _inpLongTermPeriod, 0, MODE_LWMA, PRICE_CLOSE);
+        _longTermTrendHandle = iMA(_Symbol, PERIOD_CURRENT, _inpLongTermPeriod, 0, MODE_EMA, PRICE_CLOSE);
         if (_longTermTrendHandle == INVALID_HANDLE) {
             Print("Error creating long term MA indicator");
             return(INIT_FAILED);
@@ -369,6 +386,7 @@ int InitFromBase(
 
 void ResetState()
 {
+    _recentHigh = 0;
     _fixedRisk.Percent(_inpDynamicSizingRiskPerTrade);
     _alreadyMovedToBreakEven = false;
     _initialStop = 0;
@@ -490,29 +508,22 @@ void CheckToModifyLong()
         return;
     }
 
-    //if (!(_isNewBar && _barsSincePositionOpened >= 3)) {
-    //    return;
-    //}
-    
-    // New change - only trail the SL ON THE SECOND TRANCHE (otherwise we just use the inital SL), and only if we touch the short term MA
-    
-    // CHANGE - We don't have to be already at breakeven - this will cut our losses more quickly
-    //if (!_alreadyMovedToBreakEven) return;
-
-    int count = CopyBuffer(_shortTermTrendHandle, 0, 0, _inpShortTermPeriod, _shortTermTrendData);
-    if (count <= 0) {
-        Print("Error copying short term trend data.");
+    if (!_isNewBar) {
         return;
     }
 
-    if (_isNewBar) {
-        _trailedThisBar = false;
+    if (_barsSincePositionOpened < 3) {
+        return;
     }
 
-    if (!_trailedThisBar && _currentAsk < _shortTermTrendData[1]) {
-        if (ModifyLongPosition(_currentAsk - _inpTrailingStopLossPips * _adjustedPoints, _position.TakeProfit())) {
-            _trailedThisBar = true;
-        }
+    int count = CopyBuffer(_mediumTermTrendHandle, 0, 0, _inpMediumTermPeriod, _mediumTermTrendData);
+    if (count <= 0) {
+        Print("Error copying medium term trend data.");
+        return;
+    }
+
+    if (_prices[1].close < _mediumTermTrendData[1]) {
+        ClosePosition();
     }
 }
 
@@ -529,34 +540,100 @@ bool ShouldMoveLongToBreakEven(double newStop)
         AND NOW...we move only if Martingale is active, meaning we have increased our risk beyond normal.
         This is a way to recover our losses quickly and manage the risk a little better.
         */
+        //if (_martingaleActive) {
+        //    //newStop = _position.PriceOpen();
+
+        //    newStop = breakEvenPrice;
+        //}
         return true;
     }
 
     return false;
 }
 
-bool ShouldMoveShortToBreakEven(double newStop)
-{
-    if (_alreadyMovedToBreakEven) return false;
-    
-    double breakEvenPrice = _position.PriceOpen() * 2 - _initialStop;
-    if (_currentBid < breakEvenPrice && (newStop == 0.0 || breakEvenPrice < newStop)) {
-        printf("Moving to breakeven now that the price has reached %f", breakEvenPrice);
 
-        /* ACTUALLY MOVE IT - Needs more thorough testing */
-        // Changing this so we don't actually move the SL
-
-        /* This has changed quite a bit recently.  Historically, we would always move the stop to breakeven.
-        Then this was removed so we don't move the stop
-        AND NOW...we move only if Martingale is active, meaning we have increased our risk beyond normal.
-        This is a way to recover our losses quickly and manage the risk a little better.
-        */
-
-        return true;
-    }
-
-    return false;
-}
+//void CheckToModifyLong()
+//{
+//    //if (ShouldMoveLongToBreakEven(0.0)) {
+//    //    CloseHalf(true);
+//    //    _alreadyMovedToBreakEven = true;
+//    //    ModifyLongPosition(_position.PriceOpen(), _position.TakeProfit());
+//    //    return;
+//    //}
+//
+//    //if (!(_isNewBar && _barsSincePositionOpened >= 3)) {
+//    //    return;
+//    //}
+//    
+//    // New change - only trail the SL ON THE SECOND TRANCHE (otherwise we just use the inital SL), and only if we touch the short term MA
+//    
+//    // CHANGE - We don't have to be already at breakeven - this will cut our losses more quickly    
+//    //if (!_alreadyMovedToBreakEven) return;
+//
+//    double newStop = 0;
+//
+//    if (!_alreadyMovedToBreakEven) {
+//        // Are we making higher highs?
+//        if (_prices[1].high > _prices[2].high && _prices[1].high > _recentHigh) {
+//            _recentHigh = _prices[1].high;
+//        }
+//        else {
+//            // Check if our profit has fallen by 50%
+//            //if (DecentProfitSoFar()) {
+//            if (_isNewBar && ProfitDroppedByHalf()) {
+//                CloseHalf(true);
+//                newStop = _position.PriceOpen();
+//            }
+//            //}
+//        }
+//    }
+//
+//    if (_isNewBar) {
+//        int count = CopyBuffer(_mediumTermTrendHandle, 0, 0, _inpMediumTermPeriod, _mediumTermTrendData);
+//        if (count <= 0) {
+//            Print("Error copying medium term trend data.");
+//            return;
+//        }
+//
+//        if (_currentAsk < _mediumTermTrendData[1]) {
+//            // Set SL to current low + margin
+//            newStop = _prices[1].low - _adjustedPoints * _inpTrailingStopLossPips;
+//        }
+//    }
+//
+//    if (newStop == 0) {
+//        return;
+//    }
+//
+//    if (ModifyLongPosition(newStop, _position.TakeProfit())) {
+//    }
+//}
+//
+//bool DecentProfitSoFar()
+//{
+//    double largestProfit = _recentHigh - _position.PriceOpen();
+//    double initialRisk = _position.PriceOpen() - _initialStop;
+//
+//    if (largestProfit > initialRisk * 0.75) {
+//        Print("Trade has made a decent profit so far");
+//        return true;
+//    }
+//
+//    return false;
+//}
+//
+//bool ProfitDroppedByHalf()
+//{
+//    double diff = _recentHigh - _currentAsk;
+//    double largestProfit = _recentHigh - _position.PriceOpen();
+//
+//    if (diff > largestProfit / 2) {
+//        Print("Price dropped to below half profit");
+//        return true;
+//    }
+//
+//    return false;
+//}
 
 void CheckToModifyShort()
 {
@@ -587,9 +664,38 @@ void CheckToModifyShort()
 
     if (!_trailedThisBar && _currentBid > _shortTermTrendData[1]) {
         if (ModifyShortPosition(_currentBid + _inpTrailingStopLossPips * _adjustedPoints, _position.TakeProfit())) {
+        //if (ModifyShortPosition(_currentBid + 5 * _adjustedPoints, _position.TakeProfit())) {
             _trailedThisBar = true;
         }
     }
+}
+
+bool ShouldMoveShortToBreakEven(double newStop)
+{
+    if (_alreadyMovedToBreakEven) return false;
+
+    double breakEvenPrice = _position.PriceOpen() * 2 - _initialStop;
+    if (_currentBid < breakEvenPrice && (newStop == 0.0 || breakEvenPrice < newStop)) {
+        printf("Moving to breakeven now that the price has reached %f", breakEvenPrice);
+
+        /* ACTUALLY MOVE IT - Needs more thorough testing */
+        // Changing this so we don't actually move the SL
+
+        /* This has changed quite a bit recently.  Historically, we would always move the stop to breakeven.
+        Then this was removed so we don't move the stop
+        AND NOW...we move only if Martingale is active, meaning we have increased our risk beyond normal.
+        This is a way to recover our losses quickly and manage the risk a little better.
+        */
+        //if (_martingaleActive) {
+        //    //newStop = _position.PriceOpen();
+
+        //    newStop = breakEvenPrice;
+        //}
+
+        return true;
+    }
+
+    return false;
 }
 
 void CloseHalf(bool isLong)
@@ -989,20 +1095,6 @@ bool HasBullishSignal()
     // has not had a higher high in the last 15 bars by more than 10 pips
 
 
-    /* WAVECATCHER RULES FOR GOING LONG
-       --------------------------------
-
-        Rule 1 - on the 4H timeframe, the price must be higher than the short term MA(default 50 period EMA)
-        Rule 2 - on the 4H timeframe, the price must be higher than the long term MA(default 240 period LWMA)
-        Rule 3 - The H4 short term MA must be above the H4 long term MA        
-        Rule 4 - The latest candle must be bullish(closed higher than open)
-        Rule 5 - We have made a higher high in the last 15 bars
-        Rule 6 - The short term MA must be above the medium term MA by between 4 and 8 pips
-        Rule 7 - The medium term MA must be above the long term MA by between 2 and 6 pips
-        Rule 8 - Price has closed within a few pips of both the short term and long term MAs over the last x bars
-    */
-
-
     /* IDEA: Check that on long term timeframe, price recently moved into the zone, i.e. back towards the short MA
     e.g. for shorts, highest high in the last 10 bars > short term MA on H4
 
@@ -1016,15 +1108,49 @@ bool HasBullishSignal()
     Use QMP filter signal for 2nd tranch   
     */
 
+    // Rule 1 - on the H4 timeframe, the price must be higher than the long term MA (default 89 period EMA)
     if (_prices[1].close <= _veryLongTermTimeFrameData[1]) return false;
+
+    // Rule 2 - on the H4 timeframe, the price must be higher than the short term MA (default 21 period EMA)
+    if (_prices[1].close <= _longTermTimeFrameData[1]) return false;
+
+    // Rule 3 - The H4 short term MA must be above the H4 long term MA
     if (_longTermTimeFrameData[1] <= _veryLongTermTimeFrameData[1]) return false;
+
+    // Rule 4 - The price must be above the H4 short term MA
+    if (_prices[1].close <= _longTermTimeFrameData[1]) return false;
+
+    // Rule 5 - The price must be above all 3 MAs and all 3 MAs "layered"
+    if (!MAsLayered()) return false;
+
+    // Rule 6 - The latest candle must be bullish (closed higher than open)
     if (!IsLatestCandleBullish()) return false;
+    
+    // Rule 7 - We have made a higher high in the last 15 bars
     int index = HighestHighIndex();
     if (index != 1) return false;
+    
+    // Rule 8 - The short term MA must be above the medium term MA by between 4 and 8 pips
     if (!InShortTermMASweetSpot()) return false;
+
+    // Rule 9 - The medium term MA must be above the long term MA by between 2 and 6 pips
     if (!InMediumTermMASweetSpot()) return false;
+
+    // Rule 11 - Price has closed within a few pips of both the short term and long term MAs over the last x bars
     //if (!PriceHasTradedCloseToShortTermMA()) return false;
     //if (!PriceHasTradedCloseToLongTermMA()) return false;
+
+    return true;
+}
+
+bool MAsLayered()
+{
+    if (_shortTermTrendData[1] < _longTermTrendData[1]) return false;
+    if (_mediumTermTrendData[1] < _longTermTrendData[1]) return false;
+    if (_shortTermTrendData[1] < _mediumTermTrendData[1]) return false;
+
+    if (_prices[1].close < _shortTermTrendData[1]) return false;
+    if (_prices[1].close < _longTermTrendData[1]) return false;
 
     return true;
 }
@@ -1077,14 +1203,20 @@ int HighestHighIndex()
 bool InShortTermMASweetSpot()
 {
     double shortTermDiff = (_shortTermTrendData[1] - _mediumTermTrendData[1]) / _adjustedPoints;
-    if (shortTermDiff >= _inpSweetSpot1Lower && shortTermDiff <= _inpSweetSpot1Upper) return true;
+    if (shortTermDiff >= _inpSweetSpot1Lower && shortTermDiff <= _inpSweetSpot1Upper) {
+        return true;
+    }
+
     return false;
 }
 
 bool InMediumTermMASweetSpot()
 {
     double mediumTermDiff = (_mediumTermTrendData[1] - _longTermTrendData[1]) / _adjustedPoints;
-    if (mediumTermDiff >= _inpSweetSpot2Lower && mediumTermDiff <= _inpSweetSpot2Upper) return true;
+    if (mediumTermDiff >= _inpSweetSpot2Lower && mediumTermDiff <= _inpSweetSpot2Upper) {
+        return true; 
+    }
+
     return false;
 }
 
