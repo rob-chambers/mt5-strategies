@@ -30,7 +30,7 @@ namespace cAlgo.Library.Robots
         [Parameter("Take short trades?", DefaultValue = true)]
         public bool TakeShortsParameter { get; set; }
 
-        [Parameter("Initial SL Rule", DefaultValue = "ShortTermHighLow")]
+        [Parameter("Initial SL Rule", DefaultValue = "StaticPipsValue")]
         public string InitialStopLossRule { get; set; }
 
         [Parameter("Trailing SL Rule", DefaultValue = "None")]
@@ -69,7 +69,6 @@ namespace cAlgo.Library.Robots
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
         private AverageTrueRange _atr;
-        private bool _canOpenPosition;
 
         protected override void OnStart()
         {
@@ -77,11 +76,6 @@ namespace cAlgo.Library.Robots
             _mediumMA = Indicators.MovingAverage(SourceSeries, MediumPeriodParameter, MovingAverageType.Exponential);
             _slowMA = Indicators.MovingAverage(SourceSeries, SlowPeriodParameter, MovingAverageType.Weighted);
             _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
-
-            Positions.Opened += OnPositionOpened;
-            Positions.Closed += OnPositionClosed;
-
-            _canOpenPosition = true;
 
             Print("Take Longs: {0}", TakeLongsParameter);
             Print("Take Shorts: {0}", TakeShortsParameter);
@@ -92,31 +86,12 @@ namespace cAlgo.Library.Robots
                 TakeShortsParameter,
                 InitialStopLossRule,
                 TrailingStopLossRule,
-                LotSizingRule);
+                LotSizingRule,
+                StopLossInPips,
+                TakeProfitInPips);
         }
 
-        protected override void OnBar()
-        {
-            if (!_canOpenPosition)
-            {
-                return;
-            }
-
-            if (TakeLongsParameter && HasBullishSignal())
-            {
-                var Quantity = 1;
-
-                var volumeInUnits = Symbol.QuantityToVolume(Quantity);
-                ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, StopLossInPips, TakeProfitInPips);
-            }
-            else if (TakeShortsParameter && HasBearishSignal())
-            {
-                var Quantity = 1;
-
-                var volumeInUnits = Symbol.QuantityToVolume(Quantity);
-                ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, StopLossInPips, TakeProfitInPips);
-            }
-        }
+        
 
         //protected override void OnTick()
         //{
@@ -131,7 +106,7 @@ namespace cAlgo.Library.Robots
 
         //}        
 
-        private bool HasBullishSignal()
+        protected override bool HasBullishSignal()
         {
             var currentHigh = MarketSeries.High.Last(1);
             var currentClose = MarketSeries.Close.Last(1);
@@ -157,7 +132,7 @@ namespace cAlgo.Library.Robots
             return false;
         }
 
-        private bool HasBearishSignal()
+        protected override bool HasBearishSignal()
         {
             var currentClose = MarketSeries.Close.Last(1);
 
@@ -169,6 +144,71 @@ namespace cAlgo.Library.Robots
             }
 
             return false;
+        }        
+    }
+
+    public abstract class BaseRobot : Robot
+    {
+        private bool _takeLongsParameter;
+        private bool _takeShortsParameter;
+        private StopLossRule _initialStopLossRule;
+        private StopLossRule _trailingStopLossRule;
+        private LotSizingRule _lotSizingRule;
+        private int _stopLossInPips;
+        private int _takeProfitInPips;
+        private bool _canOpenPosition;
+
+        //public bool MoveToBreakEven { get; set; }
+
+        protected abstract string Name { get; }
+
+        protected abstract bool HasBullishSignal();
+        protected abstract bool HasBearishSignal();
+
+        protected void Init(
+            bool takeLongsParameter, 
+            bool takeShortsParameter, 
+            string initialStopLossRule,
+            string trailingStopLossRule,
+            string lotSizingRule,
+            int stopLossInPips = 0,
+            int takeProfitInPips = 0)
+        {
+            _takeLongsParameter = takeLongsParameter;
+            _takeShortsParameter = takeShortsParameter;
+            _initialStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), initialStopLossRule);
+            _trailingStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), trailingStopLossRule);
+            _lotSizingRule = (LotSizingRule)Enum.Parse(typeof(LotSizingRule), lotSizingRule);
+            _stopLossInPips = stopLossInPips;
+            _takeProfitInPips = takeProfitInPips;
+
+            _canOpenPosition = true;
+
+            Positions.Opened += OnPositionOpened;
+            Positions.Closed += OnPositionClosed;
+        }
+
+        protected override void OnBar()
+        {
+            if (!_canOpenPosition)
+            {
+                return;
+            }
+
+            if (_takeLongsParameter && HasBullishSignal())
+            {
+                var Quantity = 1;
+
+                var volumeInUnits = Symbol.QuantityToVolume(Quantity);
+                ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, _stopLossInPips, _takeProfitInPips);
+            }
+            else if (_takeShortsParameter && HasBearishSignal())
+            {
+                var Quantity = 1;
+
+                var volumeInUnits = Symbol.QuantityToVolume(Quantity);
+                ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, _stopLossInPips, _takeProfitInPips);
+            }
         }
 
         private void OnPositionOpened(PositionOpenedEventArgs args)
@@ -183,37 +223,6 @@ namespace cAlgo.Library.Robots
             var position = args.Position;
             Print("Closed {0:N} {1} at {2} for {3} profit", position.Volume, position.TradeType, position.EntryPrice, position.GrossProfit);
             _canOpenPosition = true;
-        }
-    }
-
-    public abstract class BaseRobot : Robot
-    {
-        private bool _takeLongsParameter;
-        private bool _takeShortsParameter;
-        private StopLossRule _initialStopLossRule;
-        private StopLossRule _trailingStopLossRule;
-        private LotSizingRule _lotSizingRule;
-
-        //public int InitialSLPips { get; set; }
-
-        //public int TrailingSLPips { get; set; }
-
-        //public bool MoveToBreakEven { get; set; }
-
-        protected abstract string Name { get; }
-
-        protected void Init(
-            bool takeLongsParameter, 
-            bool takeShortsParameter, 
-            string initialStopLossRule,
-            string trailingStopLossRule,
-            string lotSizingRule)
-        {
-            _takeLongsParameter = takeLongsParameter;
-            _takeShortsParameter = takeShortsParameter;
-            _initialStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), initialStopLossRule);
-            _trailingStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), trailingStopLossRule);
-            _lotSizingRule = (LotSizingRule)Enum.Parse(typeof(LotSizingRule), lotSizingRule);
         }
     }
 }
