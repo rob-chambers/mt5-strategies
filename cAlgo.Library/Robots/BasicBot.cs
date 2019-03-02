@@ -47,12 +47,6 @@ namespace cAlgo.Library.Robots
             _slowMA = Indicators.MovingAverage(SourceSeries, SlowPeriodParameter, MovingAverageType.Weighted);
             _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
 
-            //double currentHigh = MarketSeries.High[1];
-            //double currentClose = MarketSeries.Close[1];
-            //double currentLow = MarketSeries.Low[1];
-
-            //Print("HLC: {0},{1},{2}", currentHigh, currentLow, currentClose);
-
             Positions.Opened += OnPositionOpened;
             Positions.Closed += OnPositionClosed;
 
@@ -66,12 +60,19 @@ namespace cAlgo.Library.Robots
                 return;
             }
 
-            if (HasBullishSignal())
+            if (TakeLongsParameter && HasBullishSignal())
             {
                 var Quantity = 1;
 
                 var volumeInUnits = Symbol.QuantityToVolume(Quantity);
                 ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, StopLossInPips, TakeProfitInPips);
+            }
+            else if (TakeShortsParameter && HasBearishSignal())
+            {
+                var Quantity = 1;
+
+                var volumeInUnits = Symbol.QuantityToVolume(Quantity);
+                ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, StopLossInPips, TakeProfitInPips);
             }
         }
 
@@ -116,6 +117,15 @@ namespace cAlgo.Library.Robots
 
         private bool HasBearishSignal()
         {
+            var currentClose = MarketSeries.Close.Last(1);
+           
+            if (currentClose < _slowMA.Result.LastValue 
+                && currentClose < _mediumMA.Result.LastValue
+                && currentClose < _fastMA.Result.LastValue)
+            {
+                return true;
+            }
+
             return false;
         }
 
