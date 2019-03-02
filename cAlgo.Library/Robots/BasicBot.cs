@@ -5,19 +5,42 @@ using cAlgo.API.Internals;
 
 namespace cAlgo.Library.Robots
 {
-    [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.None)]
-    public class BasicBot : Robot
+    public enum StopLossRule
     {
-        private const string Name = "Basic cBot";
+        None,
+        StaticPipsValue,
+        //CurrentBar2ATR,
+        CurrentBarNPips,
+        PreviousBarNPips,
+        ShortTermHighLow
+    };
 
-        [Parameter()]
-        public DataSeries SourceSeries { get; set; }
-       
+    public enum LotSizingRule
+    {
+        Static,
+        Dynamic
+    };
+
+    [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.None)]
+    public class BasicBot : BaseRobot
+    {
         [Parameter("Take long trades?", DefaultValue = true)]
         public bool TakeLongsParameter { get; set; }
 
         [Parameter("Take short trades?", DefaultValue = true)]
         public bool TakeShortsParameter { get; set; }
+
+        [Parameter("Initial SL Rule", DefaultValue = "ShortTermHighLow")]
+        public string InitialStopLossRule { get; set; }
+
+        [Parameter("Trailing SL Rule", DefaultValue = "None")]
+        public string TrailingStopLossRule { get; set; }
+
+        [Parameter("Lot Sizing Rule", DefaultValue = "Static")]
+        public string LotSizingRule { get; set; }
+
+        [Parameter()]
+        public DataSeries SourceSeries { get; set; }
 
         [Parameter("Slow MA Period", DefaultValue = 240)]
         public int SlowPeriodParameter { get; set; }
@@ -25,7 +48,7 @@ namespace cAlgo.Library.Robots
         [Parameter("Medium MA Period", DefaultValue = 100)]
         public int MediumPeriodParameter { get; set; }
 
-        [Parameter("Fast MA Period", DefaultValue = 50)]        
+        [Parameter("Fast MA Period", DefaultValue = 50)]
         public int FastPeriodParameter { get; set; }
 
         [Parameter("Stop Loss (pips)", DefaultValue = 30)]
@@ -33,6 +56,14 @@ namespace cAlgo.Library.Robots
 
         [Parameter("Take Profit (pips)", DefaultValue = 50)]
         public int TakeProfitInPips { get; set; }
+
+        protected override string Name
+        {
+            get
+            {
+                return "Basic cBot";
+            }
+        }
 
         private MovingAverage _fastMA;
         private MovingAverage _mediumMA;
@@ -51,6 +82,17 @@ namespace cAlgo.Library.Robots
             Positions.Closed += OnPositionClosed;
 
             _canOpenPosition = true;
+
+            Print("Take Longs: {0}", TakeLongsParameter);
+            Print("Take Shorts: {0}", TakeShortsParameter);
+            Print("Initial SL rule: {0}", InitialStopLossRule);
+            Print("Trailing SL rule: {0}", TrailingStopLossRule);
+
+            Init(TakeLongsParameter, 
+                TakeShortsParameter,
+                InitialStopLossRule,
+                TrailingStopLossRule,
+                LotSizingRule);
         }
 
         protected override void OnBar()
@@ -118,8 +160,8 @@ namespace cAlgo.Library.Robots
         private bool HasBearishSignal()
         {
             var currentClose = MarketSeries.Close.Last(1);
-           
-            if (currentClose < _slowMA.Result.LastValue 
+
+            if (currentClose < _slowMA.Result.LastValue
                 && currentClose < _mediumMA.Result.LastValue
                 && currentClose < _fastMA.Result.LastValue)
             {
@@ -141,6 +183,37 @@ namespace cAlgo.Library.Robots
             var position = args.Position;
             Print("Closed {0:N} {1} at {2} for {3} profit", position.Volume, position.TradeType, position.EntryPrice, position.GrossProfit);
             _canOpenPosition = true;
+        }
+    }
+
+    public abstract class BaseRobot : Robot
+    {
+        private bool _takeLongsParameter;
+        private bool _takeShortsParameter;
+        private StopLossRule _initialStopLossRule;
+        private StopLossRule _trailingStopLossRule;
+        private LotSizingRule _lotSizingRule;
+
+        //public int InitialSLPips { get; set; }
+
+        //public int TrailingSLPips { get; set; }
+
+        //public bool MoveToBreakEven { get; set; }
+
+        protected abstract string Name { get; }
+
+        protected void Init(
+            bool takeLongsParameter, 
+            bool takeShortsParameter, 
+            string initialStopLossRule,
+            string trailingStopLossRule,
+            string lotSizingRule)
+        {
+            _takeLongsParameter = takeLongsParameter;
+            _takeShortsParameter = takeShortsParameter;
+            _initialStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), initialStopLossRule);
+            _trailingStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), trailingStopLossRule);
+            _lotSizingRule = (LotSizingRule)Enum.Parse(typeof(LotSizingRule), lotSizingRule);
         }
     }
 }
