@@ -51,8 +51,8 @@ namespace cAlgo.Library.Robots
         [Parameter("Fast MA Period", DefaultValue = 50)]
         public int FastPeriodParameter { get; set; }
 
-        [Parameter("Stop Loss (pips)", DefaultValue = 30)]
-        public int StopLossInPips { get; set; }
+        [Parameter("Initial SL (pips)", DefaultValue = 30)]
+        public int InitialStopLossInPips { get; set; }
 
         [Parameter("Take Profit (pips)", DefaultValue = 50)]
         public int TakeProfitInPips { get; set; }
@@ -87,7 +87,7 @@ namespace cAlgo.Library.Robots
                 InitialStopLossRule,
                 TrailingStopLossRule,
                 LotSizingRule,
-                StopLossInPips,
+                InitialStopLossInPips,
                 TakeProfitInPips);
         }
 
@@ -154,7 +154,7 @@ namespace cAlgo.Library.Robots
         private StopLossRule _initialStopLossRule;
         private StopLossRule _trailingStopLossRule;
         private LotSizingRule _lotSizingRule;
-        private int _stopLossInPips;
+        private int _initialStopLossInPips;
         private int _takeProfitInPips;
         private bool _canOpenPosition;
 
@@ -171,7 +171,7 @@ namespace cAlgo.Library.Robots
             string initialStopLossRule,
             string trailingStopLossRule,
             string lotSizingRule,
-            int stopLossInPips = 0,
+            int initialStopLossInPips = 0,
             int takeProfitInPips = 0)
         {
             _takeLongsParameter = takeLongsParameter;
@@ -179,13 +179,16 @@ namespace cAlgo.Library.Robots
             _initialStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), initialStopLossRule);
             _trailingStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), trailingStopLossRule);
             _lotSizingRule = (LotSizingRule)Enum.Parse(typeof(LotSizingRule), lotSizingRule);
-            _stopLossInPips = stopLossInPips;
+            _initialStopLossInPips = initialStopLossInPips;
             _takeProfitInPips = takeProfitInPips;
 
             _canOpenPosition = true;
 
             Positions.Opened += OnPositionOpened;
             Positions.Closed += OnPositionClosed;
+
+            Print("Symbol.TickSize: {0}, Symbol.Digits: {1}, Symbol.PipSize: {2}", 
+                Symbol.TickSize, Symbol.Digits, Symbol.PipSize);
         }
 
         protected override void OnBar()
@@ -195,19 +198,21 @@ namespace cAlgo.Library.Robots
                 return;
             }
 
+            double? stopLossLevel;
             if (_takeLongsParameter && HasBullishSignal())
             {
                 var Quantity = 1;
 
                 var volumeInUnits = Symbol.QuantityToVolume(Quantity);
-                ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, _stopLossInPips, _takeProfitInPips);
+                stopLossLevel = CalculateStopLossLevelForBuyOrder();
+                ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossLevel, _takeProfitInPips);
             }
             else if (_takeShortsParameter && HasBearishSignal())
             {
                 var Quantity = 1;
 
                 var volumeInUnits = Symbol.QuantityToVolume(Quantity);
-                ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, _stopLossInPips, _takeProfitInPips);
+                ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, _initialStopLossInPips, _takeProfitInPips);
             }
         }
 
@@ -223,6 +228,39 @@ namespace cAlgo.Library.Robots
             var position = args.Position;
             Print("Closed {0:N} {1} at {2} for {3} profit", position.Volume, position.TradeType, position.EntryPrice, position.GrossProfit);
             _canOpenPosition = true;
+        }
+
+        private double? CalculateStopLossLevelForBuyOrder()
+        {
+            double? stopLossLevel = null;
+
+            switch (_initialStopLossRule)
+            {
+                case StopLossRule.None:
+                    break;
+
+                case StopLossRule.StaticPipsValue:
+                    stopLossLevel = _initialStopLossInPips;
+                    break;
+
+                case StopLossRule.CurrentBarNPips:
+                    stopLossLevel = _initialStopLossInPips + (Symbol.Ask - MarketSeries.Low.Last(1)) / Symbol.PipSize;
+                    break;
+
+                case StopLossRule.PreviousBarNPips:
+                    var low = MarketSeries.Low.Last(1);
+                    if (MarketSeries.Low.Last(2) < low)
+                    {
+                        low = MarketSeries.Low.Last(2);
+                    }
+
+                    stopLossLevel = _initialStopLossInPips + (Symbol.Ask - low) / Symbol.PipSize;
+                    break;
+            }
+
+            return stopLossLevel.HasValue
+                ? (double?)Math.Round(stopLossLevel.Value, Symbol.Digits)
+                : null;
         }
     }
 }
