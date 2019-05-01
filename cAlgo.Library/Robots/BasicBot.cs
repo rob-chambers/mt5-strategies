@@ -30,7 +30,7 @@ namespace cAlgo.Library.Robots
         [Parameter("Take short trades?", DefaultValue = true)]
         public bool TakeShortsParameter { get; set; }
 
-        [Parameter("Initial SL Rule", DefaultValue = "StaticPipsValue")]
+        [Parameter("Initial SL Rule", DefaultValue = "CurrentBarNPips")]
         public string InitialStopLossRule { get; set; }
 
         [Parameter("Trailing SL Rule", DefaultValue = "None")]
@@ -51,11 +51,14 @@ namespace cAlgo.Library.Robots
         [Parameter("Fast MA Period", DefaultValue = 50)]
         public int FastPeriodParameter { get; set; }
 
-        [Parameter("Initial SL (pips)", DefaultValue = 30)]
+        [Parameter("Initial SL (pips)", DefaultValue = 5)]
         public int InitialStopLossInPips { get; set; }
 
         [Parameter("Take Profit (pips)", DefaultValue = 50)]
         public int TakeProfitInPips { get; set; }
+
+        [Parameter("RSI Threshold", DefaultValue = 35, MinValue = 10, MaxValue = 60)]
+        public int RsiThreshold { get; set; }
 
         protected override string Name
         {
@@ -69,6 +72,7 @@ namespace cAlgo.Library.Robots
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
         private AverageTrueRange _atr;
+        private RelativeStrengthIndex _rsi;
 
         protected override void OnStart()
         {
@@ -76,6 +80,7 @@ namespace cAlgo.Library.Robots
             _mediumMA = Indicators.MovingAverage(SourceSeries, MediumPeriodParameter, MovingAverageType.Exponential);
             _slowMA = Indicators.MovingAverage(SourceSeries, SlowPeriodParameter, MovingAverageType.Weighted);
             _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
+            _rsi = Indicators.RelativeStrengthIndex(MarketSeries.Close, 14);
 
             Print("Take Longs: {0}", TakeLongsParameter);
             Print("Take Shorts: {0}", TakeShortsParameter);
@@ -90,8 +95,6 @@ namespace cAlgo.Library.Robots
                 InitialStopLossInPips,
                 TakeProfitInPips);
         }
-
-        
 
         //protected override void OnTick()
         //{
@@ -112,21 +115,20 @@ namespace cAlgo.Library.Robots
             var currentClose = MarketSeries.Close.Last(1);
             var currentLow = MarketSeries.Low.Last(1);
 
-            //Print("Checking for signal. - {0}, {1}, {2}", currentHigh, currentLow, currentClose);
-            //if (currentHigh - currentClose > currentClose - currentLow) return false;
-
-            //Print("Found bullish bar - HLC = {0}, {1}, {2}", currentHigh, currentLow, currentClose);
-
-            // Special case first
-            if (currentLow < _fastMA.Result.LastValue &&
-                currentLow < _slowMA.Result.LastValue &&
-                currentLow < _mediumMA.Result.LastValue &&
-                currentHigh > _fastMA.Result.LastValue &&
-                currentHigh > _mediumMA.Result.LastValue &&
-                currentHigh > _slowMA.Result.LastValue)
+            if (IsBullishPinBar(MarketSeries.Close.Count - 1))
             {
-                Print("Found special case bar");
-                return true;
+                Print("Found pin bar");
+                
+                if (currentLow <= MarketSeries.Low.Minimum(10))
+                {
+                    Print("Found a low over the last 10 bars");
+                    if (_rsi.Result.Last(1) <= RsiThreshold || _rsi.Result.Last(2) <= RsiThreshold || _rsi.Result.Last(3) <= RsiThreshold)
+                    {
+                        Print("RSI recently went below {0}", RsiThreshold);
+                        return true;
+                    }
+                }
+
             }
 
             return false;
@@ -144,7 +146,43 @@ namespace cAlgo.Library.Robots
             }
 
             return false;
-        }        
+        }
+
+        private bool IsBullishPinBar(int index)
+        {
+            const double PinbarThreshhold = 0.67;
+
+            var lastBarIndex = index - 1;
+            var priorBarIndex = lastBarIndex - 1;
+            var currentLow = MarketSeries.Low[lastBarIndex];
+            var priorLow = MarketSeries.Low[priorBarIndex];
+            var currentHigh = MarketSeries.High[lastBarIndex];
+            var priorHigh = MarketSeries.High[priorBarIndex];
+            var close = MarketSeries.Close[lastBarIndex];
+            var currentOpen = MarketSeries.Open[lastBarIndex];
+
+            if (!(currentLow < priorLow)) return false;
+            if (!(close > priorLow)) return false;
+            if (currentHigh > priorHigh) return false;
+
+            var closeFromHigh = currentHigh - close;
+            var openFromHigh = currentHigh - currentOpen;
+            var range = currentHigh - currentLow;
+
+            if (!((closeFromHigh / range <= (1 - PinbarThreshhold)) &&
+                (openFromHigh / range <= (1 - PinbarThreshhold))))
+            {
+                return false;
+            }
+
+            // Check length of pin bar
+            if (range < _atr.Result[lastBarIndex])
+            {
+                return false;
+            }
+
+            return true;
+        }
     }
 
     public abstract class BaseRobot : Robot
@@ -198,20 +236,46 @@ namespace cAlgo.Library.Robots
                 return;
             }
 
+            if (PendingOrders.Count > 0)
+            {
+                return;
+            }
+
             double? stopLossLevel;
             if (_takeLongsParameter && HasBullishSignal())
             {
                 var Quantity = 1;
 
-                var volumeInUnits = Symbol.QuantityToVolume(Quantity);
-                stopLossLevel = CalculateStopLossLevelForBuyOrder();
-                ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossLevel, _takeProfitInPips);
+                var volumeInUnits = Symbol.QuantityToVolumeInUnits(Quantity);
+                //stopLossLevel = CalculateStopLossLevelForBuyOrder();
+
+                var previousLow = MarketSeries.Low.Last(1);
+                Print("Last close = {0}", MarketSeries.Close.LastValue);
+                Print("Low of previous bar = {0}", previousLow);
+
+                stopLossLevel = (MarketSeries.Close.LastValue - previousLow) / Symbol.PipSize + _initialStopLossInPips;
+                Print("SL = {0}", stopLossLevel);
+
+                if (stopLossLevel.HasValue)
+                {
+                    var targetPrice = MarketSeries.High.Maximum(2);
+
+                    // Take profit at 1:1 risk
+                    var takeProfitPips = stopLossLevel.Value;
+
+                    // TODO: Fix expiration
+                    var expiration = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(20), DateTimeKind.Utc);
+
+                    PlaceStopOrder(TradeType.Buy, Symbol, volumeInUnits, targetPrice, Name, stopLossLevel, takeProfitPips, expiration, "Placing BUY Stop at " + targetPrice);
+                }
+
+                //ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossLevel, _takeProfitInPips);
             }
             else if (_takeShortsParameter && HasBearishSignal())
             {
                 var Quantity = 1;
 
-                var volumeInUnits = Symbol.QuantityToVolume(Quantity);
+                var volumeInUnits = Symbol.QuantityToVolumeInUnits(Quantity);
                 ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, _initialStopLossInPips, _takeProfitInPips);
             }
         }
@@ -219,14 +283,22 @@ namespace cAlgo.Library.Robots
         private void OnPositionOpened(PositionOpenedEventArgs args)
         {
             var position = args.Position;
-            Print("{0} {1:N} at {2}", position.TradeType, position.Volume, position.EntryPrice);
+            var sl = position.StopLoss.HasValue
+                ? string.Format(" (SL={0})", position.StopLoss.Value)
+                : string.Empty;
+
+            var tp = position.TakeProfit.HasValue
+                ? string.Format(" (TP={0})", position.TakeProfit.Value)
+                : string.Empty;
+
+            Print("{0} {1:N} at {2}{3}{4}", position.TradeType, position.VolumeInUnits, position.EntryPrice, sl, tp);
             _canOpenPosition = false;
         }
 
         private void OnPositionClosed(PositionClosedEventArgs args)
         {
             var position = args.Position;
-            Print("Closed {0:N} {1} at {2} for {3} profit", position.Volume, position.TradeType, position.EntryPrice, position.GrossProfit);
+            Print("Closed {0:N} {1} at {2} for {3} profit", position.VolumeInUnits, position.TradeType, position.EntryPrice, position.GrossProfit);
             _canOpenPosition = true;
         }
 

@@ -32,7 +32,7 @@ enum STOPLOSS_RULE
 //| Input variables                                                                                                              |
 //+------------------------------------------------------------------------------------------------------------------------------+
 input double        _inpDynamicSizingRiskPerTrade = 2;              // Risk per trade of account balance
-input STOPLOSS_RULE _inpInitialStopLossRule = LongTermMA;           // Initial Stop Loss Rule
+input STOPLOSS_RULE _inpInitialStopLossRule = MediumTermMA;         // Initial Stop Loss Rule
 input int           _inpInitialStopLossPips = 1;                    // Initial stop loss in pips
 
 // Go Long / short parameters
@@ -75,7 +75,6 @@ double _longTermTrendData[];
 double _mediumTermTrendData[];
 double _shortTermTrendData[];
 long _accountMarginMode;
-bool _trailedThisBar;
 
 //+------------------------------------------------------------------------------------------------------------------------------+
 //| Variables from base class                                                                                                    |
@@ -269,6 +268,9 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
+    _currentSignal = "";
+    _currentLongTermSignal = "";
+
     FileClose(_fileHandle);
 
     Print("Releasing indicator handles");
@@ -279,12 +281,13 @@ void OnDeinit(const int reason)
     ReleaseIndicator(_longTermTimeFrameHandle);
     ReleaseIndicator(_veryLongTermTimeFrameHandle);
     ReleaseIndicator(_qmpFilterHandle);
+    ReleaseIndicator(_h4QmpFilterHandle);
     ReleaseIndicator(_platinumHandle);
     ReleaseIndicator(_h4PlatinumHandle);
     ReleaseIndicator(_adxHandle);
     ReleaseIndicator(_h4AdxHandle);
     ReleaseIndicator(_rsiHandle);
-    ReleaseIndicator(_longTermRsiHandle);    
+    ReleaseIndicator(_longTermRsiHandle);   
 }
 
 bool InitWritingFile()
@@ -671,22 +674,22 @@ void NewBarAndNoCurrentPositions()
     }
 
     string trend = GetTrendDirection(1);
-    if (trend == "Dn") {
-        //Print("Current signal changed to down");
+    if (trend == "Dn" && _currentSignal != "Dn") {
+        Print("Current signal changed to down");
         _currentSignal = "Dn";
     }
-    else if (trend == "Up") {
-        //Print("Current signal changed to up");
+    else if (trend == "Up" && _currentSignal != "Dn") {
+        Print("Current signal changed to up");
         _currentSignal = "Up";
     }
 
     trend = GetLongTermTrendDirection(1);
-    if (trend == "Dn") {
-        //Print("Current signal changed to down");
+    if (trend == "Dn" && _currentLongTermSignal != "Dn") {
+        Print("Current long term signal changed to down");
         _currentLongTermSignal = "Dn";
     }
-    else if (trend == "Up") {
-        //Print("Current signal changed to up");
+    else if (trend == "Up" && _currentLongTermSignal != "Up") {
+        Print("Current long term signal changed to up");
         _currentLongTermSignal = "Up";
     }
 
@@ -734,11 +737,10 @@ void CheckToModifyLong()
     if (ShouldMoveLongToBreakEven(0.0)) {
         CloseHalf(true);
         _alreadyMovedToBreakEven = true;
-        ModifyLongPosition(_position.PriceOpen(), _position.TakeProfit());
+        ModifyLongPosition(_currentAsk, _position.TakeProfit());
         return;
     }
 
-    // Close the position if the price is lower than the medium term MA, but only after a new bar is formed
     if (!_isNewBar) {
         return;
     }
@@ -748,7 +750,13 @@ void CheckToModifyLong()
         return;
     }
 
-    int count = CopyBuffer(_mediumTermTrendHandle, 0, 0, _inpMediumTermPeriod, _mediumTermTrendData);
+    // Move stop if we get a reverse signal
+    if (_currentSignal == "Dn") {
+        double newStop = _currentAsk - _adjustedPoints * 10;
+        ModifyLongPosition(newStop, _position.TakeProfit());
+    }
+
+    /*int count = CopyBuffer(_mediumTermTrendHandle, 0, 0, _inpMediumTermPeriod, _mediumTermTrendData);
     if (count <= 0) {
         Print("Error copying medium term trend data.");
         return;
@@ -756,7 +764,7 @@ void CheckToModifyLong()
 
     if (_prices[1].close < _mediumTermTrendData[1]) {
         ClosePosition();
-    }
+    }*/
 }
 
 bool ShouldMoveLongToBreakEven(double newStop)
@@ -777,6 +785,7 @@ bool ShouldMoveLongToBreakEven(double newStop)
 
         //    newStop = breakEvenPrice;
         //}
+
         return true;
     }
 
@@ -802,7 +811,13 @@ void CheckToModifyShort()
         return;
     }
 
-    int count = CopyBuffer(_mediumTermTrendHandle, 0, 0, _inpMediumTermPeriod, _mediumTermTrendData);
+    // Move stop if we get a reverse signal
+    if (_currentSignal == "Up") {
+        double newStop = _currentBid + _adjustedPoints * 10;
+        ModifyLongPosition(newStop, _position.TakeProfit());
+    }
+
+    /*int count = CopyBuffer(_mediumTermTrendHandle, 0, 0, _inpMediumTermPeriod, _mediumTermTrendData);
     if (count <= 0) {
         Print("Error copying medium term trend data.");
         return;
@@ -810,7 +825,7 @@ void CheckToModifyShort()
 
     if (_prices[1].close > _mediumTermTrendData[1]) {
         ClosePosition();
-    }
+    }*/
 }
 
 bool ShouldMoveShortToBreakEven(double newStop)
@@ -1215,15 +1230,28 @@ bool HasBullishSignal()
     // Rule 6 - The latest candle must be bullish (closed higher than open)
     if (!IsLatestCandleBullish()) return false;
 
-    // Rule 7 - We have made a higher high in the last 15 bars
-    int index = HighestHighIndex();
-    if (index != 1) return false;
+    Print("CS", _currentSignal);
 
-    // Rule 8 - The short term MA must be above the medium term MA by between 4 and 8 pips
-    if (!InShortTermMASweetSpot()) return false;
+    if (_currentSignal != "Up") {
+        Print("Ignoring potential BUY as current SHORT term signal is down. ");
+        return false;
+    }
 
-    // Rule 9 - The medium term MA must be above the long term MA by between 2 and 6 pips
-    if (!InMediumTermMASweetSpot()) return false;
+    Print("LS", _currentLongTermSignal);
+    if (_currentLongTermSignal != "Up") {
+        Print("Ignoring potential BUY as current LONG term signal is down");
+        return false;
+    }
+
+    //// Rule 7 - We have made a higher high in the last 15 bars
+    //int index = HighestHighIndex();
+    //if (index != 1) return false;
+
+    //// Rule 8 - The short term MA must be above the medium term MA by between 4 and 8 pips
+    //if (!InShortTermMASweetSpot()) return false;
+
+    //// Rule 9 - The medium term MA must be above the long term MA by between 2 and 6 pips
+    //if (!InMediumTermMASweetSpot()) return false;
 
     // Rule 11 - Price has closed within a few pips of both the short term and long term MAs over the last x bars
     //if (!PriceHasTradedCloseToShortTermMA()) return false;
@@ -1388,15 +1416,25 @@ bool HasBearishSignal()
     // Rule 6 - The latest candle must be bearish (closed lower than open)
     if (!IsLatestCandleBearish()) return false;
 
-    // Rule 7 - We have made a lower low in the last 15 bars
-    int index = LowestLowIndex();
-    if (index != 1) return false;
+    if (_currentSignal != "Dn") {
+        Print("Ignoring potential SELL as current short term signal is down");
+        return false;
+    }
 
-    // Rule 8 - The short term MA must be below the medium term MA by between 4 and 8 pips
-    if (!InBearishShortTermMASweetSpot()) return false;
+    if (_currentLongTermSignal != "Dn") {
+        Print("Ignoring potential SELL as current short term signal is down");
+        return false;
+    }
 
-    // Rule 9 - The medium term MA must be below the long term MA by between 2 and 6 pips
-    if (!InBearishMediumTermMASweetSpot()) return false;
+    //// Rule 7 - We have made a lower low in the last 15 bars
+    //int index = LowestLowIndex();
+    //if (index != 1) return false;
+
+    //// Rule 8 - The short term MA must be below the medium term MA by between 4 and 8 pips
+    //if (!InBearishShortTermMASweetSpot()) return false;
+
+    //// Rule 9 - The medium term MA must be below the long term MA by between 2 and 6 pips
+    //if (!InBearishMediumTermMASweetSpot()) return false;
 
     // Rule 11 - Price has closed within a few pips of both the short term and long term MAs over the last x bars
     //if (!PriceHasTradedCloseToShortTermMA()) return false;

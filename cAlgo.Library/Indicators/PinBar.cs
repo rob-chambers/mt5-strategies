@@ -8,10 +8,10 @@ namespace cAlgo.Library.Indicators
     [Indicator(IsOverlay = true, TimeZone = TimeZones.UTC, AutoRescale = false, AccessRights = AccessRights.None)]
     public class PinBar : Indicator
     {
-        [Output("Up Point", Color = Colors.Lime, PlotType = PlotType.Points, Thickness = 5)]
+        [Output("Up Point", LineColor = "Lime", PlotType = PlotType.Points, Thickness = 5)]
         public IndicatorDataSeries UpPoint { get; set; }
 
-        [Output("Down Point", Color = Colors.Yellow, PlotType = PlotType.Points, Thickness = 5)]
+        [Output("Down Point", LineColor = "Yellow", PlotType = PlotType.Points, Thickness = 5)]
         public IndicatorDataSeries DownPoint { get; set; }
 
         [Parameter(DefaultValue = 0.67, MinValue = 0.5, MaxValue = 0.95)]
