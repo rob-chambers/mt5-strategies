@@ -47,6 +47,7 @@
   <ItemGroup>
     <Compile Include="Indicators\PinBar.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Robots\BreakoutBot.cs" />
     <Compile Include="Robots\BasicBot.cs" />
     <Compile Include="Robots\My Trend cBot.cs" />
     <Compile Include="Robots\Sample RSI cBot.cs" />

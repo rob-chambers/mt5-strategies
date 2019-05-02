@@ -1,1 +1,1 @@
-copy "BasicBot.cs" "C:\Users\rob\Documents\cAlgo\Sources\Robots\Basic Bot\Basic Bot\Basic Bot.cs"
+copy "BreakoutBot.cs" "C:\Users\rob\Documents\cAlgo\Sources\Robots\BreakoutBot\BreakoutBot\BreakoutBot.cs"

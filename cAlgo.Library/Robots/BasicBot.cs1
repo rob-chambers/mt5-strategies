@@ -1,0 +1,186 @@
+﻿using cAlgo.API;
+using cAlgo.API.Indicators;
+using cAlgo.API.Internals;
+
+namespace cAlgo.Library.Robots
+{
+    public enum StopLossRule
+    {
+        None,
+        StaticPipsValue,
+        //CurrentBar2ATR,
+        CurrentBarNPips,
+        PreviousBarNPips,
+        ShortTermHighLow
+    };
+
+    public enum LotSizingRule
+    {
+        Static,
+        Dynamic
+    };
+
+    [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.None)]
+    public class BasicBot : BaseRobot
+    {
+        [Parameter("Take long trades?", DefaultValue = true)]
+        public bool TakeLongsParameter { get; set; }
+
+        [Parameter("Take short trades?", DefaultValue = true)]
+        public bool TakeShortsParameter { get; set; }
+
+        [Parameter("Initial SL Rule", DefaultValue = "CurrentBarNPips")]
+        public string InitialStopLossRule { get; set; }
+
+        [Parameter("Trailing SL Rule", DefaultValue = "None")]
+        public string TrailingStopLossRule { get; set; }
+
+        [Parameter("Lot Sizing Rule", DefaultValue = "Static")]
+        public string LotSizingRule { get; set; }
+
+        [Parameter()]
+        public DataSeries SourceSeries { get; set; }
+
+        [Parameter("Slow MA Period", DefaultValue = 240)]
+        public int SlowPeriodParameter { get; set; }
+
+        [Parameter("Medium MA Period", DefaultValue = 100)]
+        public int MediumPeriodParameter { get; set; }
+
+        [Parameter("Fast MA Period", DefaultValue = 50)]
+        public int FastPeriodParameter { get; set; }
+
+        [Parameter("Initial SL (pips)", DefaultValue = 5)]
+        public int InitialStopLossInPips { get; set; }
+
+        [Parameter("Take Profit (pips)", DefaultValue = 50)]
+        public int TakeProfitInPips { get; set; }
+
+        [Parameter("RSI Threshold", DefaultValue = 35, MinValue = 10, MaxValue = 60)]
+        public int RsiThreshold { get; set; }
+
+        protected override string Name
+        {
+            get
+            {
+                return "Basic cBot";
+            }
+        }
+
+        private MovingAverage _fastMA;
+        private MovingAverage _mediumMA;
+        private MovingAverage _slowMA;
+        private AverageTrueRange _atr;
+        private RelativeStrengthIndex _rsi;
+
+        protected override void OnStart()
+        {
+            _fastMA = Indicators.MovingAverage(SourceSeries, FastPeriodParameter, MovingAverageType.Exponential);
+            _mediumMA = Indicators.MovingAverage(SourceSeries, MediumPeriodParameter, MovingAverageType.Exponential);
+            _slowMA = Indicators.MovingAverage(SourceSeries, SlowPeriodParameter, MovingAverageType.Weighted);
+            _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
+            _rsi = Indicators.RelativeStrengthIndex(MarketSeries.Close, 14);
+
+            Print("Take Longs: {0}", TakeLongsParameter);
+            Print("Take Shorts: {0}", TakeShortsParameter);
+            Print("Initial SL rule: {0}", InitialStopLossRule);
+            Print("Trailing SL rule: {0}", TrailingStopLossRule);
+
+            Init(TakeLongsParameter, 
+                TakeShortsParameter,
+                InitialStopLossRule,
+                TrailingStopLossRule,
+                LotSizingRule,
+                InitialStopLossInPips,
+                TakeProfitInPips);
+        }
+
+        //protected override void OnTick()
+        //{
+        //    var longPosition = Positions.Find(Name, Symbol, TradeType.Buy);
+        //    var shortPosition = Positions.Find(Name, Symbol, TradeType.Sell);
+
+        //    if (longPosition == null || shortPosition == null)
+        //    {
+        //        _canOpenPosition = true;
+        //        return;
+        //    }
+
+        //}        
+
+        protected override bool HasBullishSignal()
+        {
+            var currentHigh = MarketSeries.High.Last(1);
+            var currentClose = MarketSeries.Close.Last(1);
+            var currentLow = MarketSeries.Low.Last(1);
+
+            if (IsBullishPinBar(MarketSeries.Close.Count - 1))
+            {
+                Print("Found pin bar");
+                
+                if (currentLow <= MarketSeries.Low.Minimum(10))
+                {
+                    Print("Found a low over the last 10 bars");
+                    if (_rsi.Result.Last(1) <= RsiThreshold || _rsi.Result.Last(2) <= RsiThreshold || _rsi.Result.Last(3) <= RsiThreshold)
+                    {
+                        Print("RSI recently went below {0}", RsiThreshold);
+                        return true;
+                    }
+                }
+
+            }
+
+            return false;
+        }
+
+        protected override bool HasBearishSignal()
+        {
+            var currentClose = MarketSeries.Close.Last(1);
+
+            if (currentClose < _slowMA.Result.LastValue
+                && currentClose < _mediumMA.Result.LastValue
+                && currentClose < _fastMA.Result.LastValue)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool IsBullishPinBar(int index)
+        {
+            const double PinbarThreshhold = 0.67;
+
+            var lastBarIndex = index - 1;
+            var priorBarIndex = lastBarIndex - 1;
+            var currentLow = MarketSeries.Low[lastBarIndex];
+            var priorLow = MarketSeries.Low[priorBarIndex];
+            var currentHigh = MarketSeries.High[lastBarIndex];
+            var priorHigh = MarketSeries.High[priorBarIndex];
+            var close = MarketSeries.Close[lastBarIndex];
+            var currentOpen = MarketSeries.Open[lastBarIndex];
+
+            if (!(currentLow < priorLow)) return false;
+            if (!(close > priorLow)) return false;
+            if (currentHigh > priorHigh) return false;
+
+            var closeFromHigh = currentHigh - close;
+            var openFromHigh = currentHigh - currentOpen;
+            var range = currentHigh - currentLow;
+
+            if (!((closeFromHigh / range <= (1 - PinbarThreshhold)) &&
+                (openFromHigh / range <= (1 - PinbarThreshhold))))
+            {
+                return false;
+            }
+
+            // Check length of pin bar
+            if (range < _atr.Result[lastBarIndex])
+            {
+                return false;
+            }
+
+            return true;
+        }
+    }
+}
