@@ -54,6 +54,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         [Parameter("Move to breakeven?", DefaultValue = false)]
         public bool MoveToBreakEven { get; set; }
+
+        [Parameter("Close half at breakeven?", DefaultValue = false)]
+        public bool CloseHalfAtBreakEven { get; set; }
         #endregion
 
         [Parameter()]
@@ -101,6 +104,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             Print("Take profit in pips: {0}", TakeProfitInPips);
             Print("Minutes to wait after position closed: {0}", MinutesToWaitAfterPositionClosed);
             Print("Move to breakeven: {0}", MoveToBreakEven);
+            Print("Close half at breakeven: {0}", CloseHalfAtBreakEven);
 
             Init(TakeLongsParameter, 
                 TakeShortsParameter,
@@ -111,7 +115,8 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 LotSizingRule,
                 TakeProfitInPips,                
                 MinutesToWaitAfterPositionClosed,
-                MoveToBreakEven);
+                MoveToBreakEven,
+                CloseHalfAtBreakEven);
         }
 
         /*
@@ -424,7 +429,7 @@ bool CMyExpertBase::LongModified()
         private int _trailingStopLossInPips;
         private int _minutesToWaitAfterPositionClosed;
         private bool _moveToBreakEven;
-
+        private bool _closeHalfAtBreakEven;
         private bool _canOpenPosition;
         private DateTime _lastClosedPositionTime;
         private double _takeProfitLevel;
@@ -433,6 +438,7 @@ bool CMyExpertBase::LongModified()
         private bool _alreadyMovedToBreakEven;
         private double _targetx1;
         private double _breakEvenPrice;
+        private bool _isClosingHalf;
 
         protected abstract bool HasBullishSignal();
         protected abstract bool HasBearishSignal();
@@ -447,7 +453,8 @@ bool CMyExpertBase::LongModified()
             string lotSizingRule,            
             int takeProfitInPips = 0,            
             int minutesToWaitAfterPositionClosed = 0,
-            bool moveToBreakEven = false)
+            bool moveToBreakEven = false,
+            bool closeHalfAtBreakEven = false)
         {
             _takeLongsParameter = takeLongsParameter;
             _takeShortsParameter = takeShortsParameter;
@@ -459,12 +466,14 @@ bool CMyExpertBase::LongModified()
             _takeProfitInPips = takeProfitInPips;
             _minutesToWaitAfterPositionClosed = minutesToWaitAfterPositionClosed;
             _moveToBreakEven = moveToBreakEven;
+            _closeHalfAtBreakEven = closeHalfAtBreakEven;
 
             _canOpenPosition = true;
             _recentHigh = 0;
 
             Positions.Opened += OnPositionOpened;
             Positions.Closed += OnPositionClosed;
+            Positions.Modified += OnPositionModified;
 
             Print("Symbol.TickSize: {0}, Symbol.Digits: {1}, Symbol.PipSize: {2}", 
                 Symbol.TickSize, Symbol.Digits, Symbol.PipSize);
@@ -523,6 +532,13 @@ bool CMyExpertBase::LongModified()
                 Print("Moving stop loss to entry as we hit breakeven");
                 AdjustStopLossForLongPosition(_currentPosition.EntryPrice);
                 _alreadyMovedToBreakEven = true;
+
+                if (_closeHalfAtBreakEven)
+                {
+                    _isClosingHalf = true;
+                    ModifyPosition(_currentPosition, _currentPosition.VolumeInUnits / 2);                    
+                }
+
                 return;
             }
 
@@ -672,13 +688,27 @@ bool CMyExpertBase::LongModified()
             _currentPosition = null;
             _recentHigh = 0;
             _alreadyMovedToBreakEven = false;
-            var position = args.Position;
-            Print("Closed {0:N} {1} at {2} for {3} profit", 
-                position.VolumeInUnits, position.TradeType, position.EntryPrice, position.GrossProfit);
+            PrintClosedPositionInfo(args.Position);
 
             _lastClosedPositionTime = Server.Time;
 
             _canOpenPosition = true;
+        }
+
+        
+        private void OnPositionModified(PositionModifiedEventArgs args)
+        {
+            if (!_isClosingHalf)
+                return;
+
+            PrintClosedPositionInfo(args.Position);
+            _isClosingHalf = false;
+        }
+
+        private void PrintClosedPositionInfo(Position position)
+        {
+            Print("Closed {0:N} {1} at {2} for {3} profit",
+                position.VolumeInUnits, position.TradeType, position.EntryPrice, position.GrossProfit);
         }
 
         private double? CalculateStopLossInPipsForBuyOrder()
