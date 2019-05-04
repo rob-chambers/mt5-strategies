@@ -388,6 +388,9 @@ bool CMyExpertBase::LongModified()
 
         protected override void ManageLongPosition()
         {
+            // Important - call base funcitonality to trail stop higher
+            base.ManageLongPosition();
+
             /* RULES
              * 1) If we close below the fast MA, we close the position.  Add a small 2 pip buffer
              */
@@ -429,6 +432,7 @@ bool CMyExpertBase::LongModified()
         private bool _inpMoveToBreakEven;
         private bool _alreadyMovedToBreakEven;
         private double _targetx1;
+        private double _breakEvenPrice;
 
         protected abstract bool HasBullishSignal();
         protected abstract bool HasBearishSignal();
@@ -457,6 +461,7 @@ bool CMyExpertBase::LongModified()
             _moveToBreakEven = moveToBreakEven;
 
             _canOpenPosition = true;
+            _recentHigh = 0;
 
             Positions.Opened += OnPositionOpened;
             Positions.Closed += OnPositionClosed;
@@ -513,13 +518,22 @@ bool CMyExpertBase::LongModified()
             // Are we making higher highs?
             var madeNewHigh = false;
 
+            if (_moveToBreakEven && !_alreadyMovedToBreakEven && Symbol.Ask >= _breakEvenPrice)
+            {
+                Print("Moving stop loss to entry as we hit breakeven");
+                AdjustStopLossForLongPosition(_currentPosition.EntryPrice);
+                _alreadyMovedToBreakEven = true;
+                return;
+            }
+
             // Avoid adjusting trailing stop too often by adding a buffer
             var buffer = Symbol.PipSize * 3;
 
-            if (Symbol.Bid > _recentHigh + buffer)
+            //Print("Comparing current bid price of {0} to recent high {1}", Symbol.Bid, _recentHigh + buffer);
+            if (Symbol.Ask > _recentHigh + buffer)
             {
                 madeNewHigh = true;
-                _recentHigh = Symbol.Bid;
+                _recentHigh = Symbol.Ask;
             }
 
             if (!madeNewHigh)
@@ -533,7 +547,15 @@ bool CMyExpertBase::LongModified()
             //var stop = _recentHigh - _trailingStopLossInPips * Symbol.PipSize;
 
             Print("Adjusting stop loss to {0} based on new high of {1}", stop, _recentHigh);
-            ModifyPosition(_currentPosition, stop, _currentPosition.TakeProfit);
+            AdjustStopLossForLongPosition(stop);
+        }
+
+        private void AdjustStopLossForLongPosition(double newStop)
+        {
+            if (_currentPosition.StopLoss.HasValue && _currentPosition.StopLoss.Value > newStop)
+                return;
+
+            ModifyPosition(_currentPosition, newStop, _currentPosition.TakeProfit);
         }
 
         private double CalulateTrailingStopForLongPosition()
@@ -632,9 +654,15 @@ bool CMyExpertBase::LongModified()
             switch (_currentPosition.TradeType)
             {
                 case TradeType.Buy:
-                    Print("Current position's SL = {0}", _currentPosition.StopLoss.HasValue
-                        ? _currentPosition.StopLoss.Value.ToString()
-                        : "N/A");
+                    //Print("Current position's SL = {0}", _currentPosition.StopLoss.HasValue
+                    //    ? _currentPosition.StopLoss.Value.ToString()
+                    //    : "N/A");
+
+                    if (_currentPosition.StopLoss.HasValue)
+                    {
+                        _breakEvenPrice = Symbol.Ask * 2 - _currentPosition.StopLoss.Value;
+                    }
+                    
                     break;
             }
         }
@@ -643,6 +671,7 @@ bool CMyExpertBase::LongModified()
         {
             _currentPosition = null;
             _recentHigh = 0;
+            _alreadyMovedToBreakEven = false;
             var position = args.Position;
             Print("Closed {0:N} {1} at {2} for {3} profit", 
                 position.VolumeInUnits, position.TradeType, position.EntryPrice, position.GrossProfit);
