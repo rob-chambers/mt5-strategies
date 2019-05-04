@@ -24,6 +24,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.None)]
     public class WaveCatcherBot : BaseRobot
     {
+        #region Standard Parameters
         [Parameter("Take long trades?", DefaultValue = true)]
         public bool TakeLongsParameter { get; set; }
 
@@ -33,11 +34,27 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("Initial SL Rule", DefaultValue = "StaticPipsValue")]
         public string InitialStopLossRule { get; set; }
 
+        [Parameter("Initial SL (pips)", DefaultValue = 5)]
+        public int InitialStopLossInPips { get; set; }
+
         [Parameter("Trailing SL Rule", DefaultValue = "None")]
         public string TrailingStopLossRule { get; set; }
 
+        [Parameter("Trailing SL (pips)", DefaultValue = 10)]
+        public int TrailingStopLossInPips { get; set; }
+
         [Parameter("Lot Sizing Rule", DefaultValue = "Static")]
         public string LotSizingRule { get; set; }
+
+        [Parameter("Take Profit (pips)", DefaultValue = 60)]
+        public int TakeProfitInPips { get; set; }
+
+        [Parameter("Pause after position closed (Minutes)", DefaultValue = 0)]
+        public int MinutesToWaitAfterPositionClosed { get; set; }
+
+        [Parameter("Move to breakeven?", DefaultValue = false)]
+        public bool MoveToBreakEven { get; set; }
+        #endregion
 
         [Parameter()]
         public DataSeries SourceSeries { get; set; }
@@ -50,12 +67,6 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         [Parameter("Fast MA Period", DefaultValue = 21)]
         public int FastPeriodParameter { get; set; }
-
-        [Parameter("Initial SL (pips)", DefaultValue = 5)]
-        public int InitialStopLossInPips { get; set; }
-
-        [Parameter("Take Profit (pips)", DefaultValue = 60)]
-        public int TakeProfitInPips { get; set; }
 
         [Parameter("MAs Cross Threshold (# bars)", DefaultValue = 10)]
         public int MovingAveragesCrossThreshold { get; set; }
@@ -83,15 +94,24 @@ namespace cAlgo.Library.Robots.WaveCatcher
             Print("Take Longs: {0}", TakeLongsParameter);
             Print("Take Shorts: {0}", TakeShortsParameter);
             Print("Initial SL rule: {0}", InitialStopLossRule);
+            Print("Initial SL in pips: {0}", InitialStopLossInPips);
             Print("Trailing SL rule: {0}", TrailingStopLossRule);
+            Print("Trailing SL in pips: {0}", TrailingStopLossInPips);
+            Print("Lot sizing rule: {0}", LotSizingRule);
+            Print("Take profit in pips: {0}", TakeProfitInPips);
+            Print("Minutes to wait after position closed: {0}", MinutesToWaitAfterPositionClosed);
+            Print("Move to breakeven: {0}", MoveToBreakEven);
 
             Init(TakeLongsParameter, 
                 TakeShortsParameter,
                 InitialStopLossRule,
-                TrailingStopLossRule,
-                LotSizingRule,
                 InitialStopLossInPips,
-                TakeProfitInPips);
+                TrailingStopLossRule,
+                TrailingStopLossInPips,
+                LotSizingRule,
+                TakeProfitInPips,                
+                MinutesToWaitAfterPositionClosed,
+                MoveToBreakEven);
         }
 
         /*
@@ -369,18 +389,13 @@ bool CMyExpertBase::LongModified()
         protected override void ManageLongPosition()
         {
             /* RULES
-             * 1) If we close below the fast MA, we close the position
+             * 1) If we close below the fast MA, we close the position.  Add a small 2 pip buffer
              */
-            if (MarketSeries.Close.Last(1) < _fastMA.Result.LastValue)
+            if (MarketSeries.Close.Last(1) < _fastMA.Result.LastValue - 2 * Symbol.PipSize)
             {
                 Print("Closing position now that we closed below the fast MA");
                 _currentPosition.Close();
             }
-
-            //if (!_madeNewHigh)
-            //{
-            //    return;
-            //}
 
             //// Trail the stop up based on the new high
             //const int TrailingStopPips = 10;
@@ -393,6 +408,7 @@ bool CMyExpertBase::LongModified()
 
     public abstract class BaseRobot : Robot
     {
+        protected abstract string Name { get; }
         protected Position _currentPosition;
 
         private bool _takeLongsParameter;
@@ -402,16 +418,17 @@ bool CMyExpertBase::LongModified()
         private LotSizingRule _lotSizingRule;
         private int _initialStopLossInPips;
         private int _takeProfitInPips;
+        private int _trailingStopLossInPips;
+        private int _minutesToWaitAfterPositionClosed;
+        private bool _moveToBreakEven;
+
         private bool _canOpenPosition;
         private DateTime _lastClosedPositionTime;
         private double _takeProfitLevel;
         private double _recentHigh;
         private bool _inpMoveToBreakEven;
         private bool _alreadyMovedToBreakEven;
-        private bool _madeNewHigh;
         private double _targetx1;
-
-        protected abstract string Name { get; }
 
         protected abstract bool HasBullishSignal();
         protected abstract bool HasBearishSignal();
@@ -420,18 +437,24 @@ bool CMyExpertBase::LongModified()
             bool takeLongsParameter, 
             bool takeShortsParameter, 
             string initialStopLossRule,
+            int initialStopLossInPips,
             string trailingStopLossRule,
-            string lotSizingRule,
-            int initialStopLossInPips = 0,
-            int takeProfitInPips = 0)
+            int trailingStopLossInPips,
+            string lotSizingRule,            
+            int takeProfitInPips = 0,            
+            int minutesToWaitAfterPositionClosed = 0,
+            bool moveToBreakEven = false)
         {
             _takeLongsParameter = takeLongsParameter;
             _takeShortsParameter = takeShortsParameter;
             _initialStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), initialStopLossRule);
-            _trailingStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), trailingStopLossRule);
-            _lotSizingRule = (LotSizingRule)Enum.Parse(typeof(LotSizingRule), lotSizingRule);
             _initialStopLossInPips = initialStopLossInPips;
+            _trailingStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), trailingStopLossRule);
+            _trailingStopLossInPips = trailingStopLossInPips;
+            _lotSizingRule = (LotSizingRule)Enum.Parse(typeof(LotSizingRule), lotSizingRule);            
             _takeProfitInPips = takeProfitInPips;
+            _minutesToWaitAfterPositionClosed = minutesToWaitAfterPositionClosed;
+            _moveToBreakEven = moveToBreakEven;
 
             _canOpenPosition = true;
 
@@ -442,90 +465,147 @@ bool CMyExpertBase::LongModified()
                 Symbol.TickSize, Symbol.Digits, Symbol.PipSize);
         }
 
-        //protected override void OnTick()
-        //{
-        //    if (_currentPosition == null)
-        //    {
-        //        return;
-        //    }
+        protected override void OnTick()
+        {
+            if (_currentPosition != null)
+            {
+                ManageExistingPosition();
+                return;
+            }
+        }
 
-             
-        //}
+        protected override void OnBar()
+        {
+            if (!_canOpenPosition || PendingOrders.Count > 0)
+                return;
 
+            if (ShouldWaitBeforeLookingForNewSetup())
+                return;
+
+            if (_takeLongsParameter && HasBullishSignal())
+            {
+                EnterLongPosition();
+            }
+            else if (_takeShortsParameter && HasBearishSignal())
+            {
+                EnterShortPosition();
+            }
+        }
+
+        private void ManageExistingPosition()
+        {
+            switch (_currentPosition.TradeType)
+            {
+                case TradeType.Buy:
+                    ManageLongPosition();
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Manages an existing long position.  Note this method is called on every tick.
+        /// </summary>
         protected virtual void ManageLongPosition()
         {
-            if (!_madeNewHigh)
+            if (_trailingStopLossRule == StopLossRule.None && !_moveToBreakEven)
+                return;
+
+            // Are we making higher highs?
+            var madeNewHigh = false;
+
+            // Avoid adjusting trailing stop too often by adding a buffer
+            var buffer = Symbol.PipSize * 3;
+
+            if (Symbol.Bid > _recentHigh + buffer)
+            {
+                madeNewHigh = true;
+                _recentHigh = Symbol.Bid;
+            }
+
+            if (!madeNewHigh)
             {
                 return;
             }
 
             // Trail the stop up based on the new high
-            const int TrailingStopPips = 10;
-            var stop = _recentHigh - TrailingStopPips * Symbol.PipSize;
+            var stop = CalulateTrailingStopForLongPosition();
 
-            Print("Adjusting stop loss based on new high of {0}", _recentHigh);
+            //var stop = _recentHigh - _trailingStopLossInPips * Symbol.PipSize;
+
+            Print("Adjusting stop loss to {0} based on new high of {1}", stop, _recentHigh);
             ModifyPosition(_currentPosition, stop, _currentPosition.TakeProfit);
         }
 
-        protected override void OnBar()
+        private double CalulateTrailingStopForLongPosition()
         {
-            // Are we making higher highs?
-            _madeNewHigh = false;
-            if (MarketSeries.High.Last(1) > MarketSeries.High.Last(2) && MarketSeries.High.Last(1) > _recentHigh)
+            double stop = 0;
+            switch (_trailingStopLossRule)
             {
-                _madeNewHigh = true;
-                _recentHigh = MarketSeries.High.Last(1);
+                case StopLossRule.StaticPipsValue:
+                    stop = _trailingStopLossInPips;
+                    break;
+
+                case StopLossRule.CurrentBarNPips:
+                    stop = MarketSeries.Low.Last(1) - _trailingStopLossInPips * Symbol.PipSize;
+                    break;
+
+                case StopLossRule.PreviousBarNPips:
+                    stop = MarketSeries.Low.Last(2) - _trailingStopLossInPips * Symbol.PipSize;
+                    break;
+
+                case StopLossRule.ShortTermHighLow:
+                    stop = _recentHigh - _trailingStopLossInPips * Symbol.PipSize;
+                    break;
             }
 
-            if (_currentPosition != null)
-            {
-                switch (_currentPosition.TradeType)
-                {
-                    case TradeType.Buy:
-                        ManageLongPosition();
-                        break;
-                }
+            return stop;
+        }
 
-                return;
-            }
-            
-            if (!_canOpenPosition)
-            {
-                return;
-            }
+        private void EnterLongPosition()
+        {
+            var Quantity = 1;
 
-            if (PendingOrders.Count > 0)
-            {
-                return;
-            }
+            var volumeInUnits = Symbol.QuantityToVolumeInUnits(Quantity);
+            var stopLossPips = CalculateStopLossInPipsForBuyOrder();            
 
-            // Wait for a little while after we exited a trade
-            if (_lastClosedPositionTime != DateTime.MinValue && Server.Time.Subtract(_lastClosedPositionTime).TotalMinutes <= 120)
+            if (stopLossPips.HasValue)
+            {
+                Print("SL calculated for Buy order = {0}", stopLossPips);
+                _targetx1 = MarketSeries.Close.LastValue + stopLossPips.Value * Symbol.PipSize;
+                ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit());
+            }
+            else
+            {
+                ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name);
+            }
+        }
+
+        private double? CalculateTakeProfit()
+        {
+            return _takeProfitInPips == 0 
+                ? (double?)null 
+                : _takeProfitInPips;
+        }
+
+        private void EnterShortPosition()
+        {
+            var Quantity = 1;
+
+            var volumeInUnits = Symbol.QuantityToVolumeInUnits(Quantity);
+            ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, _initialStopLossInPips, _takeProfitInPips);
+        }
+
+        private bool ShouldWaitBeforeLookingForNewSetup()
+        {
+            if (_minutesToWaitAfterPositionClosed > 0 &&
+                _lastClosedPositionTime != DateTime.MinValue &&
+                Server.Time.Subtract(_lastClosedPositionTime).TotalMinutes <= _minutesToWaitAfterPositionClosed)
             {
                 Print("Pausing before we look for new opportunities.");
-                return;
+                return true;
             }
 
-            if (_takeLongsParameter && HasBullishSignal())
-            {
-                var Quantity = 1;
-
-                var volumeInUnits = Symbol.QuantityToVolumeInUnits(Quantity);               
-                var stopLossLevel = CalculateStopLossLevelForBuyOrder();
-
-                if (stopLossLevel.HasValue)
-                {
-                    _targetx1 = MarketSeries.Close.LastValue + stopLossLevel.Value * Symbol.PipSize;
-                    ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossLevel, null);
-                }
-            }
-            else if (_takeShortsParameter && HasBearishSignal())
-            {
-                var Quantity = 1;
-
-                var volumeInUnits = Symbol.QuantityToVolumeInUnits(Quantity);
-                ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, _initialStopLossInPips, _takeProfitInPips);
-            }
+            return false;
         }
 
         private void OnPositionOpened(PositionOpenedEventArgs args)
@@ -541,12 +621,28 @@ bool CMyExpertBase::LongModified()
                 : string.Empty;
 
             Print("{0} {1:N} at {2}{3}{4}", position.TradeType, position.VolumeInUnits, position.EntryPrice, sl, tp);
+
+            CalculateBreakEvenPrice();
+
             _canOpenPosition = false;
+        }
+
+        private void CalculateBreakEvenPrice()
+        {
+            switch (_currentPosition.TradeType)
+            {
+                case TradeType.Buy:
+                    Print("Current position's SL = {0}", _currentPosition.StopLoss.HasValue
+                        ? _currentPosition.StopLoss.Value.ToString()
+                        : "N/A");
+                    break;
+            }
         }
 
         private void OnPositionClosed(PositionClosedEventArgs args)
         {
             _currentPosition = null;
+            _recentHigh = 0;
             var position = args.Position;
             Print("Closed {0:N} {1} at {2} for {3} profit", 
                 position.VolumeInUnits, position.TradeType, position.EntryPrice, position.GrossProfit);
@@ -556,9 +652,9 @@ bool CMyExpertBase::LongModified()
             _canOpenPosition = true;
         }
 
-        private double? CalculateStopLossLevelForBuyOrder()
+        private double? CalculateStopLossInPipsForBuyOrder()
         {
-            double? stopLossLevel = null;
+            double? stopLossPips = null;
 
             switch (_initialStopLossRule)
             {
@@ -566,11 +662,11 @@ bool CMyExpertBase::LongModified()
                     break;
 
                 case StopLossRule.StaticPipsValue:
-                    stopLossLevel = _initialStopLossInPips;
+                    stopLossPips = _initialStopLossInPips;
                     break;
 
                 case StopLossRule.CurrentBarNPips:
-                    stopLossLevel = _initialStopLossInPips + (Symbol.Ask - MarketSeries.Low.Last(1)) / Symbol.PipSize;
+                    stopLossPips = _initialStopLossInPips + (Symbol.Ask - MarketSeries.Low.Last(1)) / Symbol.PipSize;
                     break;
 
                 case StopLossRule.PreviousBarNPips:
@@ -580,12 +676,12 @@ bool CMyExpertBase::LongModified()
                         low = MarketSeries.Low.Last(2);
                     }
 
-                    stopLossLevel = _initialStopLossInPips + (Symbol.Ask - low) / Symbol.PipSize;
+                    stopLossPips = _initialStopLossInPips + (Symbol.Ask - low) / Symbol.PipSize;
                     break;
             }
 
-            return stopLossLevel.HasValue
-                ? (double?)Math.Round(stopLossLevel.Value, Symbol.Digits)
+            return stopLossPips.HasValue
+                ? (double?)Math.Round(stopLossPips.Value)
                 : null;
         }
     }
