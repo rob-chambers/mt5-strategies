@@ -30,7 +30,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("Take short trades?", DefaultValue = false)]
         public bool TakeShortsParameter { get; set; }
 
-        [Parameter("Initial SL Rule", DefaultValue = "CurrentBarNPips")]
+        [Parameter("Initial SL Rule", DefaultValue = "StaticPipsValue")]
         public string InitialStopLossRule { get; set; }
 
         [Parameter("Trailing SL Rule", DefaultValue = "None")]
@@ -54,7 +54,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("Initial SL (pips)", DefaultValue = 5)]
         public int InitialStopLossInPips { get; set; }
 
-        [Parameter("Take Profit (pips)", DefaultValue = 50)]
+        [Parameter("Take Profit (pips)", DefaultValue = 60)]
         public int TakeProfitInPips { get; set; }
 
         [Parameter("MAs Cross Threshold (# bars)", DefaultValue = 10)]
@@ -365,6 +365,30 @@ bool CMyExpertBase::LongModified()
 
             return false;
         }
+
+        protected override void ManageLongPosition()
+        {
+            /* RULES
+             * 1) If we close below the fast MA, we close the position
+             */
+            if (MarketSeries.Close.Last(1) < _fastMA.Result.LastValue)
+            {
+                Print("Closing position now that we closed below the fast MA");
+                _currentPosition.Close();
+            }
+
+            //if (!_madeNewHigh)
+            //{
+            //    return;
+            //}
+
+            //// Trail the stop up based on the new high
+            //const int TrailingStopPips = 10;
+            //var stop = _recentHigh - TrailingStopPips * Symbol.PipSize;
+
+            //Print("Adjusting stop loss based on new high of {0}", _recentHigh);
+            //ModifyPosition(_currentPosition, stop, _currentPosition.TakeProfit);
+        }
     }
 
     public abstract class BaseRobot : Robot
@@ -384,6 +408,8 @@ bool CMyExpertBase::LongModified()
         private double _recentHigh;
         private bool _inpMoveToBreakEven;
         private bool _alreadyMovedToBreakEven;
+        private bool _madeNewHigh;
+        private double _targetx1;
 
         protected abstract string Name { get; }
 
@@ -418,19 +444,51 @@ bool CMyExpertBase::LongModified()
 
         //protected override void OnTick()
         //{
-        //    var longPosition = Positions.Find(Name, Symbol, TradeType.Buy);
-        //    //var shortPosition = Positions.Find(Name, Symbol, TradeType.Sell);
-
-        //    if (longPosition == null)
+        //    if (_currentPosition == null)
         //    {
         //        return;
         //    }
 
-        //    ManageLongPosition(longPosition);
+             
         //}
 
-    protected override void OnBar()
+        protected virtual void ManageLongPosition()
         {
+            if (!_madeNewHigh)
+            {
+                return;
+            }
+
+            // Trail the stop up based on the new high
+            const int TrailingStopPips = 10;
+            var stop = _recentHigh - TrailingStopPips * Symbol.PipSize;
+
+            Print("Adjusting stop loss based on new high of {0}", _recentHigh);
+            ModifyPosition(_currentPosition, stop, _currentPosition.TakeProfit);
+        }
+
+        protected override void OnBar()
+        {
+            // Are we making higher highs?
+            _madeNewHigh = false;
+            if (MarketSeries.High.Last(1) > MarketSeries.High.Last(2) && MarketSeries.High.Last(1) > _recentHigh)
+            {
+                _madeNewHigh = true;
+                _recentHigh = MarketSeries.High.Last(1);
+            }
+
+            if (_currentPosition != null)
+            {
+                switch (_currentPosition.TradeType)
+                {
+                    case TradeType.Buy:
+                        ManageLongPosition();
+                        break;
+                }
+
+                return;
+            }
+            
             if (!_canOpenPosition)
             {
                 return;
@@ -448,22 +506,17 @@ bool CMyExpertBase::LongModified()
                 return;
             }
 
-            double? stopLossLevel;
             if (_takeLongsParameter && HasBullishSignal())
             {
                 var Quantity = 1;
 
                 var volumeInUnits = Symbol.QuantityToVolumeInUnits(Quantity);               
-                stopLossLevel = 30;
+                var stopLossLevel = CalculateStopLossLevelForBuyOrder();
 
                 if (stopLossLevel.HasValue)
                 {
-                    var targetPrice = MarketSeries.High.Maximum(2);
-
-                    // Take profit at 1:1 risk
-                    _takeProfitLevel = MarketSeries.Close.LastValue + stopLossLevel.Value * Symbol.PipSize;
-
-                    ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossLevel, _takeProfitInPips);
+                    _targetx1 = MarketSeries.Close.LastValue + stopLossLevel.Value * Symbol.PipSize;
+                    ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossLevel, null);
                 }
             }
             else if (_takeShortsParameter && HasBearishSignal())
@@ -493,8 +546,10 @@ bool CMyExpertBase::LongModified()
 
         private void OnPositionClosed(PositionClosedEventArgs args)
         {
+            _currentPosition = null;
             var position = args.Position;
-            Print("Closed {0:N} {1} at {2} for {3} profit", position.VolumeInUnits, position.TradeType, position.EntryPrice, position.GrossProfit);
+            Print("Closed {0:N} {1} at {2} for {3} profit", 
+                position.VolumeInUnits, position.TradeType, position.EntryPrice, position.GrossProfit);
 
             _lastClosedPositionTime = Server.Time;
 
