@@ -2,6 +2,7 @@
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
+using System.Data.SqlClient;
 
 namespace cAlgo.Library.Robots.WaveCatcher
 {
@@ -28,9 +29,11 @@ namespace cAlgo.Library.Robots.WaveCatcher
         CloseOnMediumMaCross
     }
 
-    [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.None)]
+    [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FullAccess)]
     public class WaveCatcherBot : BaseRobot
     {
+        const string ConnectionString = @"Data Source = (localdb)\MSSQLLocalDB; Initial Catalog = cTrader; Integrated Security = True; Connect Timeout = 10; Encrypt = False;";
+
         #region Standard Parameters
         [Parameter("Take long trades?", DefaultValue = true)]
         public bool TakeLongsParameter { get; set; }
@@ -97,6 +100,8 @@ namespace cAlgo.Library.Robots.WaveCatcher
         private MovingAverage _slowMA;
         private AverageTrueRange _atr;
         private MaCrossRule _maCrossRule;
+        private int _runId;
+        private int _currentPositionId;
 
         protected override void OnStart()
         {
@@ -130,6 +135,56 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 MinutesToWaitAfterPositionClosed,
                 MoveToBreakEven,
                 CloseHalfAtBreakEven);
+
+            _runId = SaveRunToDatabase();
+            if (_runId <= 0)
+            {
+                throw new InvalidOperationException("Run Id was <= 0!");
+            }
+        }
+
+        private int SaveRunToDatabase()
+        {
+            var sql = "INSERT INTO [dbo].[Run] (CreatedDate, Symbol, Timeframe, TakeLongs, TakeShorts," +
+                            "InitialSLRule, InitialSLPips, TrailingSLRule, TrailingSLPips, LotSizingRule, TakeProfitPips," +
+                            "PauseAfterPositionClosed, MoveToBreakEven, CloseHalfAtBreakEven," +
+                            "MACrossThreshold, MACrossRule" +
+                            ") VALUES (@CreatedDate, @Symbol, @Timeframe, @TakeLongs, @TakeShorts," +
+                            "@InitialSLRule, @InitialSLPips, @TrailingSLRule, @TrailingSLPips," +
+                            "@LotSizingRule, @TakeProfitPips, @PauseAfterPositionClosed, @MoveToBreakEven, @CloseHalfAtBreakEven," +
+                            "@MACrossThreshold, @MACrossRule" +
+                            ");SELECT SCOPE_IDENTITY()";
+
+            var identity = 0;
+
+            using (var connection = new SqlConnection(ConnectionString))
+            {
+                using (var command = new SqlCommand(sql, connection))
+                {
+                    command.Parameters.AddWithValue("@CreatedDate", DateTime.Now);
+                    command.Parameters.AddWithValue("@Symbol", Symbol.Code);
+                    command.Parameters.AddWithValue("@Timeframe", TimeFrame.ToString());
+                    command.Parameters.AddWithValue("@TakeLongs", TakeLongsParameter);
+                    command.Parameters.AddWithValue("@TakeShorts", TakeShortsParameter);
+                    command.Parameters.AddWithValue("@InitialSLRule", InitialStopLossRule);
+                    command.Parameters.AddWithValue("@InitialSLPips", InitialStopLossInPips);
+                    command.Parameters.AddWithValue("@TrailingSLRule", TrailingStopLossRule);
+                    command.Parameters.AddWithValue("@TrailingSLPips", TrailingStopLossInPips);
+                    command.Parameters.AddWithValue("@LotSizingRule", LotSizingRule);
+                    command.Parameters.AddWithValue("@TakeProfitPips", TakeProfitInPips);
+                    command.Parameters.AddWithValue("@PauseAfterPositionClosed", MinutesToWaitAfterPositionClosed);
+                    command.Parameters.AddWithValue("@MoveToBreakEven", MoveToBreakEven);
+                    command.Parameters.AddWithValue("@CloseHalfAtBreakEven", CloseHalfAtBreakEven);
+                    command.Parameters.AddWithValue("@MACrossThreshold", MovingAveragesCrossThreshold);
+                    command.Parameters.AddWithValue("@MACrossRule", MaCrossRule);
+
+                    connection.Open();
+                    identity = Convert.ToInt32(command.ExecuteScalar());
+                    connection.Close();
+                }
+            }
+
+            return identity;
         }
 
         protected override bool HasBullishSignal()
@@ -184,6 +239,92 @@ namespace cAlgo.Library.Robots.WaveCatcher
             }
 
             return false;
+        }
+
+        protected override void OnPositionOpened(PositionOpenedEventArgs args)
+        {
+            base.OnPositionOpened(args);
+
+            _currentPositionId = SaveOpenedPositionToDatabase(args.Position);
+            if (_currentPositionId <= 0)
+            {
+                throw new InvalidOperationException("Position ID was <= 0!");
+            }
+        }
+
+        protected override void OnPositionClosed(PositionClosedEventArgs args)
+        {
+            base.OnPositionClosed(args);
+
+            SaveClosedPositionToDatabase(args.Position);
+        }
+
+        private void SaveClosedPositionToDatabase(Position position)
+        {
+            var sql = "UPDATE [dbo].[Position] SET ExitTime=@ExitTime, GrossProfit=@GrossProfit, ExitPrice=@ExitPrice, Pips=@Pips" +
+                " WHERE PositionId = @PositionId";
+
+            using (var connection = new SqlConnection(ConnectionString))
+            {
+                using (var command = new SqlCommand(sql, connection))
+                {
+                    command.Parameters.AddWithValue("@PositionId", _currentPositionId);
+                    command.Parameters.AddWithValue("@ExitTime", Server.Time);
+                    command.Parameters.AddWithValue("@GrossProfit", position.GrossProfit);                    
+
+                    // There's no exit price so we use current market price
+                    command.Parameters.AddWithValue("@ExitPrice", Symbol.Ask);
+
+                    command.Parameters.AddWithValue("@Pips", position.Pips);
+                    connection.Open();
+                    command.ExecuteNonQuery();
+                    connection.Close();
+                }
+            }
+        }
+
+        private int SaveOpenedPositionToDatabase(Position position)
+        {
+            var sql = "INSERT INTO [dbo].[Position] (RunID, EntryTime, TradeType, EntryPrice, Quantity, StopLoss, TakeProfit," +
+                        "[Open], [High], [Low], [Close], [MA21], [MA55], [MA89]" +
+                            ") VALUES (@RunId, @EntryTime, @TradeType, @EntryPrice, @Quantity, @StopLoss, @TakeProfit," +
+                            "@Open, @High, @Low, @Close, @MA21, @MA55, @MA89);SELECT SCOPE_IDENTITY()";
+
+            int identity;
+
+            using (var connection = new SqlConnection(ConnectionString))
+            {
+                using (var command = new SqlCommand(sql, connection))
+                {
+                    command.Parameters.AddWithValue("@RunId", _runId);
+                    command.Parameters.AddWithValue("@EntryTime", position.EntryTime.ToUniversalTime());
+                    command.Parameters.AddWithValue("@TradeType", position.TradeType.ToString());
+                    command.Parameters.AddWithValue("@EntryPrice", position.EntryPrice);
+                    command.Parameters.AddWithValue("@Quantity", position.Quantity);                    
+                    command.Parameters.AddWithValue("@StopLoss", 
+                        position.StopLoss.HasValue 
+                            ? (object)position.StopLoss.Value 
+                            : DBNull.Value);
+                    command.Parameters.AddWithValue("@TakeProfit", 
+                        position.TakeProfit.HasValue
+                            ? (object)position.TakeProfit.Value
+                            : DBNull.Value);
+
+                    command.Parameters.AddWithValue("@Open", MarketSeries.Open.Last(1));
+                    command.Parameters.AddWithValue("@High", MarketSeries.High.Last(1));
+                    command.Parameters.AddWithValue("@Low", MarketSeries.Low.Last(1));
+                    command.Parameters.AddWithValue("@Close", MarketSeries.Close.Last(1));
+                    command.Parameters.AddWithValue("@MA21", _fastMA.Result.LastValue);
+                    command.Parameters.AddWithValue("@MA55", _mediumMA.Result.LastValue);
+                    command.Parameters.AddWithValue("@MA89", _slowMA.Result.LastValue);
+
+                    connection.Open();
+                    identity = Convert.ToInt32(command.ExecuteScalar());
+                    connection.Close();
+                }
+            }
+
+            return identity;
         }
 
         private bool AreMovingAveragesStackedBullishly()
@@ -767,7 +908,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         }
 
-        private void OnPositionOpened(PositionOpenedEventArgs args)
+        protected virtual void OnPositionOpened(PositionOpenedEventArgs args)
         {
             _currentPosition = args.Position;
             var position = args.Position;
@@ -783,7 +924,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             CalculateBreakEvenPrice();
 
-            _canOpenPosition = false;
+            _canOpenPosition = false;            
         }
 
         private void CalculateBreakEvenPrice()
@@ -811,7 +952,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             }
         }
 
-        private void OnPositionClosed(PositionClosedEventArgs args)
+        protected virtual void OnPositionClosed(PositionClosedEventArgs args)
         {
             _currentPosition = null;
             _recentHigh = 0;
@@ -823,7 +964,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             _canOpenPosition = true;
         }
-        
+
         private void OnPositionModified(PositionModifiedEventArgs args)
         {
             if (!_isClosingHalf)
@@ -835,8 +976,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         private void PrintClosedPositionInfo(Position position)
         {
-            Print("Closed {0:N} {1} at {2} for {3} profit",
-                position.VolumeInUnits, position.TradeType, position.EntryPrice, position.GrossProfit);
+            // There's no exit price so we use current market price
+            Print("Closed {0:N} {1} at {2} for {3} profit (pips={4})",
+                position.VolumeInUnits, position.TradeType, Symbol.Ask, position.GrossProfit, position.Pips);
         }
     }
 }
