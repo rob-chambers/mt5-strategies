@@ -62,5 +62,8 @@
   <ItemGroup>
     <None Include="Robots\ClearDatabase.sql" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Robots\TopProfitMakingParameters.sql" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

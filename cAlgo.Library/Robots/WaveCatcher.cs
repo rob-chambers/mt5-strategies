@@ -37,7 +37,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("Take long trades?", DefaultValue = true)]
         public bool TakeLongsParameter { get; set; }
 
-        [Parameter("Take short trades?", DefaultValue = false)]
+        [Parameter("Take short trades?", DefaultValue = true)]
         public bool TakeShortsParameter { get; set; }
 
         [Parameter("Initial SL Rule", DefaultValue = 0)]
@@ -174,6 +174,14 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (!Enum.IsDefined(typeof(MaCrossRule), MaCrossRule))
             {
                 throw new ArgumentException("Invalid MA Cross rule");
+            }
+
+            var slRule = (StopLossRule)initialStopLossRule;
+            var rule = (StopLossRule)trailingStopLossRule;
+
+            if (_maCrossRule == WaveCatcher.MaCrossRule.None && slRule == StopLossRule.None && rule == StopLossRule.None)
+            {
+                throw new ArgumentException("The combination of parameters means that a position may incur a massive loss");
             }
         }
 
