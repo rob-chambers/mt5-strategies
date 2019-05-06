@@ -66,6 +66,10 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         [Parameter("Close half at breakeven?", DefaultValue = false)]
         public bool CloseHalfAtBreakEven { get; set; }
+
+        [Parameter("Dynamic Risk Percentage?", DefaultValue = 2)]
+        public double DynamicRiskPercentage { get; set; }
+
         #endregion
 
         [Parameter()]
@@ -133,7 +137,8 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 TakeProfitInPips,                
                 MinutesToWaitAfterPositionClosed,
                 MoveToBreakEven,
-                CloseHalfAtBreakEven);
+                CloseHalfAtBreakEven,
+                DynamicRiskPercentage);
 
             _runId = SaveRunToDatabase();
             if (_runId <= 0)
@@ -142,9 +147,33 @@ namespace cAlgo.Library.Robots.WaveCatcher
             }
         }
 
-        protected override void ValidateParameters(bool takeLongsParameter, bool takeShortsParameter, int initialStopLossRule, int initialStopLossInPips, int trailingStopLossRule, int trailingStopLossInPips, int lotSizingRule, int takeProfitInPips, int minutesToWaitAfterPositionClosed, bool moveToBreakEven, bool closeHalfAtBreakEven)
+        protected override void ValidateParameters(
+            bool takeLongsParameter, 
+            bool takeShortsParameter, 
+            int initialStopLossRule, 
+            int initialStopLossInPips, 
+            int trailingStopLossRule, 
+            int trailingStopLossInPips, 
+            int lotSizingRule, 
+            int takeProfitInPips, 
+            int minutesToWaitAfterPositionClosed, 
+            bool moveToBreakEven, 
+            bool closeHalfAtBreakEven,
+            double dynamicRiskPercentage)
         {
-            base.ValidateParameters(takeLongsParameter, takeShortsParameter, initialStopLossRule, initialStopLossInPips, trailingStopLossRule, trailingStopLossInPips, lotSizingRule, takeProfitInPips, minutesToWaitAfterPositionClosed, moveToBreakEven, closeHalfAtBreakEven);
+            base.ValidateParameters(
+                takeLongsParameter, 
+                takeShortsParameter, 
+                initialStopLossRule, 
+                initialStopLossInPips, 
+                trailingStopLossRule, 
+                trailingStopLossInPips, 
+                lotSizingRule, 
+                takeProfitInPips, 
+                minutesToWaitAfterPositionClosed, 
+                moveToBreakEven, 
+                closeHalfAtBreakEven,
+                dynamicRiskPercentage);
 
             if (FastPeriodParameter <= 0 || FastPeriodParameter > 999)
             {
@@ -572,6 +601,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         private int _minutesToWaitAfterPositionClosed;
         private bool _moveToBreakEven;
         private bool _closeHalfAtBreakEven;
+        private double _dynamicRiskPercentage;
         private bool _canOpenPosition;
         private DateTime _lastClosedPositionTime;
         private double _takeProfitLevel;
@@ -596,11 +626,12 @@ namespace cAlgo.Library.Robots.WaveCatcher
             int takeProfitInPips = 0,            
             int minutesToWaitAfterPositionClosed = 0,
             bool moveToBreakEven = false,
-            bool closeHalfAtBreakEven = false)
+            bool closeHalfAtBreakEven = false,
+            double dynamicRiskPercentage = 2)
         {
             ValidateParameters(takeLongsParameter, takeShortsParameter, initialStopLossRule, initialStopLossInPips,
                     trailingStopLossRule, trailingStopLossInPips, lotSizingRule, takeProfitInPips,
-                    minutesToWaitAfterPositionClosed, moveToBreakEven, closeHalfAtBreakEven);
+                    minutesToWaitAfterPositionClosed, moveToBreakEven, closeHalfAtBreakEven, dynamicRiskPercentage);
 
             _takeLongsParameter = takeLongsParameter;
             _takeShortsParameter = takeShortsParameter;
@@ -613,6 +644,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             _minutesToWaitAfterPositionClosed = minutesToWaitAfterPositionClosed;
             _moveToBreakEven = moveToBreakEven;
             _closeHalfAtBreakEven = closeHalfAtBreakEven;
+            _dynamicRiskPercentage = dynamicRiskPercentage;
 
             _canOpenPosition = true;
             _recentHigh = 0;
@@ -637,7 +669,8 @@ namespace cAlgo.Library.Robots.WaveCatcher
             int takeProfitInPips,
             int minutesToWaitAfterPositionClosed,
             bool moveToBreakEven,
-            bool closeHalfAtBreakEven)
+            bool closeHalfAtBreakEven,
+            double dynamicRiskPercentage)
         {
             if (!takeLongsParameter && !takeShortsParameter)
             {
@@ -682,6 +715,16 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (!moveToBreakEven && closeHalfAtBreakEven)
             {
                 throw new ArgumentException("'Close half at breakeven?' is only valid when 'Move to breakeven?' is set");
+            }
+
+            var lotSizing = (LotSizingRule)lotSizingRule;
+            if (lotSizing == LotSizingRule.Static && dynamicRiskPercentage != 0)
+            {
+                throw new ArgumentException("Dynamic Risk is invalid when using static lot sizing");
+            }
+            else if (lotSizing == LotSizingRule.Dynamic && (dynamicRiskPercentage <= 0 || dynamicRiskPercentage >= 10))
+            {
+                throw new ArgumentOutOfRangeException("Dynamic Risk value is out of range - it is a percentage (e.g. 2)");
             }
         }
 
@@ -897,18 +940,39 @@ namespace cAlgo.Library.Robots.WaveCatcher
         }
 
         private void EnterLongPosition()
-        {
-            var Quantity = 1;
-
-            var volumeInUnits = Symbol.QuantityToVolumeInUnits(Quantity);
-            var stopLossPips = CalculateInitialStopLossInPipsForLongPosition();            
+        {                        
+            var stopLossPips = CalculateInitialStopLossInPipsForLongPosition();
+            double lots;
 
             if (stopLossPips.HasValue)
             {
+                lots = CalculatePositionQuantityInLots(stopLossPips.Value);
                 Print("SL calculated for Buy order = {0}", stopLossPips);                
             }
+            else
+            {
+                lots = 1;
+            }
 
+            var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
             ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit());
+        }
+
+        private double CalculatePositionQuantityInLots(double stopLossPips)
+        {
+            if (_lotSizingRule == LotSizingRule.Static)
+            {
+                return 1;
+            }
+           
+            var risk = Account.Equity * _dynamicRiskPercentage / 100;
+            var oneLotRisk = Symbol.PipValue * stopLossPips * Symbol.LotSize;
+            var quantity = Math.Round(risk / oneLotRisk, 1);
+
+            Print("Account Equity={0}, Risk={1}, Risk for one lot based on SL of {2} = {3}, Qty = {4}",
+                Account.Equity, risk, stopLossPips, oneLotRisk, quantity);
+
+            return quantity;
         }
 
         private double? CalculateInitialStopLossInPipsForLongPosition()
@@ -956,15 +1020,20 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         private void EnterShortPosition()
         {            
-            var Quantity = 1;
-            var volumeInUnits = Symbol.QuantityToVolumeInUnits(Quantity);
             var stopLossPips = CalculateInitialStopLossInPipsForShortPosition();
+            double lots;
 
             if (stopLossPips.HasValue)
             {
+                lots = CalculatePositionQuantityInLots(stopLossPips.Value);
                 Print("SL calculated for Sell order = {0}", stopLossPips);                
             }
+            else
+            {
+                lots = 1;
+            }
 
+            var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
             ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit());
         }
 
