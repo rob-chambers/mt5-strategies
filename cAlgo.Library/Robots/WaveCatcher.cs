@@ -8,12 +8,11 @@ namespace cAlgo.Library.Robots.WaveCatcher
 {
     public enum StopLossRule
     {
-        None,
-        StaticPipsValue,
-        //CurrentBar2ATR,
+        None,        
         CurrentBarNPips,
         PreviousBarNPips,
-        ShortTermHighLow
+        ShortTermHighLow,
+        StaticPipsValue
     };
 
     public enum LotSizingRule
@@ -41,20 +40,20 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("Take short trades?", DefaultValue = false)]
         public bool TakeShortsParameter { get; set; }
 
-        [Parameter("Initial SL Rule", DefaultValue = "StaticPipsValue")]
-        public string InitialStopLossRule { get; set; }
+        [Parameter("Initial SL Rule", DefaultValue = 0)]
+        public int InitialStopLossRule { get; set; }
 
         [Parameter("Initial SL (pips)", DefaultValue = 5)]
         public int InitialStopLossInPips { get; set; }
 
-        [Parameter("Trailing SL Rule", DefaultValue = "None")]
-        public string TrailingStopLossRule { get; set; }
+        [Parameter("Trailing SL Rule", DefaultValue = 0)]
+        public int TrailingStopLossRule { get; set; }
 
         [Parameter("Trailing SL (pips)", DefaultValue = 10)]
         public int TrailingStopLossInPips { get; set; }
 
-        [Parameter("Lot Sizing Rule", DefaultValue = "Static")]
-        public string LotSizingRule { get; set; }
+        [Parameter("Lot Sizing Rule", DefaultValue = 0)]
+        public int LotSizingRule { get; set; }
 
         [Parameter("Take Profit (pips)", DefaultValue = 60)]
         public int TakeProfitInPips { get; set; }
@@ -84,8 +83,8 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("MAs Cross Threshold (# bars)", DefaultValue = 10)]
         public int MovingAveragesCrossThreshold { get; set; }
 
-        [Parameter("MA Cross Rule", DefaultValue = "CloseOnFastMaCross")]
-        public string MaCrossRule { get; set; }
+        [Parameter("MA Cross Rule", DefaultValue = 1)]
+        public int MaCrossRule { get; set; }
 
         protected override string Name
         {
@@ -122,7 +121,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             Print("Move to breakeven: {0}", MoveToBreakEven);
             Print("Close half at breakeven: {0}", CloseHalfAtBreakEven);
             Print("MA Cross Rule: {0}", MaCrossRule);
-            _maCrossRule = (MaCrossRule)Enum.Parse(typeof(MaCrossRule), MaCrossRule);
+            _maCrossRule = (MaCrossRule)MaCrossRule;
 
             Init(TakeLongsParameter, 
                 TakeShortsParameter,
@@ -140,6 +139,41 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (_runId <= 0)
             {
                 throw new InvalidOperationException("Run Id was <= 0!");
+            }
+        }
+
+        protected override void ValidateParameters(bool takeLongsParameter, bool takeShortsParameter, int initialStopLossRule, int initialStopLossInPips, int trailingStopLossRule, int trailingStopLossInPips, int lotSizingRule, int takeProfitInPips, int minutesToWaitAfterPositionClosed, bool moveToBreakEven, bool closeHalfAtBreakEven)
+        {
+            base.ValidateParameters(takeLongsParameter, takeShortsParameter, initialStopLossRule, initialStopLossInPips, trailingStopLossRule, trailingStopLossInPips, lotSizingRule, takeProfitInPips, minutesToWaitAfterPositionClosed, moveToBreakEven, closeHalfAtBreakEven);
+
+            if (FastPeriodParameter <= 0 || FastPeriodParameter > 999)
+            {
+                throw new ArgumentException("Invalid 'Fast MA Period' - must be between 1 and 999");
+            }
+
+            if (MediumPeriodParameter <= 0 || MediumPeriodParameter > 999)
+            {
+                throw new ArgumentException("Invalid 'Medium MA Period' - must be between 1 and 999");
+            }
+
+            if (SlowPeriodParameter <= 0 || SlowPeriodParameter > 999)
+            {
+                throw new ArgumentException("Invalid 'Slow MA Period' - must be between 1 and 999");
+            }
+
+            if (!(FastPeriodParameter < MediumPeriodParameter && MediumPeriodParameter < SlowPeriodParameter))
+            {
+                throw new ArgumentException("Invalid 'MA Periods' - fast must be less than medium and medium must be less than slow");
+            }
+
+            if (MovingAveragesCrossThreshold <= 0 || MovingAveragesCrossThreshold > 999)
+            {
+                throw new ArgumentException("MAs Cross Threshold - must be between 1 and 999");
+            }
+
+            if (!Enum.IsDefined(typeof(MaCrossRule), MaCrossRule))
+            {
+                throw new ArgumentException("Invalid MA Cross rule");
             }
         }
 
@@ -517,13 +551,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         protected abstract string Name { get; }
         protected Position _currentPosition;
-        protected double ExitPrice
-        {
-            get
-            {
-                return _exitPrice;
-            }
-        }
+        protected double ExitPrice { get; private set; }
 
         private bool _takeLongsParameter;
         private bool _takeShortsParameter;
@@ -545,7 +573,6 @@ namespace cAlgo.Library.Robots.WaveCatcher
         private double _breakEvenPrice;
         private bool _isClosingHalf;
         private double _recentLow;
-        private double _exitPrice;
 
         protected abstract bool HasBullishSignal();
         protected abstract bool HasBearishSignal();
@@ -553,23 +580,27 @@ namespace cAlgo.Library.Robots.WaveCatcher
         protected void Init(
             bool takeLongsParameter, 
             bool takeShortsParameter, 
-            string initialStopLossRule,
+            int initialStopLossRule,
             int initialStopLossInPips,
-            string trailingStopLossRule,
+            int trailingStopLossRule,
             int trailingStopLossInPips,
-            string lotSizingRule,            
+            int lotSizingRule,            
             int takeProfitInPips = 0,            
             int minutesToWaitAfterPositionClosed = 0,
             bool moveToBreakEven = false,
             bool closeHalfAtBreakEven = false)
         {
+            ValidateParameters(takeLongsParameter, takeShortsParameter, initialStopLossRule, initialStopLossInPips,
+                    trailingStopLossRule, trailingStopLossInPips, lotSizingRule, takeProfitInPips,
+                    minutesToWaitAfterPositionClosed, moveToBreakEven, closeHalfAtBreakEven);
+
             _takeLongsParameter = takeLongsParameter;
             _takeShortsParameter = takeShortsParameter;
-            _initialStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), initialStopLossRule);
+            _initialStopLossRule = (StopLossRule)initialStopLossRule;
             _initialStopLossInPips = initialStopLossInPips;
-            _trailingStopLossRule = (StopLossRule)Enum.Parse(typeof(StopLossRule), trailingStopLossRule);
+            _trailingStopLossRule = (StopLossRule)trailingStopLossRule;
             _trailingStopLossInPips = trailingStopLossInPips;
-            _lotSizingRule = (LotSizingRule)Enum.Parse(typeof(LotSizingRule), lotSizingRule);            
+            _lotSizingRule = (LotSizingRule)lotSizingRule;
             _takeProfitInPips = takeProfitInPips;
             _minutesToWaitAfterPositionClosed = minutesToWaitAfterPositionClosed;
             _moveToBreakEven = moveToBreakEven;
@@ -585,6 +616,65 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             Print("Symbol.TickSize: {0}, Symbol.Digits: {1}, Symbol.PipSize: {2}", 
                 Symbol.TickSize, Symbol.Digits, Symbol.PipSize);
+        }
+
+        protected virtual void ValidateParameters(
+            bool takeLongsParameter, 
+            bool takeShortsParameter, 
+            int initialStopLossRule, 
+            int initialStopLossInPips, 
+            int trailingStopLossRule,
+            int trailingStopLossInPips,
+            int lotSizingRule,
+            int takeProfitInPips,
+            int minutesToWaitAfterPositionClosed,
+            bool moveToBreakEven,
+            bool closeHalfAtBreakEven)
+        {
+            if (!takeLongsParameter && !takeShortsParameter)
+            {
+                throw new ArgumentException("Must take at least longs or shorts");
+            }
+
+            if (!Enum.IsDefined(typeof(StopLossRule), initialStopLossRule))
+            {
+                throw new ArgumentException("Invalid initial stop loss rule");
+            }
+
+            if (!Enum.IsDefined(typeof(StopLossRule), trailingStopLossRule))
+            {
+                throw new ArgumentException("Invalid trailing stop loss rule");
+            }
+
+            if (initialStopLossInPips < 0 || initialStopLossInPips > 999)
+            {
+                throw new ArgumentException("Invalid initial stop loss - must be between 0 and 999");
+            }
+
+            if (trailingStopLossInPips < 0 || trailingStopLossInPips > 999)
+            {
+                throw new ArgumentException("Invalid trailing stop loss - must be between 0 and 999");
+            }
+
+            if (!Enum.IsDefined(typeof(LotSizingRule), lotSizingRule))
+            {
+                throw new ArgumentException("Invalid lot sizing rule");
+            }
+
+            if (takeProfitInPips < 0 || takeProfitInPips > 999)
+            {
+                throw new ArgumentException("Invalid take profit - must be between 0 and 999");
+            }
+
+            if (minutesToWaitAfterPositionClosed < 0 || minutesToWaitAfterPositionClosed > 60 * 24)
+            {
+                throw new ArgumentException(string.Format("Invalid 'Pause after position closed' - must be between 0 and {0}", 60 * 24));
+            }
+
+            if (!moveToBreakEven && closeHalfAtBreakEven)
+            {
+                throw new ArgumentException("'Close half at breakeven?' is only valid when 'Move to breakeven?' is set");
+            }
         }
 
         protected override void OnTick()
@@ -807,13 +897,10 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             if (stopLossPips.HasValue)
             {
-                Print("SL calculated for Buy order = {0}", stopLossPips);
-                ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit());
+                Print("SL calculated for Buy order = {0}", stopLossPips);                
             }
-            else
-            {
-                ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name);
-            }
+
+            ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit());
         }
 
         private double? CalculateInitialStopLossInPipsForLongPosition()
@@ -867,13 +954,10 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             if (stopLossPips.HasValue)
             {
-                Print("SL calculated for Sell order = {0}", stopLossPips);
-                ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit());
+                Print("SL calculated for Sell order = {0}", stopLossPips);                
             }
-            else
-            {
-                ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name);
-            }
+
+            ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit());
         }
 
         private double? CalculateInitialStopLossInPipsForShortPosition()
@@ -964,7 +1048,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             _recentLow = _initialRecentLow;
             _alreadyMovedToBreakEven = false;
 
-            _exitPrice = CalculateExitPrice(args.Position);
+            ExitPrice = CalculateExitPrice(args.Position);
             PrintClosedPositionInfo(args.Position);
 
             _lastClosedPositionTime = Server.Time;
@@ -977,7 +1061,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (!_isClosingHalf)
                 return;
 
-            _exitPrice = CalculateExitPrice(args.Position);
+            ExitPrice = CalculateExitPrice(args.Position);
             PrintClosedPositionInfo(args.Position);
             _isClosingHalf = false;
         }

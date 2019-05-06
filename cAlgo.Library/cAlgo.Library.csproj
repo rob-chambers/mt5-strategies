@@ -59,5 +59,8 @@
   <ItemGroup>
     <None Include="Robots\copy.bat" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="Robots\ClearDatabase.sql" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
