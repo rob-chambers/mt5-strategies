@@ -271,10 +271,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     command.Parameters.AddWithValue("@PositionId", _currentPositionId);
                     command.Parameters.AddWithValue("@ExitTime", Server.Time);
                     command.Parameters.AddWithValue("@GrossProfit", position.GrossProfit);                    
-
-                    // There's no exit price so we use current market price
-                    command.Parameters.AddWithValue("@ExitPrice", Symbol.Ask);
-
+                    command.Parameters.AddWithValue("@ExitPrice", ExitPrice);
                     command.Parameters.AddWithValue("@Pips", position.Pips);
                     connection.Open();
                     command.ExecuteNonQuery();
@@ -520,6 +517,13 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         protected abstract string Name { get; }
         protected Position _currentPosition;
+        protected double ExitPrice
+        {
+            get
+            {
+                return _exitPrice;
+            }
+        }
 
         private bool _takeLongsParameter;
         private bool _takeShortsParameter;
@@ -541,6 +545,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         private double _breakEvenPrice;
         private bool _isClosingHalf;
         private double _recentLow;
+        private double _exitPrice;
 
         protected abstract bool HasBullishSignal();
         protected abstract bool HasBearishSignal();
@@ -958,6 +963,8 @@ namespace cAlgo.Library.Robots.WaveCatcher
             _recentHigh = 0;
             _recentLow = _initialRecentLow;
             _alreadyMovedToBreakEven = false;
+
+            _exitPrice = CalculateExitPrice(args.Position);
             PrintClosedPositionInfo(args.Position);
 
             _lastClosedPositionTime = Server.Time;
@@ -970,15 +977,31 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (!_isClosingHalf)
                 return;
 
+            _exitPrice = CalculateExitPrice(args.Position);
             PrintClosedPositionInfo(args.Position);
             _isClosingHalf = false;
         }
 
         private void PrintClosedPositionInfo(Position position)
         {
-            // There's no exit price so we use current market price
             Print("Closed {0:N} {1} at {2} for {3} profit (pips={4})",
-                position.VolumeInUnits, position.TradeType, Symbol.Ask, position.GrossProfit, position.Pips);
+                position.VolumeInUnits, position.TradeType, ExitPrice, position.GrossProfit, position.Pips);            
+        }
+
+        private double CalculateExitPrice(Position position)
+        {
+            var diff = position.Pips * Symbol.PipSize;
+            double exitPrice = 0;
+            if (position.TradeType == TradeType.Buy)
+            {
+                exitPrice = position.EntryPrice + diff;
+            }
+            else
+            {
+                exitPrice = position.EntryPrice - diff;
+            }
+
+            return exitPrice;
         }
     }
 }
