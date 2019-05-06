@@ -210,28 +210,28 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
                 if (MarketSeries.Close.LastValue <= _fastMA.Result.LastValue)
                 {
-                    Print("Setup rejected as we closed lower than the fast MA");
+                    //Print("Setup rejected as we closed lower than the fast MA");
                     return false;
                 }
 
                 if (MarketSeries.Close.Last(1) <= MarketSeries.Close.Last(2))
                 {
-                    Print("Setup rejected as we closed lower than the prior close ({0} vs {1})",
-                        MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
+                    //Print("Setup rejected as we closed lower than the prior close ({0} vs {1})",
+                    //    MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
                     return false;
                 }
 
                 if (MarketSeries.Close.Last(1) <= MarketSeries.Open.Last(1))
                 {
-                    Print("Setup rejected as we closed lower than the open ({0} vs {1})",
-                        MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
+                    //Print("Setup rejected as we closed lower than the open ({0} vs {1})",
+                    //    MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
                     return false;
                 }
 
                 if (MarketSeries.High.Last(1) <= MarketSeries.High.Last(2))
                 {
-                    Print("Setup rejected as the high wasn't higher than the prior high ({0} vs {1})",
-                        MarketSeries.High.Last(1), MarketSeries.High.Last(2));
+                    //Print("Setup rejected as the high wasn't higher than the prior high ({0} vs {1})",
+                    //    MarketSeries.High.Last(1), MarketSeries.High.Last(2));
                     return false;
                 }
 
@@ -269,7 +269,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 using (var command = new SqlCommand(sql, connection))
                 {
                     command.Parameters.AddWithValue("@PositionId", _currentPositionId);
-                    command.Parameters.AddWithValue("@ExitTime", Server.Time);
+                    command.Parameters.AddWithValue("@ExitTime", Server.Time.ToUniversalTime());
                     command.Parameters.AddWithValue("@GrossProfit", position.GrossProfit);                    
                     command.Parameters.AddWithValue("@ExitPrice", ExitPrice);
                     command.Parameters.AddWithValue("@Pips", position.Pips);
@@ -417,28 +417,28 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
                 if (MarketSeries.Close.LastValue >= _fastMA.Result.LastValue)
                 {
-                    Print("Setup rejected as we closed higher than the fast MA");
+                    //Print("Setup rejected as we closed higher than the fast MA");
                     return false;
                 }
 
                 if (MarketSeries.Close.Last(1) >= MarketSeries.Close.Last(2))
                 {
-                    Print("Setup rejected as we closed higher than the prior close ({0} vs {1})",
-                        MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
+                    //Print("Setup rejected as we closed higher than the prior close ({0} vs {1})",
+                    //    MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
                     return false;
                 }
 
                 if (MarketSeries.Close.Last(1) >= MarketSeries.Open.Last(1))
                 {
-                    Print("Setup rejected as we closed higher than the open ({0} vs {1})",
-                        MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
+                    //Print("Setup rejected as we closed higher than the open ({0} vs {1})",
+                    //    MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
                     return false;
                 }
 
                 if (MarketSeries.Low.Last(1) >= MarketSeries.Low.Last(2))
                 {
-                    Print("Setup rejected as the low wasn't lower than the prior low ({0} vs {1})",
-                        MarketSeries.Low.Last(1), MarketSeries.Low.Last(2));
+                    //Print("Setup rejected as the low wasn't lower than the prior low ({0} vs {1})",
+                    //    MarketSeries.Low.Last(1), MarketSeries.Low.Last(2));
                     return false;
                 }
 
