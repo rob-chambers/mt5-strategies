@@ -40,7 +40,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("Take short trades?", DefaultValue = true)]
         public bool TakeShortsParameter { get; set; }
 
-        [Parameter("Initial SL Rule", DefaultValue = 0)]
+        [Parameter("Initial SL Rule", DefaultValue = 2)]
         public int InitialStopLossRule { get; set; }
 
         [Parameter("Initial SL (pips)", DefaultValue = 5)]
@@ -84,6 +84,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("Fast MA Period", DefaultValue = 21)]
         public int FastPeriodParameter { get; set; }
 
+        [Parameter("H4 MA Period", DefaultValue = 21)]
+        public int H4MaPeriodParameter { get; set; }
+
         [Parameter("MAs Cross Threshold (# bars)", DefaultValue = 10)]
         public int MovingAveragesCrossThreshold { get; set; }
 
@@ -101,17 +104,22 @@ namespace cAlgo.Library.Robots.WaveCatcher
         private MovingAverage _fastMA;
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
-        private AverageTrueRange _atr;
         private MaCrossRule _maCrossRule;
         private int _runId;
         private int _currentPositionId;
+        private ExponentialMovingAverage _h4Ma;
+        private RelativeStrengthIndex _rsi;
+        private RelativeStrengthIndex _h4Rsi;
 
         protected override void OnStart()
         {
             _fastMA = Indicators.MovingAverage(SourceSeries, FastPeriodParameter, MovingAverageType.Exponential);
             _mediumMA = Indicators.MovingAverage(SourceSeries, MediumPeriodParameter, MovingAverageType.Exponential);
             _slowMA = Indicators.MovingAverage(SourceSeries, SlowPeriodParameter, MovingAverageType.Exponential);
-            _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
+            var h4series = MarketData.GetSeries(TimeFrame.Hour4);
+            _h4Ma = Indicators.ExponentialMovingAverage(h4series.Close, H4MaPeriodParameter);
+            _rsi = Indicators.RelativeStrengthIndex(SourceSeries, 14);
+            _h4Rsi = Indicators.RelativeStrengthIndex(h4series.Close, 14);
 
             Print("Take Longs: {0}", TakeLongsParameter);
             Print("Take Shorts: {0}", TakeShortsParameter);
@@ -125,6 +133,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             Print("Move to breakeven: {0}", MoveToBreakEven);
             Print("Close half at breakeven: {0}", CloseHalfAtBreakEven);
             Print("MA Cross Rule: {0}", MaCrossRule);
+            Print("H4MA: {0}", H4MaPeriodParameter);
             _maCrossRule = (MaCrossRule)MaCrossRule;
 
             Init(TakeLongsParameter, 
@@ -212,6 +221,11 @@ namespace cAlgo.Library.Robots.WaveCatcher
             {
                 throw new ArgumentException("The combination of parameters means that a position may incur a massive loss");
             }
+
+            if (H4MaPeriodParameter < 10 || H4MaPeriodParameter > 99)
+            {
+                throw new ArgumentException("H4 MA Period must be between 10 and 99");
+            }
         }
 
         private int SaveRunToDatabase()
@@ -219,11 +233,11 @@ namespace cAlgo.Library.Robots.WaveCatcher
             var sql = "INSERT INTO [dbo].[Run] (CreatedDate, Symbol, Timeframe, TakeLongs, TakeShorts," +
                             "InitialSLRule, InitialSLPips, TrailingSLRule, TrailingSLPips, LotSizingRule, TakeProfitPips," +
                             "PauseAfterPositionClosed, MoveToBreakEven, CloseHalfAtBreakEven," +
-                            "MACrossThreshold, MACrossRule" +
+                            "MACrossThreshold, MACrossRule, H4MAPeriod" +
                             ") VALUES (@CreatedDate, @Symbol, @Timeframe, @TakeLongs, @TakeShorts," +
                             "@InitialSLRule, @InitialSLPips, @TrailingSLRule, @TrailingSLPips," +
                             "@LotSizingRule, @TakeProfitPips, @PauseAfterPositionClosed, @MoveToBreakEven, @CloseHalfAtBreakEven," +
-                            "@MACrossThreshold, @MACrossRule" +
+                            "@MACrossThreshold, @MACrossRule, @H4MAPeriod" +
                             ");SELECT SCOPE_IDENTITY()";
 
             var identity = 0;
@@ -248,6 +262,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     command.Parameters.AddWithValue("@CloseHalfAtBreakEven", CloseHalfAtBreakEven);
                     command.Parameters.AddWithValue("@MACrossThreshold", MovingAveragesCrossThreshold);
                     command.Parameters.AddWithValue("@MACrossRule", MaCrossRule);
+                    command.Parameters.AddWithValue("@H4MAPeriod", H4MaPeriodParameter);
 
                     connection.Open();
                     identity = Convert.ToInt32(command.ExecuteScalar());
@@ -354,9 +369,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
         private int SaveOpenedPositionToDatabase(Position position)
         {
             var sql = "INSERT INTO [dbo].[Position] (RunID, EntryTime, TradeType, EntryPrice, Quantity, StopLoss, TakeProfit," +
-                        "[Open], [High], [Low], [Close], [MA21], [MA55], [MA89]" +
+                        "[Open], [High], [Low], [Close], [MA21], [MA55], [MA89], [RSI], [H4MA], [H4RSI]" +
                             ") VALUES (@RunId, @EntryTime, @TradeType, @EntryPrice, @Quantity, @StopLoss, @TakeProfit," +
-                            "@Open, @High, @Low, @Close, @MA21, @MA55, @MA89);SELECT SCOPE_IDENTITY()";
+                            "@Open, @High, @Low, @Close, @MA21, @MA55, @MA89, @RSI, @H4MA, @H4RSI);SELECT SCOPE_IDENTITY()";
 
             int identity;
 
@@ -385,6 +400,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     command.Parameters.AddWithValue("@MA21", _fastMA.Result.LastValue);
                     command.Parameters.AddWithValue("@MA55", _mediumMA.Result.LastValue);
                     command.Parameters.AddWithValue("@MA89", _slowMA.Result.LastValue);
+                    command.Parameters.AddWithValue("@RSI", _rsi.Result.LastValue);
+                    command.Parameters.AddWithValue("@H4MA", _h4Ma.Result.LastValue);
+                    command.Parameters.AddWithValue("@H4RSI", _h4Rsi.Result.LastValue);
 
                     connection.Open();
                     identity = Convert.ToInt32(command.ExecuteScalar());
@@ -718,11 +736,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             }
 
             var lotSizing = (LotSizingRule)lotSizingRule;
-            if (lotSizing == LotSizingRule.Static && dynamicRiskPercentage != 0)
-            {
-                throw new ArgumentException("Dynamic Risk is invalid when using static lot sizing");
-            }
-            else if (lotSizing == LotSizingRule.Dynamic && (dynamicRiskPercentage <= 0 || dynamicRiskPercentage >= 10))
+            if (lotSizing == LotSizingRule.Dynamic && (dynamicRiskPercentage <= 0 || dynamicRiskPercentage >= 10))
             {
                 throw new ArgumentOutOfRangeException("Dynamic Risk value is out of range - it is a percentage (e.g. 2)");
             }
