@@ -65,5 +65,8 @@
   <ItemGroup>
     <None Include="Robots\TopProfitMakingParameters.sql" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="Robots\Analysis Queries\BestRunsByProfit.sql" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

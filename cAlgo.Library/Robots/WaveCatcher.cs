@@ -6,7 +6,15 @@ using System.Data.SqlClient;
 
 namespace cAlgo.Library.Robots.WaveCatcher
 {
-    public enum StopLossRule
+    public enum InitialStopLossRule
+    {
+        None,
+        CurrentBarNPips,
+        PreviousBarNPips,
+        StaticPipsValue
+    };
+
+    public enum TrailingStopLossRule
     {
         None,        
         CurrentBarNPips,
@@ -214,10 +222,10 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 throw new ArgumentException("Invalid MA Cross rule");
             }
 
-            var slRule = (StopLossRule)initialStopLossRule;
-            var rule = (StopLossRule)trailingStopLossRule;
+            var slRule = (InitialStopLossRule)initialStopLossRule;
+            var rule = (TrailingStopLossRule)trailingStopLossRule;
 
-            if (_maCrossRule == WaveCatcher.MaCrossRule.None && slRule == StopLossRule.None && rule == StopLossRule.None)
+            if (_maCrossRule == WaveCatcher.MaCrossRule.None && slRule == WaveCatcher.InitialStopLossRule.None && rule == WaveCatcher.TrailingStopLossRule.None)
             {
                 throw new ArgumentException("The combination of parameters means that a position may incur a massive loss");
             }
@@ -610,8 +618,8 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         private bool _takeLongsParameter;
         private bool _takeShortsParameter;
-        private StopLossRule _initialStopLossRule;
-        private StopLossRule _trailingStopLossRule;
+        private InitialStopLossRule _initialStopLossRule;
+        private TrailingStopLossRule _trailingStopLossRule;
         private LotSizingRule _lotSizingRule;
         private int _initialStopLossInPips;
         private int _takeProfitInPips;
@@ -653,9 +661,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             _takeLongsParameter = takeLongsParameter;
             _takeShortsParameter = takeShortsParameter;
-            _initialStopLossRule = (StopLossRule)initialStopLossRule;
+            _initialStopLossRule = (InitialStopLossRule)initialStopLossRule;
             _initialStopLossInPips = initialStopLossInPips;
-            _trailingStopLossRule = (StopLossRule)trailingStopLossRule;
+            _trailingStopLossRule = (TrailingStopLossRule)trailingStopLossRule;
             _trailingStopLossInPips = trailingStopLossInPips;
             _lotSizingRule = (LotSizingRule)lotSizingRule;
             _takeProfitInPips = takeProfitInPips;
@@ -695,12 +703,12 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 throw new ArgumentException("Must take at least longs or shorts");
             }
 
-            if (!Enum.IsDefined(typeof(StopLossRule), initialStopLossRule))
+            if (!Enum.IsDefined(typeof(InitialStopLossRule), initialStopLossRule))
             {
                 throw new ArgumentException("Invalid initial stop loss rule");
             }
 
-            if (!Enum.IsDefined(typeof(StopLossRule), trailingStopLossRule))
+            if (!Enum.IsDefined(typeof(TrailingStopLossRule), trailingStopLossRule))
             {
                 throw new ArgumentException("Invalid trailing stop loss rule");
             }
@@ -787,7 +795,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         /// </summary>
         protected virtual void ManageLongPosition()
         {
-            if (_trailingStopLossRule == StopLossRule.None && !_moveToBreakEven)
+            if (_trailingStopLossRule == TrailingStopLossRule.None && !_moveToBreakEven)
                 return;
 
             // Are we making higher highs?
@@ -840,20 +848,20 @@ namespace cAlgo.Library.Robots.WaveCatcher
             double? stop = null;
             switch (_trailingStopLossRule)
             {
-                case StopLossRule.StaticPipsValue:
+                case TrailingStopLossRule.StaticPipsValue:
                     stop = Symbol.Ask - _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
-                case StopLossRule.CurrentBarNPips:
+                case TrailingStopLossRule.CurrentBarNPips:
                     stop = MarketSeries.Low.Last(1) - _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
-                case StopLossRule.PreviousBarNPips:
+                case TrailingStopLossRule.PreviousBarNPips:
                     var low = Math.Min(MarketSeries.Low.Last(1), MarketSeries.Low.Last(2));
                     stop = low - _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
-                case StopLossRule.ShortTermHighLow:
+                case TrailingStopLossRule.ShortTermHighLow:
                     stop = _recentHigh - _trailingStopLossInPips * Symbol.PipSize;
                     break;
             }
@@ -866,7 +874,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         /// </summary>
         protected virtual void ManageShortPosition()
         {
-            if (_trailingStopLossRule == StopLossRule.None && !_moveToBreakEven)
+            if (_trailingStopLossRule == TrailingStopLossRule.None && !_moveToBreakEven)
                 return;
 
             // Are we making lower lows?
@@ -919,20 +927,20 @@ namespace cAlgo.Library.Robots.WaveCatcher
             double? stop = null;
             switch (_trailingStopLossRule)
             {
-                case StopLossRule.StaticPipsValue:
+                case TrailingStopLossRule.StaticPipsValue:
                     stop = Symbol.Bid + _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
-                case StopLossRule.CurrentBarNPips:
+                case TrailingStopLossRule.CurrentBarNPips:
                     stop = MarketSeries.High.Last(1) + _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
-                case StopLossRule.PreviousBarNPips:
+                case TrailingStopLossRule.PreviousBarNPips:
                     var high = Math.Max(MarketSeries.High.Last(1), MarketSeries.High.Last(2));
                     stop = high + _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
-                case StopLossRule.ShortTermHighLow:
+                case TrailingStopLossRule.ShortTermHighLow:
                     stop = _recentLow + _trailingStopLossInPips * Symbol.PipSize;
                     break;
             }
@@ -995,18 +1003,18 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             switch (_initialStopLossRule)
             {
-                case StopLossRule.None:
+                case InitialStopLossRule.None:
                     break;
 
-                case StopLossRule.StaticPipsValue:
+                case InitialStopLossRule.StaticPipsValue:
                     stopLossPips = _initialStopLossInPips;
                     break;
 
-                case StopLossRule.CurrentBarNPips:
+                case InitialStopLossRule.CurrentBarNPips:
                     stopLossPips = _initialStopLossInPips + (Symbol.Ask - MarketSeries.Low.Last(1)) / Symbol.PipSize;
                     break;
 
-                case StopLossRule.PreviousBarNPips:
+                case InitialStopLossRule.PreviousBarNPips:
                     var low = MarketSeries.Low.Last(1);
                     if (MarketSeries.Low.Last(2) < low)
                     {
@@ -1057,18 +1065,18 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             switch (_initialStopLossRule)
             {
-                case StopLossRule.None:
+                case InitialStopLossRule.None:
                     break;
 
-                case StopLossRule.StaticPipsValue:
+                case InitialStopLossRule.StaticPipsValue:
                     stopLossPips = _initialStopLossInPips;
                     break;
 
-                case StopLossRule.CurrentBarNPips:
+                case InitialStopLossRule.CurrentBarNPips:
                     stopLossPips = _initialStopLossInPips + (MarketSeries.High.Last(1) - Symbol.Bid) / Symbol.PipSize;
                     break;
 
-                case StopLossRule.PreviousBarNPips:
+                case InitialStopLossRule.PreviousBarNPips:
                     var high = MarketSeries.High.Last(1);
                     if (MarketSeries.High.Last(2) > high)
                     {
