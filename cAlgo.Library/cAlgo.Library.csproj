@@ -57,6 +57,7 @@
     <Folder Include="lib\" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Robots\Analysis Queries\Database Analysis.xlsx" />
     <None Include="Robots\copy.bat" />
   </ItemGroup>
   <ItemGroup>
@@ -67,6 +68,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Robots\Analysis Queries\BestRunsByProfit.sql" />
+    <Content Include="Robots\Analysis Queries\Results Analysis.sql" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

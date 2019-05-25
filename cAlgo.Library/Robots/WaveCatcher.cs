@@ -101,6 +101,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("MA Cross Rule", DefaultValue = 1)]
         public int MaCrossRule { get; set; }
 
+        [Parameter("Record", DefaultValue = false)]
+        public bool RecordSession { get; set; }
+
         protected override string Name
         {
             get
@@ -142,6 +145,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             Print("Close half at breakeven: {0}", CloseHalfAtBreakEven);
             Print("MA Cross Rule: {0}", MaCrossRule);
             Print("H4MA: {0}", H4MaPeriodParameter);
+            Print("Recording: {0}", RecordSession);
             _maCrossRule = (MaCrossRule)MaCrossRule;
 
             Init(TakeLongsParameter, 
@@ -157,10 +161,13 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 CloseHalfAtBreakEven,
                 DynamicRiskPercentage);
 
-            _runId = SaveRunToDatabase();
-            if (_runId <= 0)
+            if (RecordSession)
             {
-                throw new InvalidOperationException("Run Id was <= 0!");
+                _runId = SaveRunToDatabase();
+                if (_runId <= 0)
+                {
+                    throw new InvalidOperationException("Run Id was <= 0!");
+                }
             }
         }
 
@@ -287,9 +294,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
             1) Fast MA > Medium MA > Slow MA (MAs are 'stacked')
             2) Crossing of MAs must have occurred in the last n bars
             3) Close > Fast MA
-            4) Close > Yesterday's close
+            4) Current Close > Prior close
             5) Close > Open
-            6) High > Yesterday's high
+            6) Current High > Prior high
              */
             if (AreMovingAveragesStackedBullishly())
             {
@@ -339,10 +346,13 @@ namespace cAlgo.Library.Robots.WaveCatcher
         {
             base.OnPositionOpened(args);
 
-            _currentPositionId = SaveOpenedPositionToDatabase(args.Position);
-            if (_currentPositionId <= 0)
+            if (RecordSession)
             {
-                throw new InvalidOperationException("Position ID was <= 0!");
+                _currentPositionId = SaveOpenedPositionToDatabase(args.Position);
+                if (_currentPositionId <= 0)
+                {
+                    throw new InvalidOperationException("Position ID was <= 0!");
+                }
             }
         }
 
@@ -350,7 +360,10 @@ namespace cAlgo.Library.Robots.WaveCatcher
         {
             base.OnPositionClosed(args);
 
-            SaveClosedPositionToDatabase(args.Position);
+            if (RecordSession)
+            {
+                SaveClosedPositionToDatabase(args.Position);
+            }
         }
 
         private void SaveClosedPositionToDatabase(Position position)
@@ -497,9 +510,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
             1) Fast MA < Medium MA < Slow MA (MAs are 'stacked')
             2) Crossing of MAs must have occurred in the last n bars
             3) Close < Fast MA
-            4) Close < Yesterday's close
+            4) Close < Prior close
             5) Close < Open
-            6) Low < Yesterday's low
+            6) Low < Prior low
              */
             if (AreMovingAveragesStackedBearishly())
             {
@@ -1174,7 +1187,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         private double CalculateExitPrice(Position position)
         {
             var diff = position.Pips * Symbol.PipSize;
-            double exitPrice = 0;
+            double exitPrice;
             if (position.TradeType == TradeType.Buy)
             {
                 exitPrice = position.EntryPrice + diff;
@@ -1184,7 +1197,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 exitPrice = position.EntryPrice - diff;
             }
 
-            return exitPrice;
+            return 0;
         }
     }
 }
