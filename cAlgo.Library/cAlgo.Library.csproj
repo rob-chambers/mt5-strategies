@@ -47,6 +47,7 @@
   <ItemGroup>
     <Compile Include="Indicators\PinBar.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Robots\HighProbabilityOscillator.cs" />
     <Compile Include="Robots\WaveCatcher.cs" />
     <Compile Include="Robots\BreakoutBot.cs" />
     <Compile Include="Robots\BasicBot.cs" />
@@ -58,7 +59,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Robots\Analysis Queries\Database Analysis.xlsx" />
-    <None Include="Robots\copy.bat" />
+    <None Include="Robots\copy-HighProbability.bat" />
+    <None Include="Robots\copy-WaveCatcher.bat" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Robots\ClearDatabase.sql" />

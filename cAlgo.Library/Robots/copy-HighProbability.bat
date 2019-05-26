@@ -1,0 +1,1 @@
+copy "HighProbabilityOscillator.cs" "C:\Users\rob\Documents\cAlgo\Sources\Robots\HighProbabilityOscillator\HighProbabilityOscillator\HighProbabilityOscillator.cs"

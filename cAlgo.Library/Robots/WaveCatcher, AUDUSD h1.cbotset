@@ -1,0 +1,26 @@
+﻿[ChartParameters]
+Symbol = AUDUSD
+Timeframe = h1
+
+[cBotParameters]
+TakeLongsParameter = True
+TakeShortsParameter = True
+InitialStopLossRule = 2
+InitialStopLossInPips = 5
+TrailingStopLossRule = 3
+TrailingStopLossInPips = 15
+LotSizingRule = 1
+TakeProfitRule = 3
+TakeProfitInPips = 0
+MinutesToWaitAfterPositionClosed = 0
+MoveToBreakEven = False
+CloseHalfAtBreakEven = False
+DynamicRiskPercentage = 2
+SourceSeries = Close
+SlowPeriodParameter = 89
+MediumPeriodParameter = 55
+FastPeriodParameter = 21
+H4MaPeriodParameter = 21
+MovingAveragesCrossThreshold = 10
+MaCrossRule = 0
+RecordSession = False
