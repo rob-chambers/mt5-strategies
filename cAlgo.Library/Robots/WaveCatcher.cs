@@ -22,7 +22,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         PreviousBarNPips,
         ShortTermHighLow,
         StaticPipsValue,
-        DontLoseMoreThanHalfProfit
+        SmartProfitLocker
     };
 
     public enum TakeProfitRule
@@ -108,7 +108,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("H4 MA Period", DefaultValue = 21)]
         public int H4MaPeriodParameter { get; set; }
 
-        [Parameter("MAs Cross Threshold (# bars)", DefaultValue = 10)]
+        [Parameter("MAs Cross Threshold (# bars)", DefaultValue = 30)]
         public int MovingAveragesCrossThreshold { get; set; }
 
         [Parameter("MA Cross Rule", DefaultValue = 1)]
@@ -116,6 +116,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         [Parameter("Record", DefaultValue = false)]
         public bool RecordSession { get; set; }
+
+        [Parameter("Enter at Market", DefaultValue = true)]
+        public bool EnterAtMarket { get; set; }
 
         protected override string Name
         {
@@ -133,7 +136,11 @@ namespace cAlgo.Library.Robots.WaveCatcher
         private int _currentPositionId;
         private ExponentialMovingAverage _h4Ma;
         private RelativeStrengthIndex _rsi;
-        private RelativeStrengthIndex _h4Rsi;        
+        private RelativeStrengthIndex _h4Rsi;
+        private TradeResult _currentTradeResult;
+        private double _highestHigh;
+        private double _lowestLow;
+        private double _lowestLowIndex;
 
         protected override void OnStart()
         {
@@ -160,6 +167,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             Print("MA Cross Rule: {0}", MaCrossRule);
             Print("H4MA: {0}", H4MaPeriodParameter);
             Print("Recording: {0}", RecordSession);
+            Print("Enter at Market: {0}", EnterAtMarket);
             _maCrossRule = (MaCrossRule)MaCrossRule;
 
             Init(TakeLongsParameter, 
@@ -258,6 +266,98 @@ namespace cAlgo.Library.Robots.WaveCatcher
             {
                 throw new ArgumentException("H4 MA Period must be between 10 and 99");
             }
+        }
+
+        protected override void EnterLongPosition()
+        {
+            //var stopLossPips = CalculateInitialStopLossInPipsForShortPosition();
+            //double lots;
+
+            //if (stopLossPips.HasValue)
+            //{
+            //    lots = CalculatePositionQuantityInLots(stopLossPips.Value);
+            //    Print("SL calculated for Sell order = {0}", stopLossPips);
+            //}
+            //else
+            //{
+            //    lots = 1;
+            //}
+
+            //var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
+            //ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
+
+            if (EnterAtMarket)
+            {
+                base.EnterLongPosition();
+                return;
+            }
+
+            var volumeInUnits = 100000;
+
+            var priorBarRange = MarketSeries.High.Last(1) - MarketSeries.Low.Last(1);
+            priorBarRange /= 4;
+            var limitPrice = _fastMA.Result.LastValue + priorBarRange;
+            var label = string.Format("BUY {0}", Symbol);
+            double? stopLossPips = Math.Round(5 + (limitPrice - _slowMA.Result.LastValue) / Symbol.PipSize, 1);
+            var expiry = Server.Time.AddHours(6);
+
+            Print("Placing limit order at {0} with stop {1}", limitPrice, stopLossPips);
+            _currentTradeResult = PlaceLimitOrder(TradeType.Buy, Symbol, volumeInUnits, limitPrice, label, stopLossPips, CalculateFibTakeProfit(), expiry);
+        }
+
+        protected override void EnterShortPosition()
+        {
+            //var stopLossPips = CalculateInitialStopLossInPipsForShortPosition();
+            //double lots;
+
+            //if (stopLossPips.HasValue)
+            //{
+            //    lots = CalculatePositionQuantityInLots(stopLossPips.Value);
+            //    Print("SL calculated for Sell order = {0}", stopLossPips);
+            //}
+            //else
+            //{
+            //    lots = 1;
+            //}
+
+            //var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
+            //ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
+
+            if (EnterAtMarket)
+            {
+                base.EnterShortPosition();
+                return;
+            }
+
+            var volumeInUnits = 100000;
+            var priorBarRange = MarketSeries.High.Last(1) - MarketSeries.Low.Last(1);
+            priorBarRange /= 4;
+            var limitPrice = _fastMA.Result.LastValue - priorBarRange;
+            var label = string.Format("SELL {0}", Symbol);
+            double? stopLossPips = Math.Round(5 + (_slowMA.Result.LastValue - limitPrice) / Symbol.PipSize, 1);
+            var expiry = Server.Time.AddHours(6);
+
+            Print("Placing limit order at {0} with stop {1}", limitPrice, stopLossPips);
+            _currentTradeResult = PlaceLimitOrder(TradeType.Sell, Symbol, volumeInUnits, limitPrice, label, stopLossPips, CalculateFibTakeProfit(), expiry);
+        }
+
+        private double? CalculateFibTakeProfit()
+        {
+            return null;
+
+
+            // Find highest high from here back
+            //var highest = MarketSeries.High.Maximum(20);
+           
+            //const double StandardFib = 1.382;
+
+            //var lowestLow = Common.LowestLow(MarketSeries.Low, 10, 6);
+            //var level = Math.Round((highest - lowestLow) * StandardFib / Symbol.PipSize, 1);
+
+            //Print("Fib TP calculation = {0} based on low of {1} and high of {2}",
+            //    level, lowestLow, highest);
+
+            //return level;
         }
 
         private int SaveRunToDatabase()
@@ -361,12 +461,24 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 //}
 
                 //// Another filter - how low was the recent lowest low?  Attempt to only buy when the MAs have been flat
-                //if (!MovingAveragesShouldBeFlat())
-                //{
-                //    Print("Setup rejected as the MAs don't seem to be flat");
-                //    return false;
-                //}
+                if (!MovingAveragesShouldBeFlat())
+                {
+                    Print("Setup rejected as the MAs don't seem to be flat");
+                    return false;
+                }
 
+                // Another filter - have we hit a new high?
+                const int HighestHighPeriod = 70;
+
+                var high = MarketSeries.High.Maximum(HighestHighPeriod);
+                var priorHigh = MarketSeries.High.Last(1);
+                if (priorHigh != high)
+                {
+                    Print("Setup rejected as the prior high {0} has not gone higher than {1}", priorHigh, high);
+                    return false;
+                }
+
+                _highestHigh = high;
                 return true;
             }
 
@@ -393,7 +505,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             var distance = (_fastMA.Result.Last(lowIndex) - low) / Symbol.PipSize;
             Print("Distance from low to fast MA: {0}", distance);
 
-            return distance <= 17;
+            return distance <= 46;
         }
 
         protected override void OnPositionOpened(PositionOpenedEventArgs args)
@@ -523,7 +635,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             }
 
             var index = 1;
-            while (index <= 30)
+            while (index <= 40)
             {
                 if (AreMovingAveragesStackedBullishlyAtIndex(index))
                 {
@@ -588,26 +700,26 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     return false;
                 }
 
-                if (MarketSeries.Close.Last(1) >= MarketSeries.Close.Last(2))
-                {
-                    //Print("Setup rejected as we closed higher than the prior close ({0} vs {1})",
-                    //    MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
-                    return false;
-                }
+                //if (MarketSeries.Close.Last(1) >= MarketSeries.Close.Last(2))
+                //{
+                //    //Print("Setup rejected as we closed higher than the prior close ({0} vs {1})",
+                //    //    MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
+                //    return false;
+                //}
 
-                if (MarketSeries.Close.Last(1) >= MarketSeries.Open.Last(1))
-                {
-                    //Print("Setup rejected as we closed higher than the open ({0} vs {1})",
-                    //    MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
-                    return false;
-                }
+                //if (MarketSeries.Close.Last(1) >= MarketSeries.Open.Last(1))
+                //{
+                //    //Print("Setup rejected as we closed higher than the open ({0} vs {1})",
+                //    //    MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
+                //    return false;
+                //}
 
-                if (MarketSeries.Low.Last(1) >= MarketSeries.Low.Last(2))
-                {
-                    //Print("Setup rejected as the low wasn't lower than the prior low ({0} vs {1})",
-                    //    MarketSeries.Low.Last(1), MarketSeries.Low.Last(2));
-                    return false;
-                }
+                //if (MarketSeries.Low.Last(1) >= MarketSeries.Low.Last(2))
+                //{
+                //    //Print("Setup rejected as the low wasn't lower than the prior low ({0} vs {1})",
+                //    //    MarketSeries.Low.Last(1), MarketSeries.Low.Last(2));
+                //    return false;
+                //}
 
                 //// Another filter - what's the distance between the MAs?  Avoid noise and ensure there's been a breakout
                 //if ((_mediumMA.Result.LastValue - _fastMA.Result.LastValue) / Symbol.PipSize < 7)
@@ -616,6 +728,18 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 //    return false;
                 //}
 
+                // Another filter - have we hit a new low?
+                const int LowestLowPeriod = 70;
+
+                var low = MarketSeries.Low.Minimum(LowestLowPeriod);
+                var priorLow = MarketSeries.Low.Last(1);
+                if (priorLow != low)
+                {
+                    Print("Setup rejected as the prior low {0} has not gone lower than {1}", priorLow, low);
+                    return false;
+                }
+
+                _lowestLow = low;                
                 return true;
             }
 
@@ -712,7 +836,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
         protected double BreakEvenPrice { get; private set; }
         protected double DoubleRiskPrice { get; private set; }
         protected double TripleRiskPrice { get; private set; }
-        protected double TrailingInitiationPrice { get; private set; }
+        protected double? TrailingInitiationPrice { get; private set; }
 
         private bool _takeLongsParameter;
         private bool _takeShortsParameter;
@@ -977,13 +1101,13 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     stop = RecentHigh - _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
-                case TrailingStopLossRule.DontLoseMoreThanHalfProfit:                    
-                    stop = _currentPosition.EntryPrice + (RecentHigh - _currentPosition.EntryPrice) / 2;
+                case TrailingStopLossRule.SmartProfitLocker:    
+                    stop = CalculateSmartTrailingStopForLong();                    
                     break;
             }
 
             return stop;
-        }        
+        }
 
         /// <summary>
         /// Manages an existing short position.  Note this method is called on every tick.
@@ -1066,11 +1190,72 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     stop = RecentLow + _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
-                case TrailingStopLossRule.DontLoseMoreThanHalfProfit:
-                    stop = _currentPosition.EntryPrice - (_currentPosition.EntryPrice - RecentLow) / 2;
+                case TrailingStopLossRule.SmartProfitLocker:
+                    stop = CalculateSmartTrailingStopForShort();
                     break;
             }
 
+            return stop;
+        }
+
+        private double? CalculateSmartTrailingStopForLong()
+        {
+            var minStop = 20;
+            double stop;
+
+            if (_currentPosition.Pips < minStop)
+            {
+                Print("Band 20");
+                stop = minStop;
+            }
+            else if (_currentPosition.Pips < 40)
+            {
+                Print("Band 40");
+                stop = 16;
+            }
+            else if (_currentPosition.Pips < 50)
+            {
+                Print("Band 50");
+                stop = 12;
+            }
+            else
+            {
+                Print("Band MAX");
+                stop = 8;
+            }
+
+            stop = RecentHigh - stop * Symbol.PipSize;
+            return stop;
+        }
+
+
+        private double? CalculateSmartTrailingStopForShort()
+        {
+            var minStop = 20;
+            double stop;
+
+            if (_currentPosition.Pips < minStop)
+            {
+                Print("Band 20");
+                stop = minStop;
+            }
+            else if (_currentPosition.Pips < 40)
+            {
+                Print("Band 40");
+                stop = 16;
+            }
+            else if (_currentPosition.Pips < 50)
+            {
+                Print("Band 50");
+                stop = 12;
+            }
+            else
+            {
+                Print("Band MAX");
+                stop = 8;
+            }
+
+            stop = RecentLow + stop * Symbol.PipSize;
             return stop;
         }
 
@@ -1087,7 +1272,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             return false;
         }
 
-        private void EnterLongPosition()
+        protected virtual void EnterLongPosition()
         {                        
             var stopLossPips = CalculateInitialStopLossInPipsForLongPosition();
             double lots;
@@ -1184,7 +1369,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             }
         }
 
-        private void EnterShortPosition()
+        protected virtual void EnterShortPosition()
         {            
             var stopLossPips = CalculateInitialStopLossInPipsForShortPosition();
             double lots;
@@ -1386,4 +1571,49 @@ namespace cAlgo.Library.Robots.WaveCatcher
             return 0;
         }
     }
+
+    public static class Common
+    {
+        public static int IndexOfLowestLow(DataSeries dataSeries, int periods)
+        {
+            var index = 1;
+            var lowest = double.MaxValue;
+            var lowestIndex = -1;
+
+            while (index < periods)
+            {
+                var low = dataSeries.Last(index);
+                if (low < lowest)
+                {
+                    lowest = low;
+                    lowestIndex = index;
+                }
+
+                index++;
+            }
+
+            return lowestIndex;
+        }
+
+        public static double LowestLow(DataSeries dataSeries, int periods, int startIndex = 1)
+        {
+            var index = startIndex;
+            var lowest = double.MaxValue;
+
+            while (index < periods)
+            {
+                var low = dataSeries.Last(index);
+                if (low < lowest)
+                {
+                    lowest = low;
+                }
+
+                index++;
+            }
+
+            return lowest;
+        }
+    }
 }
+
+
