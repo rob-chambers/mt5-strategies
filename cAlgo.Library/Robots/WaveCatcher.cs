@@ -12,7 +12,8 @@ namespace cAlgo.Library.Robots.WaveCatcher
         None,
         CurrentBarNPips,
         PreviousBarNPips,
-        StaticPipsValue
+        StaticPipsValue,
+        Custom
     };
 
     public enum TrailingStopLossRule
@@ -120,6 +121,27 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("Enter at Market", DefaultValue = true)]
         public bool EnterAtMarket { get; set; }
 
+        [Parameter("Apply closing vs prior close filter", DefaultValue = true)]
+        public bool CloseVsPriorCloseFilter { get; set; }
+
+        [Parameter("Apply close vs open filter", DefaultValue = true)]
+        public bool CloseVsOpenFilter { get; set; }
+
+        [Parameter("Apply high/low vs prior high/low filter", DefaultValue = true)]
+        public bool HighLowVsPriorHighLowFilter { get; set; }
+
+        [Parameter("Apply MA Distance filter", DefaultValue = true)]
+        public bool MADistanceFilter { get; set; }
+
+        [Parameter("Apply MA Max Distance filter", DefaultValue = true)]
+        public bool MAMaxDistanceFilter { get; set; }
+
+        [Parameter("Apply Flat MAs filter", DefaultValue = true)]
+        public bool MAsFlatFilter { get; set; }
+
+        [Parameter("New high/low filter", DefaultValue = true)]
+        public bool NewHighLowFilter { get; set; }
+
         protected override string Name
         {
             get
@@ -168,6 +190,13 @@ namespace cAlgo.Library.Robots.WaveCatcher
             Print("H4MA: {0}", H4MaPeriodParameter);
             Print("Recording: {0}", RecordSession);
             Print("Enter at Market: {0}", EnterAtMarket);
+            Print("CloseVsPriorCloseFilter: {0}", CloseVsPriorCloseFilter);
+            Print("CloseVsOpenFilter: {0}", CloseVsOpenFilter);
+            Print("HighVsPriorHighFilter: {0}", HighLowVsPriorHighLowFilter);
+            Print("MADistanceFilter: {0}", MADistanceFilter);
+            Print("MAsFlatFilter: {0}", MAsFlatFilter);
+            Print("NewHighLowFilter: {0}", NewHighLowFilter);
+
             _maCrossRule = (MaCrossRule)MaCrossRule;
 
             Init(TakeLongsParameter, 
@@ -341,6 +370,28 @@ namespace cAlgo.Library.Robots.WaveCatcher
             _currentTradeResult = PlaceLimitOrder(TradeType.Sell, Symbol, volumeInUnits, limitPrice, label, stopLossPips, CalculateFibTakeProfit(), expiry);
         }
 
+        protected override double? CalculateInitialStopLossInPipsForLongPosition()
+        {
+            if (_initialStopLossRule == WaveCatcher.InitialStopLossRule.Custom)
+            {
+                var stop = (Symbol.Ask - _mediumMA.Result.LastValue) / Symbol.PipSize;
+                return Math.Round(stop, 1);
+            }
+
+            return base.CalculateInitialStopLossInPipsForLongPosition();
+        }
+
+        protected override double? CalculateInitialStopLossInPipsForShortPosition()
+        {
+            if (_initialStopLossRule == WaveCatcher.InitialStopLossRule.Custom)
+            {
+                var stop = (_mediumMA.Result.LastValue - Symbol.Bid) / Symbol.PipSize;
+                return Math.Round(stop, 1);
+            }
+
+            return base.CalculateInitialStopLossInPipsForShortPosition();
+        }
+
         private double? CalculateFibTakeProfit()
         {
             return null;
@@ -415,58 +466,71 @@ namespace cAlgo.Library.Robots.WaveCatcher
             5) Close > Open
             6) Current High > Prior high
              */
-            if (AreMovingAveragesStackedBullishly())
+
+            if (!AreMovingAveragesStackedBullishly())
             {
-                var lastCross = GetLastBullishBowtie();
-                if (lastCross == -1 || lastCross > MovingAveragesCrossThreshold)
-                {
-                    // Either there was no cross or it was too long ago and we have missed the move
-                    return false;
-                }
+                return false;
+            }
 
-                Print("Bullish cross identified at index {0}", lastCross);
+            var lastCross = GetLastBullishBowtie();
+            if (lastCross == -1 || lastCross > MovingAveragesCrossThreshold)
+            {
+                // Either there was no cross or it was too long ago and we have missed the move
+                return false;
+            }
 
-                if (MarketSeries.Close.LastValue <= _fastMA.Result.LastValue)
-                {
-                    //Print("Setup rejected as we closed lower than the fast MA");
-                    return false;
-                }
+            Print("Bullish cross identified at index {0}", lastCross);
 
-                if (MarketSeries.Close.Last(1) <= MarketSeries.Close.Last(2))
-                {
-                    //Print("Setup rejected as we closed lower than the prior close ({0} vs {1})",
-                    //    MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
-                    return false;
-                }
+            if (MarketSeries.Close.LastValue <= _fastMA.Result.LastValue)
+            {
+                //Print("Setup rejected as we closed lower than the fast MA");
+                return false;
+            }
 
-                if (MarketSeries.Close.Last(1) <= MarketSeries.Open.Last(1))
-                {
-                    //Print("Setup rejected as we closed lower than the open ({0} vs {1})",
-                    //    MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
-                    return false;
-                }
+            if (CloseVsPriorCloseFilter && MarketSeries.Close.Last(1) <= MarketSeries.Close.Last(2))
+            {
+                //Print("Setup rejected as we closed lower than the prior close ({0} vs {1})",
+                //    MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
+                return false;
+            }
 
-                if (MarketSeries.High.Last(1) <= MarketSeries.High.Last(2))
-                {
-                    //Print("Setup rejected as the high wasn't higher than the prior high ({0} vs {1})",
-                    //    MarketSeries.High.Last(1), MarketSeries.High.Last(2));
-                    return false;
-                }
+            if (CloseVsOpenFilter && MarketSeries.Close.Last(1) <= MarketSeries.Open.Last(1))
+            {
+                //Print("Setup rejected as we closed lower than the open ({0} vs {1})",
+                //    MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
+                return false;
+            }
 
-                // Another filter - what's the distance between the MAs?  Avoid noise and ensure there's been a breakout
-                //if ((_fastMA.Result.LastValue - _mediumMA.Result.LastValue) / Symbol.PipSize <= 3)
-                //{
-                //    Print("Setup rejected as there wasn't enough distance between the fast and medium MAs");
-                //    return false;
-                //}
+            if (HighLowVsPriorHighLowFilter && MarketSeries.High.Last(1) <= MarketSeries.High.Last(2))
+            {
+                //Print("Setup rejected as the high wasn't higher than the prior high ({0} vs {1})",
+                //    MarketSeries.High.Last(1), MarketSeries.High.Last(2));
+                return false;
+            }
 
-                //// Another filter - how low was the recent lowest low?  Attempt to only buy when the MAs have been flat
-                if (!MovingAveragesShouldBeFlat())
-                {
-                    Print("Setup rejected as the MAs don't seem to be flat");
-                    return false;
-                }
+            // What's the distance between the MAs?  Avoid noise and ensure there's been a breakout
+            if (MADistanceFilter && (_fastMA.Result.LastValue - _mediumMA.Result.LastValue) / Symbol.PipSize <= 3)
+            {
+                Print("Setup rejected as there wasn't enough distance between the fast and medium MAs");
+                return false;
+            }
 
+            // What's the distance between the MAs?  Ensure we haven't already missed the move
+            if (MAMaxDistanceFilter && (_fastMA.Result.LastValue - _mediumMA.Result.LastValue) / Symbol.PipSize >= 30)
+            {
+                Print("Setup rejected as the distance between the fast and medium MAs was more than 30 pips");
+                return false;
+            }
+
+            // How low was the recent lowest low?  Attempt to only enter when the MAs have been flat
+            if (MAsFlatFilter && !MAsShouldAreFlatForBullishSetup())
+            {
+                Print("Setup rejected as the MAs don't seem to be flat");
+                return false;
+            }
+
+            if (NewHighLowFilter)
+            {
                 // Another filter - have we hit a new high?
                 const int HighestHighPeriod = 70;
 
@@ -479,13 +543,12 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 }
 
                 _highestHigh = high;
-                return true;
             }
 
-            return false;
+            return true;
         }
 
-        private bool MovingAveragesShouldBeFlat()
+        private bool MAsShouldAreFlatForBullishSetup()
         {
             var index = 1;
             var lowIndex = 1;
@@ -504,6 +567,29 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             var distance = (_fastMA.Result.Last(lowIndex) - low) / Symbol.PipSize;
             Print("Distance from low to fast MA: {0}", distance);
+
+            return distance <= 46;
+        }
+
+        private bool MAsShouldAreFlatForBearishSetup()
+        {
+            var index = 1;
+            var highIndex = 1;
+            var high = 0.0;
+
+            while (index <= 40)
+            {
+                if (MarketSeries.High.Last(index) > high)
+                {
+                    high = MarketSeries.High.Last(index);
+                    highIndex = index;
+                }
+
+                index++;
+            }
+
+            var distance = (high - _fastMA.Result.Last(highIndex)) / Symbol.PipSize;
+            Print("Distance from high to fast MA: {0}", distance);
 
             return distance <= 46;
         }
@@ -683,51 +769,70 @@ namespace cAlgo.Library.Robots.WaveCatcher
             5) Close < Open
             6) Low < Prior low
              */
-            if (AreMovingAveragesStackedBearishly())
+            if (!AreMovingAveragesStackedBearishly())
             {
-                var lastCross = GetLastBearishBowtie();
-                if (lastCross == -1 || lastCross > MovingAveragesCrossThreshold)
-                {
-                    // Either there was no cross or it was too long ago and we have missed the move
-                    return false;
-                }
+                return false;
+            }
 
-                Print("Bearish cross identified at index {0}", lastCross);
+            var lastCross = GetLastBearishBowtie();
+            if (lastCross == -1 || lastCross > MovingAveragesCrossThreshold)
+            {
+                // Either there was no cross or it was too long ago and we have missed the move
+                return false;
+            }
 
-                if (MarketSeries.Close.LastValue >= _fastMA.Result.LastValue)
-                {
-                    //Print("Setup rejected as we closed higher than the fast MA");
-                    return false;
-                }
+            Print("Bearish cross identified at index {0}", lastCross);
 
-                //if (MarketSeries.Close.Last(1) >= MarketSeries.Close.Last(2))
-                //{
-                //    //Print("Setup rejected as we closed higher than the prior close ({0} vs {1})",
-                //    //    MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
-                //    return false;
-                //}
+            if (MarketSeries.Close.LastValue >= _fastMA.Result.LastValue)
+            {
+                //Print("Setup rejected as we closed higher than the fast MA");
+                return false;
+            }
 
-                //if (MarketSeries.Close.Last(1) >= MarketSeries.Open.Last(1))
-                //{
-                //    //Print("Setup rejected as we closed higher than the open ({0} vs {1})",
-                //    //    MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
-                //    return false;
-                //}
+            if (CloseVsPriorCloseFilter && MarketSeries.Close.Last(1) >= MarketSeries.Close.Last(2))
+            {
+                //Print("Setup rejected as we closed higher than the prior close ({0} vs {1})",
+                //    MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
+                return false;
+            }
 
-                //if (MarketSeries.Low.Last(1) >= MarketSeries.Low.Last(2))
-                //{
-                //    //Print("Setup rejected as the low wasn't lower than the prior low ({0} vs {1})",
-                //    //    MarketSeries.Low.Last(1), MarketSeries.Low.Last(2));
-                //    return false;
-                //}
+            if (CloseVsOpenFilter && MarketSeries.Close.Last(1) >= MarketSeries.Open.Last(1))
+            {
+                //Print("Setup rejected as we closed higher than the open ({0} vs {1})",
+                //    MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
+                return false;
+            }
 
-                //// Another filter - what's the distance between the MAs?  Avoid noise and ensure there's been a breakout
-                //if ((_mediumMA.Result.LastValue - _fastMA.Result.LastValue) / Symbol.PipSize < 7)
-                //{
-                //    Print("Setup rejected as there wasn't enough distance between the fast and medium MAs");
-                //    return false;
-                //}
+            if (HighLowVsPriorHighLowFilter && MarketSeries.Low.Last(1) >= MarketSeries.Low.Last(2))
+            {
+                //Print("Setup rejected as the low wasn't lower than the prior low ({0} vs {1})",
+                //    MarketSeries.Low.Last(1), MarketSeries.Low.Last(2));
+                return false;
+            }
 
+            // Another filter - what's the distance between the MAs?  Avoid noise and ensure there's been a breakout
+            if (MADistanceFilter && (_mediumMA.Result.LastValue - _fastMA.Result.LastValue) / Symbol.PipSize < 7)
+            {
+                Print("Setup rejected as there wasn't enough distance between the fast and medium MAs");
+                return false;
+            }
+
+            // What's the distance between the MAs?  Ensure we haven't already missed the move
+            if (MAMaxDistanceFilter && (_mediumMA.Result.LastValue - _fastMA.Result.LastValue) / Symbol.PipSize >= 30)
+            {
+                Print("Setup rejected as the distance between the fast and medium MAs was more than 30 pips");
+                return false;
+            }
+
+            // How high was the recent highest high?  Attempt to only enter when the MAs have been flat
+            if (MAsFlatFilter && !MAsShouldAreFlatForBearishSetup())
+            {
+                Print("Setup rejected as the MAs don't seem to be flat");
+                return false;
+            }
+
+            if (NewHighLowFilter)
+            {
                 // Another filter - have we hit a new low?
                 const int LowestLowPeriod = 70;
 
@@ -739,11 +844,10 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     return false;
                 }
 
-                _lowestLow = low;                
-                return true;
+                _lowestLow = low;
             }
 
-            return false;
+            return true;
         }
 
         protected override void ManageLongPosition()
@@ -840,7 +944,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         private bool _takeLongsParameter;
         private bool _takeShortsParameter;
-        private InitialStopLossRule _initialStopLossRule;
+        protected InitialStopLossRule _initialStopLossRule;
         private TrailingStopLossRule _trailingStopLossRule;
         private LotSizingRule _lotSizingRule;
         private int _initialStopLossInPips;
@@ -1051,6 +1155,11 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 return;
             }
 
+            if (!ShouldTrail)
+            {
+                return;
+            }
+
             // Avoid adjusting trailing stop too often by adding a buffer
             var buffer = Symbol.PipSize * 3;
 
@@ -1117,11 +1226,6 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (_trailingStopLossRule == TrailingStopLossRule.None && !_moveToBreakEven)
                 return;
 
-            if (!ShouldTrail)
-            {
-                return;
-            }
-
             // Are we making lower lows?
             var madeNewLow = false;
 
@@ -1137,6 +1241,11 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     ModifyPosition(_currentPosition, _currentPosition.VolumeInUnits / 2);
                 }
 
+                return;
+            }
+
+            if (!ShouldTrail)
+            {
                 return;
             }
 
@@ -1269,6 +1378,14 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 return true;
             }
 
+            // Alternately, avoid trading on a Friday evening
+            var openTime = MarketSeries.OpenTime.LastValue;
+            if (openTime.DayOfWeek == DayOfWeek.Friday && openTime.Hour >= 16)
+            {
+                Print("Avoiding trading on a Friday afternoon");
+                return true;
+            }
+
             return false;
         }
 
@@ -1308,7 +1425,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             return quantity;
         }
 
-        private double? CalculateInitialStopLossInPipsForLongPosition()
+        protected virtual double? CalculateInitialStopLossInPipsForLongPosition()
         {
             double? stopLossPips = null;
 
@@ -1388,7 +1505,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
         }
 
-        private double? CalculateInitialStopLossInPipsForShortPosition()
+        protected virtual double? CalculateInitialStopLossInPipsForShortPosition()
         {
             double? stopLossPips = null;
 
