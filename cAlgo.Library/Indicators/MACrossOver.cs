@@ -1,6 +1,43 @@
 ﻿using cAlgo.API;
 using cAlgo.API.Indicators;
 
+/*
+ * Rules for new indicator:
+
+We must have had a cross of all 3 MAs
+
+For short:
+- High must be within a couple of pips of 21MA
+- Low must be within a couple of pips of 89MA
+- Low must be lower than 55MA
+- Close must be lower than open
+
+    
+- Futher Recent high (say 20 bars) must be > 50 pips higher than current high
+
+
+*** Further filters
+For longs:
+
+Make sure we *close* above the short MA!
+Has the short term MA crossed below the medium MA in the last x bars?
+Ensure the RSI hasn't gone overbought
+
+    
+
+Over last 20 bars, what was the max distance (short - long) between the MAs?  If > 10 pips, filter out
+
+
+    A stronger signal is made if we have a new low/high over x bars
+    A stronger signal is made when the fast MA < either slow MA or medium MA in last x bars (say x = 5) (for a long)
+    
+    
+*** Rules
+Enter using a stop order in the same direction about half way above/below the range of the signal bar, unless it's a very significant bar
+
+
+ */
+
 namespace cAlgo.Library.Indicators
 {
     [Indicator(IsOverlay = true, TimeZone = TimeZones.UTC, AutoRescale = false, AccessRights = AccessRights.None)]
@@ -9,7 +46,7 @@ namespace cAlgo.Library.Indicators
         [Output("Up Point", LineColor = "Lime", PlotType = PlotType.Points, Thickness = 5)]
         public IndicatorDataSeries UpPoint { get; set; }
 
-        [Output("Down Point", LineColor = "Yellow", PlotType = PlotType.Points, Thickness = 5)]
+        [Output("Down Point", LineColor = "White", PlotType = PlotType.Points, Thickness = 5)]
         public IndicatorDataSeries DownPoint { get; set; }
 
         [Parameter()]
@@ -95,11 +132,13 @@ namespace cAlgo.Library.Indicators
         private void DrawBullishPoint(int index)
         {
             UpPoint[index] = MarketSeries.Low[index] - _buffer;
+            Chart.DrawIcon("bullsignal" + index, ChartIconType.UpArrow, index, UpPoint[index], Color.Lime);
         }
 
         private void DrawBearishPoint(int index)
         {
             DownPoint[index] = MarketSeries.High[index] + _buffer;
+            Chart.DrawIcon("bearsignal" + index, ChartIconType.DownArrow, index, DownPoint[index], Color.White);
         }
     }
 }
