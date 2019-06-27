@@ -5,7 +5,7 @@ using cAlgo.API.Internals;
 using System.Data.SqlClient;
 using System.Linq;
 
-namespace cAlgo.Library.Robots.HighProbabilityOscillator
+namespace cAlgo.Library.Robots.NewBreakout
 {
     public enum InitialStopLossRule
     {
@@ -40,8 +40,15 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
         Dynamic
     };
 
+    public enum MaCrossRule
+    {
+        None,
+        CloseOnFastMaCross,
+        CloseOnMediumMaCross
+    }
+
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FullAccess)]
-    public class HighProbabilityOscillatorBot : BaseRobot
+    public class NewBreakoutBot : BaseRobot
     {
         const string ConnectionString = @"Data Source = (localdb)\MSSQLLocalDB; Initial Catalog = cTrader; Integrated Security = True; Connect Timeout = 10; Encrypt = False;";
 
@@ -52,19 +59,19 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
         [Parameter("Take short trades?", DefaultValue = true)]
         public bool TakeShortsParameter { get; set; }
 
-        [Parameter("Initial SL Rule", DefaultValue = 4)]
+        [Parameter("Initial SL Rule", DefaultValue = 2)]
         public int InitialStopLossRule { get; set; }
 
-        [Parameter("Initial SL (pips)", DefaultValue = 2)]
+        [Parameter("Initial SL (pips)", DefaultValue = 5)]
         public int InitialStopLossInPips { get; set; }
 
-        [Parameter("Trailing SL Rule", DefaultValue = 5)]
+        [Parameter("Trailing SL Rule", DefaultValue = 0)]
         public int TrailingStopLossRule { get; set; }
 
         [Parameter("Trailing SL (pips)", DefaultValue = 10)]
         public int TrailingStopLossInPips { get; set; }
 
-        [Parameter("Lot Sizing Rule", DefaultValue = 1)]
+        [Parameter("Lot Sizing Rule", DefaultValue = 0)]
         public int LotSizingRule { get; set; }
 
         [Parameter("Take Profit Rule", DefaultValue = 0)]
@@ -102,11 +109,17 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
         [Parameter("H4 MA Period", DefaultValue = 21)]
         public int H4MaPeriodParameter { get; set; }
 
-        [Parameter("RSI Cross Threshold (# bars)", DefaultValue = 15)]
-        public int RsiCrossThreshold { get; set; }
+        [Parameter("MAs Cross Threshold (# bars)", DefaultValue = 30)]
+        public int MovingAveragesCrossThreshold { get; set; }
+
+        [Parameter("MA Cross Rule", DefaultValue = 1)]
+        public int MaCrossRule { get; set; }
 
         [Parameter("Record", DefaultValue = false)]
         public bool RecordSession { get; set; }
+
+        [Parameter("Enter at Market", DefaultValue = true)]
+        public bool EnterAtMarket { get; set; }
 
         [Parameter("Apply closing vs prior close filter", DefaultValue = true)]
         public bool CloseVsPriorCloseFilter { get; set; }
@@ -114,21 +127,33 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
         [Parameter("Apply close vs open filter", DefaultValue = true)]
         public bool CloseVsOpenFilter { get; set; }
 
-        //[Parameter("Special logic value", DefaultValue = 1)]
-        //public int SpecialLogic { get; set; }
+        [Parameter("Apply high/low vs prior high/low filter", DefaultValue = true)]
+        public bool HighLowVsPriorHighLowFilter { get; set; }
 
+        [Parameter("Apply MA Distance filter", DefaultValue = true)]
+        public bool MADistanceFilter { get; set; }
+
+        [Parameter("Apply MA Max Distance filter", DefaultValue = true)]
+        public bool MAMaxDistanceFilter { get; set; }
+
+        [Parameter("Apply Flat MAs filter", DefaultValue = true)]
+        public bool MAsFlatFilter { get; set; }
+
+        [Parameter("New high/low filter", DefaultValue = true)]
+        public bool NewHighLowFilter { get; set; }
 
         protected override string Name
         {
             get
             {
-                return "HighProbabilityOscillator";
+                return "NewBreakoutBot";
             }
         }
 
         private MovingAverage _fastMA;
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
+        private MaCrossRule _maCrossRule;
         private int _runId;
         private int _currentPositionId;
         private ExponentialMovingAverage _h4Ma;
@@ -152,14 +177,25 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
             Print("Trailing SL rule: {0}", TrailingStopLossRule);
             Print("Trailing SL in pips: {0}", TrailingStopLossInPips);
             Print("Lot sizing rule: {0}", LotSizingRule);
+            Print("Take profit rule: {0}", TakeProfitRule);
             Print("Take profit in pips: {0}", TakeProfitInPips);
             Print("Minutes to wait after position closed: {0}", MinutesToWaitAfterPositionClosed);
             Print("Move to breakeven: {0}", MoveToBreakEven);
             Print("Close half at breakeven: {0}", CloseHalfAtBreakEven);
+            Print("MA Cross Rule: {0}", MaCrossRule);
             Print("H4MA: {0}", H4MaPeriodParameter);
             Print("Recording: {0}", RecordSession);
+            Print("Enter at Market: {0}", EnterAtMarket);
+            Print("CloseVsPriorCloseFilter: {0}", CloseVsPriorCloseFilter);
+            Print("CloseVsOpenFilter: {0}", CloseVsOpenFilter);
+            Print("HighVsPriorHighFilter: {0}", HighLowVsPriorHighLowFilter);
+            Print("MADistanceFilter: {0}", MADistanceFilter);
+            Print("MAsFlatFilter: {0}", MAsFlatFilter);
+            Print("NewHighLowFilter: {0}", NewHighLowFilter);
 
-            Init(TakeLongsParameter,
+            _maCrossRule = (MaCrossRule)MaCrossRule;
+
+            Init(TakeLongsParameter, 
                 TakeShortsParameter,
                 InitialStopLossRule,
                 InitialStopLossInPips,
@@ -167,12 +203,11 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
                 TrailingStopLossInPips,
                 LotSizingRule,
                 TakeProfitRule,
-                TakeProfitInPips,
+                TakeProfitInPips,                
                 MinutesToWaitAfterPositionClosed,
                 MoveToBreakEven,
                 CloseHalfAtBreakEven,
                 DynamicRiskPercentage);
-
 
             if (RecordSession)
             {
@@ -206,8 +241,8 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
                 initialStopLossInPips, 
                 trailingStopLossRule, 
                 trailingStopLossInPips, 
-                lotSizingRule, 
-                TakeProfitRule,
+                lotSizingRule,
+                takeProfitRule,
                 takeProfitInPips, 
                 minutesToWaitAfterPositionClosed, 
                 moveToBreakEven, 
@@ -234,15 +269,20 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
                 throw new ArgumentException("Invalid 'MA Periods' - fast must be less than medium and medium must be less than slow");
             }
 
-            if (RsiCrossThreshold <= 0 || RsiCrossThreshold > 999)
+            if (MovingAveragesCrossThreshold <= 0 || MovingAveragesCrossThreshold > 999)
             {
                 throw new ArgumentException("MAs Cross Threshold - must be between 1 and 999");
+            }
+
+            if (!Enum.IsDefined(typeof(MaCrossRule), MaCrossRule))
+            {
+                throw new ArgumentException("Invalid MA Cross rule");
             }
 
             var slRule = (InitialStopLossRule)initialStopLossRule;
             var rule = (TrailingStopLossRule)trailingStopLossRule;
 
-            if (slRule == HighProbabilityOscillator.InitialStopLossRule.None && rule == HighProbabilityOscillator.TrailingStopLossRule.None)
+            if (_maCrossRule == NewBreakout.MaCrossRule.None && slRule == NewBreakout.InitialStopLossRule.None && rule == NewBreakout.TrailingStopLossRule.None)
             {
                 throw new ArgumentException("The combination of parameters means that a position may incur a massive loss");
             }
@@ -251,6 +291,47 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
             {
                 throw new ArgumentException("H4 MA Period must be between 10 and 99");
             }
+        }
+
+        protected override double? CalculateInitialStopLossInPipsForLongPosition()
+        {
+            if (_initialStopLossRule == NewBreakout.InitialStopLossRule.Custom)
+            {
+                var stop = (Symbol.Ask - _mediumMA.Result.LastValue) / Symbol.PipSize;
+                return Math.Round(stop, 1);
+            }
+
+            return base.CalculateInitialStopLossInPipsForLongPosition();
+        }
+
+        protected override double? CalculateInitialStopLossInPipsForShortPosition()
+        {
+            if (_initialStopLossRule == NewBreakout.InitialStopLossRule.Custom)
+            {
+                var stop = (_mediumMA.Result.LastValue - Symbol.Bid) / Symbol.PipSize;
+                return Math.Round(stop, 1);
+            }
+
+            return base.CalculateInitialStopLossInPipsForShortPosition();
+        }
+
+        private double? CalculateFibTakeProfit()
+        {
+            return null;
+
+
+            // Find highest high from here back
+            //var highest = MarketSeries.High.Maximum(20);
+           
+            //const double StandardFib = 1.382;
+
+            //var lowestLow = Common.LowestLow(MarketSeries.Low, 10, 6);
+            //var level = Math.Round((highest - lowestLow) * StandardFib / Symbol.PipSize, 1);
+
+            //Print("Fib TP calculation = {0} based on low of {1} and high of {2}",
+            //    level, lowestLow, highest);
+
+            //return level;
         }
 
         private int SaveRunToDatabase()
@@ -285,8 +366,8 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
                     command.Parameters.AddWithValue("@PauseAfterPositionClosed", MinutesToWaitAfterPositionClosed);
                     command.Parameters.AddWithValue("@MoveToBreakEven", MoveToBreakEven);
                     command.Parameters.AddWithValue("@CloseHalfAtBreakEven", CloseHalfAtBreakEven);
-                    command.Parameters.AddWithValue("@MACrossThreshold", RsiCrossThreshold);
-                    command.Parameters.AddWithValue("@MACrossRule", 0);
+                    command.Parameters.AddWithValue("@MACrossThreshold", MovingAveragesCrossThreshold);
+                    command.Parameters.AddWithValue("@MACrossRule", MaCrossRule);
                     command.Parameters.AddWithValue("@H4MAPeriod", H4MaPeriodParameter);
 
                     connection.Open();
@@ -300,126 +381,33 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
 
         protected override bool HasBullishSignal()
         {
-            /* RULES
-            1) Close > Open
-            2) Close > prior close
-            3) Price must cross above short term MA
-            4) Price must be below medium and long term MA
-            5) RSI must have gone below 30 in the last x bars (say 15-20)
-            
-            Stop must be based on recent STL
-            Enter on open of next bar
-            Close when price reaches long-term MA
-             */
-
-            var lastClose = MarketSeries.Close.LastValue;
-            var priorClose = MarketSeries.Close.Last(1);
-            if (CloseVsOpenFilter && priorClose <= MarketSeries.Open.Last(1))
-            {                
-                return false;
+            for (var index = 1; index < 70; index++)
+            {
+                if (!AreMovingAveragesFlatAtIndex(index))
+                {
+                    return false;
+                }
             }
 
-            if (CloseVsPriorCloseFilter && priorClose <= MarketSeries.Close.Last(2))
-            {
-                //Print("Close <= Prior close");
-                return false;
-            }
-            
-            if (lastClose <= _fastMA.Result.LastValue)
-            {
-                //Print("Close <= Fast MA");
-                return false;
-            }
+            const int HighestHighPeriod = 70;
 
-            if (priorClose >= _fastMA.Result.LastValue)
+            var high = MarketSeries.High.Maximum(HighestHighPeriod);
+            var priorHigh = MarketSeries.High.Last(1);
+            if (priorHigh != high)
             {
-                //Print("Prior Close >= Fast MA");
-                return false;
-            }
-
-            if (priorClose >= _mediumMA.Result.LastValue || priorClose >= _slowMA.Result.LastValue)
-            {
-                Print("Prior Close >= Medium/Slow MA");
-                return false;
-            }
-
-            if (!RecentBullishRciSetup())
-            {
-                Print("No RSI setup");
+                //Print("Setup rejected as the prior high {0} has not gone higher than {1}", priorHigh, high);
                 return false;
             }
 
             return true;
         }
 
-        protected override double? CalculateInitialStopLossInPipsForLongPosition()
-        {
-            if (_initialStopLossRule == HighProbabilityOscillator.InitialStopLossRule.Custom)
-            {
-                var low = MarketSeries.Low.Minimum(10);
-                var stop = low - InitialStopLossInPips * Symbol.PipSize;
-                stop = (Symbol.Ask - stop) / Symbol.PipSize;
-
-                return Math.Round(stop, 1);
-            }
-
-            return base.CalculateInitialStopLossInPipsForLongPosition();
-        }
-
-        protected override double? CalculateInitialStopLossInPipsForShortPosition()
-        {
-            if (_initialStopLossRule == HighProbabilityOscillator.InitialStopLossRule.Custom)
-            {
-                var high = MarketSeries.High.Maximum(10);
-                var stop = high + InitialStopLossInPips * Symbol.PipSize;
-                stop = (stop - Symbol.Bid) / Symbol.PipSize;
-
-                return Math.Round(stop, 1);
-            }
-
-            return base.CalculateInitialStopLossInPipsForShortPosition();
-        }
-
-        private bool RecentBullishRciSetup()
-        {
-            var index = 1;
-            while (index <= RsiCrossThreshold)
-            {
-                if (BullishRsiAtIndex(index))
-                {
-                    return true;
-                }
-                else
-                {
-                    index++;
-                }
-            }
-
-            return false;
-        }
-
-        private bool RecentBearishRciSetup()
-        {
-            var index = 1;
-            while (index <= RsiCrossThreshold)
-            {
-                if (BearishRsiAtIndex(index))
-                {
-                    return true;
-                }
-                else
-                {
-                    index++;
-                }
-            }
-
-            return false;
-        }
-
         protected override void OnPositionOpened(PositionOpenedEventArgs args)
         {
             base.OnPositionOpened(args);
             ShouldTrail = false;
+
+            Print("Trailing will be initiated if price reaches {0}", TrailingInitiationPrice);
 
             if (RecordSession)
             {
@@ -509,157 +497,180 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
             return identity;
         }
 
-        private bool AreMovingAveragesStackedBullishly()
+        private bool AreMovingAveragesFlatAtIndex(int index)
         {
-            return _fastMA.Result.LastValue > _mediumMA.Result.LastValue &&
-                _mediumMA.Result.LastValue > _slowMA.Result.LastValue;
-        }
-
-        private bool AreMovingAveragesStackedBearishly()
-        {
-            return _fastMA.Result.LastValue < _mediumMA.Result.LastValue &&
-                _mediumMA.Result.LastValue < _slowMA.Result.LastValue;
-        }
-
-        private bool AreMovingAveragesStackedBullishlyAtIndex(int index)
-        {
-            return _fastMA.Result.Last(index) > _mediumMA.Result.Last(index) &&
-                _mediumMA.Result.Last(index) > _slowMA.Result.Last(index);
+            return Math.Abs(_fastMA.Result.Last(index) - _mediumMA.Result.Last(index)) / Symbol.PipSize <= 20 &&
+                   Math.Abs(_mediumMA.Result.Last(index) - _slowMA.Result.Last(index)) / Symbol.PipSize <= 20 &&
+                   Math.Abs(_fastMA.Result.Last(index) - _slowMA.Result.Last(index)) / Symbol.PipSize <= 20;
         }
 
         private bool AreMovingAveragesStackedBearishlyAtIndex(int index)
         {
-            return _fastMA.Result.Last(index) > _mediumMA.Result.Last(index) &&
-                _mediumMA.Result.Last(index) > _slowMA.Result.Last(index);
-        }
-
-        private bool BullishRsiAtIndex(int index)
-        {
-            return _rsi.Result.Last(index) <= 30;
-        }
-
-        private bool BearishRsiAtIndex(int index)
-        {
-            return _rsi.Result.Last(index) >= 70;
-        }
-
-        private int GetLastBullishBowtie()
-        {
-            if (!AreMovingAveragesStackedBullishly())
-            {
-                return -1;
-            }
-
-            var index = 1;
-            while (index <= 30)
-            {
-                if (AreMovingAveragesStackedBullishlyAtIndex(index))
-                {
-                    index++;
-                }
-                else
-                {
-                    return index;
-                }
-            }
-
-            return -1;
-        }
-
-        private int GetLastBearishBowtie()
-        {
-            if (!AreMovingAveragesStackedBearishly())
-            {
-                return -1;
-            }
-
-            var index = 1;
-            while (index <= 30)
-            {
-                if (AreMovingAveragesStackedBearishlyAtIndex(index))
-                {
-                    index++;
-                }
-                else
-                {
-                    return index;
-                }
-            }
-
-            return -1;
+            return _fastMA.Result.Last(index) < _mediumMA.Result.Last(index) &&
+                _mediumMA.Result.Last(index) < _slowMA.Result.Last(index);
         }
 
         protected override bool HasBearishSignal()
         {
             /* RULES
-            1) Close < Open
-            2) Close < prior close
-            3) Price must cross below short term MA
-            4) Price must be above medium and long term MA
-            5) RSI must have gone above 70 in the last x bars (say 15-20)
-            
-            Stop must be based on recent STH
-            Enter on open of next bar
-            Close when price reaches long-term MA
+            1) Fast MA < Medium MA < Slow MA (MAs are 'stacked')
+            2) Crossing of MAs must have occurred in the last n bars
+            3) Close < Fast MA
+            4) Close < Prior close
+            5) Close < Open
+            6) Low < Prior low
              */
+            //if (!AreMovingAveragesStackedBearishly())
+            //{
+            //    return false;
+            //}
 
-            var lastClose = MarketSeries.Close.LastValue;
-            if (CloseVsOpenFilter && MarketSeries.Close.Last(1) >= MarketSeries.Open.Last(1))
-            {
-                return false;
-            }
+            //var lastCross = GetLastBearishBowtie();
+            //if (lastCross == -1 || lastCross > MovingAveragesCrossThreshold)
+            //{
+            //    // Either there was no cross or it was too long ago and we have missed the move
+            //    return false;
+            //}
 
-            if (CloseVsPriorCloseFilter && MarketSeries.Close.Last(1) >= MarketSeries.Close.Last(2))
-            {
-                return false;
-            }
+            //Print("Bearish cross identified at index {0}", lastCross);
 
-            if (MarketSeries.Close.Last(1) <= _fastMA.Result.LastValue)
-            {
-                return false;
-            }
+            //if (MarketSeries.Close.LastValue >= _fastMA.Result.LastValue)
+            //{
+            //    //Print("Setup rejected as we closed higher than the fast MA");
+            //    return false;
+            //}
 
-            if (lastClose >= _fastMA.Result.LastValue || MarketSeries.Open.Last(1) <= _fastMA.Result.LastValue)
-            {
-                return false;
-            }
+            //if (CloseVsPriorCloseFilter && MarketSeries.Close.Last(1) >= MarketSeries.Close.Last(2))
+            //{
+            //    //Print("Setup rejected as we closed higher than the prior close ({0} vs {1})",
+            //    //    MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
+            //    return false;
+            //}
 
-            if (lastClose <= _mediumMA.Result.LastValue || lastClose <= _slowMA.Result.LastValue)
-            {
-                return false;
-            }
+            //if (CloseVsOpenFilter && MarketSeries.Close.Last(1) >= MarketSeries.Open.Last(1))
+            //{
+            //    //Print("Setup rejected as we closed higher than the open ({0} vs {1})",
+            //    //    MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
+            //    return false;
+            //}
 
-            if (!RecentBearishRciSetup())
-            {
-                return false;
-            }
+            //if (HighLowVsPriorHighLowFilter && MarketSeries.Low.Last(1) >= MarketSeries.Low.Last(2))
+            //{
+            //    //Print("Setup rejected as the low wasn't lower than the prior low ({0} vs {1})",
+            //    //    MarketSeries.Low.Last(1), MarketSeries.Low.Last(2));
+            //    return false;
+            //}
 
-            return true;
+            //// Another filter - what's the distance between the MAs?  Avoid noise and ensure there's been a breakout
+            //if (MADistanceFilter && (_mediumMA.Result.LastValue - _fastMA.Result.LastValue) / Symbol.PipSize < 7)
+            //{
+            //    Print("Setup rejected as there wasn't enough distance between the fast and medium MAs");
+            //    return false;
+            //}
+
+            //// What's the distance between the MAs?  Ensure we haven't already missed the move
+            //if (MAMaxDistanceFilter && (_mediumMA.Result.LastValue - _fastMA.Result.LastValue) / Symbol.PipSize >= 30)
+            //{
+            //    Print("Setup rejected as the distance between the fast and medium MAs was more than 30 pips");
+            //    return false;
+            //}
+
+            //// How high was the recent highest high?  Attempt to only enter when the MAs have been flat
+            //if (MAsFlatFilter && !MAsShouldAreFlatForBearishSetup())
+            //{
+            //    Print("Setup rejected as the MAs don't seem to be flat");
+            //    return false;
+            //}
+
+            //if (NewHighLowFilter)
+            //{
+            //    // Another filter - have we hit a new low?
+            //    const int LowestLowPeriod = 70;
+
+            //    var low = MarketSeries.Low.Minimum(LowestLowPeriod);
+            //    var priorLow = MarketSeries.Low.Last(1);
+            //    if (priorLow != low)
+            //    {
+            //        Print("Setup rejected as the prior low {0} has not gone lower than {1}", priorLow, low);
+            //        return false;
+            //    }
+
+            //    _lowestLow = low;
+            //}
+
+            return false;
         }
 
         protected override void ManageLongPosition()
         {
-            if (!ShouldTrail && MarketSeries.Close.LastValue > _slowMA.Result.LastValue)
+            if (!ShouldTrail && Symbol.Ask > TrailingInitiationPrice)
             {
                 ShouldTrail = true;
-                Print("Initiating trailing now that we closed above the slow MA");
+                Print("Initiating trailing now that we have reached trailing initiation price");
             }
 
             // Important - call base functionality to trail stop higher
             base.ManageLongPosition();
+
+            double value;
+            string maType;
+
+            switch (_maCrossRule)
+            {
+                case NewBreakout.MaCrossRule.CloseOnFastMaCross:
+                    value = _fastMA.Result.LastValue;
+                    maType = "fast";
+                    break;
+
+                case NewBreakout.MaCrossRule.CloseOnMediumMaCross:
+                    value = _mediumMA.Result.LastValue;
+                    maType = "medium";
+                    break;
+
+                default:
+                    return;
+            }
+
+            if (MarketSeries.Close.Last(1) < value - 2 * Symbol.PipSize)
+            {
+                Print("Closing position now that we closed below the {0} MA", maType);
+                _currentPosition.Close();
+            }
         }
 
         protected override void ManageShortPosition()
         {
+            if (!ShouldTrail && Symbol.Bid < TrailingInitiationPrice)
+            {
+                ShouldTrail = true;
+                Print("Initiating trailing now that we have reached trailing initiation price");
+            }
+
             // Important - call base functionality to trail stop lower
             base.ManageShortPosition();
 
-            var value = _slowMA.Result.LastValue;
-            var maType = "slow";
+            double value;
+            string maType;
 
-            if (MarketSeries.Close.LastValue < value)
+            switch (_maCrossRule)
             {
-                Print("Closing position now that we closed below the {0} MA", maType);
+                case NewBreakout.MaCrossRule.CloseOnFastMaCross:
+                    value = _fastMA.Result.LastValue;
+                    maType = "fast";
+                    break;
+
+                case NewBreakout.MaCrossRule.CloseOnMediumMaCross:
+                    value = _mediumMA.Result.LastValue;
+                    maType = "medium";
+                    break;
+
+                default:
+                    return;
+            }
+
+            if (MarketSeries.Close.Last(1) > value + 2 * Symbol.PipSize)
+            {
+                Print("Closing position now that we closed above the {0} MA", maType);
                 _currentPosition.Close();
             }
         }
@@ -697,22 +708,22 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
         private double _dynamicRiskPercentage;
         private bool _canOpenPosition;
         private DateTime _lastClosedPositionTime;
-        private bool _alreadyMovedToBreakEven;
+        private bool _alreadyMovedToBreakEven;        
         private bool _isClosingHalf;
 
         protected abstract bool HasBullishSignal();
         protected abstract bool HasBearishSignal();
 
         protected void Init(
-            bool takeLongsParameter,
-            bool takeShortsParameter,
+            bool takeLongsParameter, 
+            bool takeShortsParameter, 
             int initialStopLossRule,
             int initialStopLossInPips,
             int trailingStopLossRule,
             int trailingStopLossInPips,
-            int lotSizingRule,
+            int lotSizingRule,         
             int takeProfitRule,
-            int takeProfitInPips = 0,
+            int takeProfitInPips = 0,            
             int minutesToWaitAfterPositionClosed = 0,
             bool moveToBreakEven = false,
             bool closeHalfAtBreakEven = false,
@@ -742,15 +753,15 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
             Positions.Closed += OnPositionClosed;
             Positions.Modified += OnPositionModified;
 
-            Print("Symbol.TickSize: {0}, Symbol.Digits: {1}, Symbol.PipSize: {2}",
+            Print("Symbol.TickSize: {0}, Symbol.Digits: {1}, Symbol.PipSize: {2}", 
                 Symbol.TickSize, Symbol.Digits, Symbol.PipSize);
         }
 
         protected virtual void ValidateParameters(
-            bool takeLongsParameter,
-            bool takeShortsParameter,
-            int initialStopLossRule,
-            int initialStopLossInPips,
+            bool takeLongsParameter, 
+            bool takeShortsParameter, 
+            int initialStopLossRule, 
+            int initialStopLossInPips, 
             int trailingStopLossRule,
             int trailingStopLossInPips,
             int lotSizingRule,
@@ -828,7 +839,7 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
             if (_currentPosition == null)
                 return;
 
-            ManageExistingPosition();
+            ManageExistingPosition();                
         }
 
         protected override void OnBar()
@@ -889,7 +900,7 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
                 if (_closeHalfAtBreakEven)
                 {
                     _isClosingHalf = true;
-                    ModifyPosition(_currentPosition, _currentPosition.VolumeInUnits / 2);
+                    ModifyPosition(_currentPosition, _currentPosition.VolumeInUnits / 2);                    
                 }
 
                 return;
@@ -950,8 +961,8 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
                     stop = RecentHigh - _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
-                case TrailingStopLossRule.SmartProfitLocker:
-                    stop = CalculateSmartTrailingStopForLong();
+                case TrailingStopLossRule.SmartProfitLocker:    
+                    stop = CalculateSmartTrailingStopForLong();                    
                     break;
             }
 
@@ -1130,14 +1141,14 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
         }
 
         protected virtual void EnterLongPosition()
-        {
+        {                        
             var stopLossPips = CalculateInitialStopLossInPipsForLongPosition();
             double lots;
 
             if (stopLossPips.HasValue)
             {
                 lots = CalculatePositionQuantityInLots(stopLossPips.Value);
-                Print("SL calculated for Buy order = {0}", stopLossPips);
+                Print("SL calculated for Buy order = {0}", stopLossPips);                
             }
             else
             {
@@ -1154,7 +1165,7 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
             {
                 return 1;
             }
-
+           
             var risk = Account.Equity * _dynamicRiskPercentage / 100;
             var oneLotRisk = Symbol.PipValue * stopLossPips * Symbol.LotSize;
             var quantity = Math.Round(risk / oneLotRisk, 1);
@@ -1212,8 +1223,8 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
                     return _takeProfitInPips;
 
                 case TakeProfitRule.DoubleRisk:
-                    return stopLossPips.HasValue
-                        ? stopLossPips.Value * 2
+                    return stopLossPips.HasValue 
+                        ? stopLossPips.Value * 2 
                         : (double?)null;
 
                 case TakeProfitRule.TripleRisk:
@@ -1227,14 +1238,14 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
         }
 
         protected virtual void EnterShortPosition()
-        {
+        {            
             var stopLossPips = CalculateInitialStopLossInPipsForShortPosition();
             double lots;
 
             if (stopLossPips.HasValue)
             {
                 lots = CalculatePositionQuantityInLots(stopLossPips.Value);
-                Print("SL calculated for Sell order = {0}", stopLossPips);
+                Print("SL calculated for Sell order = {0}", stopLossPips);                
             }
             else
             {
@@ -1320,7 +1331,7 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
                     {
                         BreakEvenPrice = Symbol.Ask * 2 - _currentPosition.StopLoss.Value;
                     }
-
+                    
                     break;
 
                 case TradeType.Sell:
@@ -1385,7 +1396,7 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
 
         protected virtual void OnPositionClosed(PositionClosedEventArgs args)
         {
-            _currentPosition = null;
+            _currentPosition = null;            
             _alreadyMovedToBreakEven = false;
 
             ExitPrice = CalculateExitPrice(args.Position);
@@ -1409,7 +1420,7 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
         private void PrintClosedPositionInfo(Position position)
         {
             Print("Closed {0:N} {1} at {2} for {3} profit (pips={4})",
-                position.VolumeInUnits, position.TradeType, ExitPrice, position.GrossProfit, position.Pips);
+                position.VolumeInUnits, position.TradeType, ExitPrice, position.GrossProfit, position.Pips);            
         }
 
         private double CalculateExitPrice(Position position)
@@ -1472,3 +1483,5 @@ namespace cAlgo.Library.Robots.HighProbabilityOscillator
         }
     }
 }
+
+
