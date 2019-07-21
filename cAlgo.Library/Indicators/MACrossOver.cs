@@ -43,12 +43,6 @@ namespace cAlgo.Library.Indicators
     [Indicator(IsOverlay = true, TimeZone = TimeZones.UTC, AutoRescale = false, AccessRights = AccessRights.None)]
     public class MACrossOver : Indicator
     {
-        [Output("Up Point", LineColor = "Lime", PlotType = PlotType.Points, Thickness = 5)]
-        public IndicatorDataSeries UpPoint { get; set; }
-
-        [Output("Down Point", LineColor = "White", PlotType = PlotType.Points, Thickness = 5)]
-        public IndicatorDataSeries DownPoint { get; set; }
-
         [Parameter()]
         public DataSeries SourceSeries { get; set; }
 
@@ -61,12 +55,17 @@ namespace cAlgo.Library.Indicators
         [Parameter("Fast MA Period", DefaultValue = 21)]
         public int FastPeriodParameter { get; set; }
 
+        [Output("Up Signal", LineColor = "Lime")]
+        public IndicatorDataSeries UpSignal { get; set; }
+
+        [Output("Down Signal", LineColor = "White")]
+        public IndicatorDataSeries DownSignal { get; set; }
+
         private MovingAverage _fastMA;
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
         private double _buffer;
 
-        // REC Was here
         protected override void Initialize()
         {
             // Initialize and create nested indicators
@@ -79,6 +78,9 @@ namespace cAlgo.Library.Indicators
         public override void Calculate(int index)
         {
             // Calculate value at specified index
+            UpSignal[index] = double.NaN;
+            DownSignal[index] = double.NaN;
+
             if (IsBullishPinBar(index))
             {
                 DrawBullishPoint(index);
@@ -131,14 +133,16 @@ namespace cAlgo.Library.Indicators
 
         private void DrawBullishPoint(int index)
         {
-            UpPoint[index] = MarketSeries.Low[index] - _buffer;
-            Chart.DrawIcon("bullsignal" + index, ChartIconType.UpArrow, index, UpPoint[index], Color.Lime);
+            UpSignal[index] = 1.0;
+            var y = MarketSeries.Low[index] - _buffer;            
+            Chart.DrawIcon("bullsignal" + index, ChartIconType.UpArrow, index, y, Color.Lime);
         }
 
         private void DrawBearishPoint(int index)
         {
-            DownPoint[index] = MarketSeries.High[index] + _buffer;
-            Chart.DrawIcon("bearsignal" + index, ChartIconType.DownArrow, index, DownPoint[index], Color.White);
+            DownSignal[index] = 1.0;
+            var y = MarketSeries.High[index] + _buffer;
+            Chart.DrawIcon("bearsignal" + index, ChartIconType.DownArrow, index, y, Color.White);
         }
     }
 }

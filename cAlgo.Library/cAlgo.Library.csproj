@@ -56,6 +56,7 @@
     <Compile Include="Robots\BasicBot.cs" />
     <Compile Include="Robots\My Trend cBot.cs" />
     <Compile Include="Robots\Sample RSI cBot.cs" />
+    <Compile Include="Robots\MACrosser.cs" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="lib\" />
@@ -65,6 +66,7 @@
     <None Include="Robots\Analysis Queries\Database Analysis.xlsx" />
     <None Include="Robots\copy-HighProbability.bat" />
     <None Include="Robots\copy-newbreakout.bat" />
+    <None Include="Robots\copy-MACrosser.bat" />
     <None Include="Robots\copy-WaveCatcher.bat" />
   </ItemGroup>
   <ItemGroup>
