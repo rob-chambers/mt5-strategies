@@ -40,6 +40,7 @@ namespace Powder.TradingLibrary
         private DateTime _lastClosedPositionTime;
         private bool _alreadyMovedToBreakEven;
         private bool _isClosingHalf;
+        private double? _entryStopLossInPips;
 
         protected abstract bool HasBullishSignal();
         protected abstract bool HasBearishSignal();
@@ -380,31 +381,50 @@ namespace Powder.TradingLibrary
 
         private double? CalculateSmartTrailingStopForLong()
         {
-            var minStop = 20;
-            double stop;
+            // This stop is designed to become tighter the more profit we make
 
-            if (_currentPosition.Pips < minStop)
+            double initialRiskInPips = 20;
+            if (_entryStopLossInPips.HasValue)
             {
-                Print("Band 20");
-                stop = minStop;
+                initialRiskInPips = _entryStopLossInPips.Value;
             }
-            else if (_currentPosition.Pips < 40)
+
+            var onePointFiveProfitLevel = initialRiskInPips * 1.5;
+            var doubleProfitLevel = initialRiskInPips * 2;
+            var tripleProfitLevel = initialRiskInPips * 3;
+
+            Print("initialRiskInPips = {0}", initialRiskInPips);
+            double ratio;
+            if (_currentPosition.Pips < initialRiskInPips)
             {
-                Print("Band 40");
-                stop = 16;
+                Print("Lowest Band");
+                ratio = initialRiskInPips;
             }
-            else if (_currentPosition.Pips < 50)
+            else if (_currentPosition.Pips < onePointFiveProfitLevel)
             {
-                Print("Band 50");
-                stop = 12;
+                Print("1-1.5 Band");
+                ratio = initialRiskInPips * 3 / 4;
+            }
+            else if (_currentPosition.Pips < doubleProfitLevel)
+            {
+                Print("Double Band");
+                ratio = initialRiskInPips / 2;
+            }
+            else if (_currentPosition.Pips < tripleProfitLevel)
+            {
+                Print("Triple Band");
+                ratio = initialRiskInPips / 3;
             }
             else
             {
-                Print("Band MAX");
-                stop = 8;
+                Print("Highest Band");
+                ratio = initialRiskInPips / 4;
             }
 
-            stop = RecentHigh - stop * Symbol.PipSize;
+            ratio = Math.Truncate(ratio);
+            Print("Ratio = {0}", ratio);
+
+            var stop = RecentHigh - ratio * Symbol.PipSize;
             return stop;
         }
 
@@ -475,8 +495,9 @@ namespace Powder.TradingLibrary
                 lots = 1;
             }
 
-            var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
-            ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
+            _entryStopLossInPips = stopLossPips;
+            var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);            
+            ExecuteMarketOrder(TradeType.Buy, SymbolName, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
         }
 
         private double CalculatePositionQuantityInLots(double stopLossPips)
@@ -572,8 +593,9 @@ namespace Powder.TradingLibrary
                 lots = 1;
             }
 
+            _entryStopLossInPips = stopLossPips;
             var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
-            ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
+            ExecuteMarketOrder(TradeType.Sell, SymbolName, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
         }
 
         protected virtual double? CalculateInitialStopLossInPipsForShortPosition()

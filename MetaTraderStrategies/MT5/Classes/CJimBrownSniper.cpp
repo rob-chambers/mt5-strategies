@@ -568,6 +568,10 @@ bool CJimBrownSniper::HasBullishSignal()
         return false;
     }
 
+	if (_prices[1].close < _longTermTrendData[1]) {
+		return false;
+	}
+
     StorePerfData();
 
     if (_upCrossRecentIndex > -1 && _upCrossPriorIndex > -1 && _upCrossRecentValue > _upCrossPriorValue) {
@@ -589,6 +593,10 @@ bool CJimBrownSniper::HasBearishSignal()
     if (GetTrendDirection(1) != "Dn") {
         return false;
     }
+
+	if (_prices[1].close > _longTermTrendData[1]) {
+		return false;
+	}
 
     StorePerfData();
 
