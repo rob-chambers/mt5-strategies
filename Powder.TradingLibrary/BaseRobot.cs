@@ -665,6 +665,12 @@ namespace Powder.TradingLibrary
             //Print("Current position's SL = {0}", _currentPosition.StopLoss.HasValue
             //    ? _currentPosition.StopLoss.Value.ToString()
             //    : "N/A");
+
+            if (!_currentPosition.StopLoss.HasValue)
+            {
+                return;
+            }
+
             switch (_currentPosition.TradeType)
             {
                 case TradeType.Buy:
@@ -710,6 +716,11 @@ namespace Powder.TradingLibrary
 
         private double CalculateRiskPrice(double multiplier)
         {
+            if (!_currentPosition.StopLoss.HasValue)
+            {
+                return 0;
+            }
+
             double diff;
             switch (_currentPosition.TradeType)
             {
