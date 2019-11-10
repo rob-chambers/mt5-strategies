@@ -17,7 +17,7 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
         [Parameter("Take long trades?", DefaultValue = true)]
         public bool TakeLongsParameter { get; set; }
 
-        [Parameter("Take short trades?", DefaultValue = false)]
+        [Parameter("Take short trades?", DefaultValue = true)]
         public bool TakeShortsParameter { get; set; }
 
         [Parameter("Initial SL Rule", DefaultValue = 0)]
@@ -243,42 +243,29 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
         protected override bool HasBullishSignal()
         {
             // Assume we are back-testing with dates indicating when we get the DEW Up signal
+            var price = MarketSeries.Close.Last(1);
+            if (price > _fastMA.Result.LastValue)
+            {
+                return true;
+            }
 
-            return true;
+            return false;
+        }
 
-
-            //var value = _maCrossIndicator.UpSignal.Last(1);
-            //if (!value.Equals(double.NaN))
-            //    return true;
-
-            //if (!AreMovingAveragesStackedBullishly())
-            //{
-            //    return false;
-            //}
-
-            //var lastCross = GetLastBullishBowtie();
-            //if (lastCross == -1 || lastCross > MovingAveragesCrossThreshold)
-            //{
-            //    // Either there was no cross or it was too long ago and we have missed the move
-            //    return false;
-            //}
-
-            //Print("Bullish cross identified at index {0}", lastCross);
-
-            //if (MarketSeries.Close.LastValue <= _fastMA.Result.LastValue)
-            //{
-            //    //Print("Setup rejected as we closed lower than the fast MA");
-            //    return false;
-            //}
-
-            //return true;
+        protected override bool HasBearishSignal()
+        {
+            // Assume we are back-testing with dates indicating when we get the DEW Down signal
+            var price = MarketSeries.Close.Last(1);
+            if (price < _fastMA.Result.LastValue)
+            {
+                return true;
+            }
 
             return false;
         }
 
         protected override void OnPositionOpened(PositionOpenedEventArgs args)
         {
-            Print("Sold Half flag reset");
             _soldHalf = false;
             base.OnPositionOpened(args);
             ShouldTrail = false;
@@ -367,38 +354,6 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
             return identity;
         }
 
-        protected override bool HasBearishSignal()
-        {
-            var value = _maCrossIndicator.DownSignal.Last(1);
-            if (!value.Equals(double.NaN))
-            {
-                return true;
-            }
-
-            //if (!AreMovingAveragesStackedBearishly())
-            //{
-            //    return false;
-            //}
-
-            //var lastCross = GetLastBearishBowtie();
-            //if (lastCross == -1 || lastCross > MovingAveragesCrossThreshold)
-            //{
-            //    // Either there was no cross or it was too long ago and we have missed the move
-            //    return false;
-            //}
-
-            //Print("Bearish cross identified at index {0}", lastCross);
-
-            //if (MarketSeries.Close.LastValue >= _fastMA.Result.LastValue)
-            //{
-            //    //Print("Setup rejected as we closed higher than the fast MA");
-            //    return false;
-            //}
-
-            //return true;
-            return false;
-        }
-
         protected override bool ManageLongPosition()
         {
             if (BarsSinceEntry <= BarsToAllowTradeToDevelop)
@@ -413,20 +368,8 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
                 return true;
             }
 
-            //double value;
-            //string maType;
-
-            //    case MaCrossRuleValues.CloseOnMediumMaCross:
-            //        value = _mediumMA.Result.LastValue;
-            //        maType = "medium";
-            //        break;
-
-            //    default:
-            //        return true;
-            //}
-
             // Check for a close below the fast MA
-            var price = MarketSeries.Close.Last(1);
+            var price = MarketSeries.Close.LastValue;
             if (!_soldHalf && price < _fastMA.Result.LastValue - 2 * Symbol.PipSize)
             {
                 Print("Selling half now that we closed below the fast MA");
@@ -449,85 +392,38 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
 
         protected override bool ManageShortPosition()
         {
-            if (!ShouldTrail && Symbol.Bid < TrailingInitiationPrice)
-            {
-                ShouldTrail = true;
-                Print("Initiating trailing now that we have reached trailing initiation price");
-            }
-
-            // Important - call base functionality to trail stop lower
-            if (!base.ManageShortPosition())
+            if (BarsSinceEntry <= BarsToAllowTradeToDevelop)
                 return false;
 
-            double value;
-            string maType;
-
-            switch (_maCrossRule)
+            // Check if RSI is extended
+            if (_rsi.Result.LastValue <= 20)
             {
-                case MaCrossRuleValues.CloseOnFastMaCross:
-                    value = _fastMA.Result.LastValue;
-                    maType = "fast";
-                    break;
-
-                case MaCrossRuleValues.CloseOnMediumMaCross:
-                    value = _mediumMA.Result.LastValue;
-                    maType = "medium";
-                    break;
-
-                default:
-                    return true;
+                Print("Closing position now that the RSI is extended");
+                _canOpenPosition = true;
+                _currentPosition.Close();
+                return true;
             }
 
-            if (MarketSeries.Close.Last(1) > value + 2 * Symbol.PipSize)
+            // Check for a close above the fast MA
+            var price = MarketSeries.Close.LastValue;
+            if (!_soldHalf && price > _fastMA.Result.LastValue + 2 * Symbol.PipSize)
             {
-                Print("Closing position now that we closed above the {0} MA", maType);
+                Print("Selling half now that we closed above the fast MA");
+                ModifyPosition(_currentPosition, _currentPosition.VolumeInUnits / 2);
+                _soldHalf = true;
+                return true;
+            }
+
+            // Check for a close above the slow MA
+            if (price > _slowMA.Result.LastValue + 2 * Symbol.PipSize)
+            {
+                Print("Closing position now that we closed above the slow MA");
+                _canOpenPosition = true;
                 _currentPosition.Close();
+                return true;
             }
 
             return true;
-        }
-    }
-    
-    public static class Common
-    {
-        public static int IndexOfLowestLow(DataSeries dataSeries, int periods)
-        {
-            var index = 1;
-            var lowest = double.MaxValue;
-            var lowestIndex = -1;
-
-            while (index < periods)
-            {
-                var low = dataSeries.Last(index);
-                if (low < lowest)
-                {
-                    lowest = low;
-                    lowestIndex = index;
-                }
-
-                index++;
-            }
-
-            return lowestIndex;
-        }
-
-        public static double LowestLow(DataSeries dataSeries, int periods, int startIndex = 1)
-        {
-            var index = startIndex;
-            var lowest = double.MaxValue;
-
-            while (index < periods)
-            {
-                var low = dataSeries.Last(index);
-                if (low < lowest)
-                {
-                    lowest = low;
-                }
-
-                index++;
-            }
-
-            return lowest;
         }
     }
 }
