@@ -6,9 +6,19 @@ using System.Data.SqlClient;
 using cAlgo.Library.Indicators;
 using Powder.TradingLibrary;
 using System.Collections.Generic;
+using System.Linq;
+using System.IO;
+using System.Xml;
+using System.Xml.Serialization;
 
 namespace cAlgo.Library.Robots.VectorVestDowBot
 {
+    public enum SignalType
+    {
+        DewUp,
+        DewDown
+    }
+
     /*
      * RULES......................
      *  Enter on pull back to the 21MA on an H4
@@ -23,10 +33,35 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
     {
         const string ConnectionString = @"Data Source = (localdb)\MSSQLLocalDB; Initial Catalog = cTrader; Integrated Security = True; Connect Timeout = 10; Encrypt = False;";
 
-        private class SignalDay
+        [Serializable()]
+        [XmlRoot("SignalCollection")]
+        public class SignalDayCollection
         {
+            [XmlArray("Signals")]
+            [XmlArrayItem("Signal", typeof(SignalDay))]
+            public SignalDay[] Signals { get; set; }
+        }
+
+        [Serializable()]
+        public class SignalDay
+        {
+            [XmlElement("Type")]
+            public SignalType SignalType { get; set; }
+
+            [XmlIgnore]
             public DateTime Date { get; set; }
+
+            [XmlElement("Date")]
+            public string SomeDateString
+            {
+                get { return this.Date.ToString("yyyy-MM-dd HH:mm:ss"); }
+                set { Date = DateTime.Parse(value); }
+            }
+
+            [XmlElement("RT")]
             public double RT { get; set; }
+
+            [XmlElement("Bsr")]
             public double Bsr { get; set; }
         }
 
@@ -94,108 +129,323 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
         private int _currentPositionId;
         private RelativeStrengthIndex _rsi;
         private RelativeStrengthIndex _h4Rsi;
-        private bool _soldHalf;
-        private DateTime _signalDate;
+        private bool _closedHalf;
+        private DateTime _upSignalDate;
+        private DateTime _downSignalDate;
+        private SignalDayCollection _signals;
 
-        private readonly List<SignalDay> _signals = new List<SignalDay>
-        {
-            new SignalDay
-            {
-                 Date = new DateTime(2017, 11, 16),
-                 Bsr = 1.02,
-                 RT = 1.00
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2018, 3, 7),
-                 Bsr = 0.9,
-                 RT = 0.99
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2018, 4, 17),
-                 Bsr = 1.08,
-                 RT = 0.99
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2018, 4, 27),
-                 Bsr = 0.81,
-                 RT = 0.97
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2018, 5, 9),
-                 Bsr = 1.21,
-                 RT = 1.01
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2018, 7, 6),
-                 Bsr = 1.48,
-                 RT = 1.01
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2019, 8, 2),
-                 Bsr = 0.79,
-                 RT = 0.96
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2018, 8, 14),
-                 Bsr = 0.69,
-                 RT = 0.94
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2018, 8, 17),
-                 Bsr = 0.69,
-                 RT = 0.94
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2018, 11, 28),
-                 Bsr = 0.29,
-                 RT = 0.89
-            },
-
-
-            new SignalDay
-            {
-                 Date = new DateTime(2019, 1, 11),
-                 Bsr = 0.64,
-                 RT = 0.98
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2019, 3, 28),
-                 Bsr = 1.66,
-                 RT = 1.05
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2019, 6, 13),
-                 Bsr = 0.46,
-                 RT = 0.93
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2019, 9, 5),
-                 Bsr = 0.55,
-                 RT = 0.95
-            },
-            new SignalDay
-            {
-                 Date = new DateTime(2019, 10, 21),
-                 Bsr = 0.96,
-                 RT = 0.96
-            }
-        };
+        //private readonly List<SignalDay> _signals = new List<SignalDay>
+        //{
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2016, 5, 10),
+        //        Bsr = 2.25,
+        //        RT = 1.06
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2016, 5, 25),
+        //        Bsr = 1.50,
+        //        RT = 1.04
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2016, 6, 30),
+        //        Bsr = 1.16,
+        //        RT = 1.02
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2016, 9, 22),
+        //        Bsr = 2.22,
+        //        RT = 1.07
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2016, 10, 10),
+        //        Bsr = 1.22,
+        //        RT = 1.01
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2016, 11, 11),
+        //        Bsr = 1.07,
+        //        RT = 1.02
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2017, 3, 30),
+        //        Bsr = 1.48,
+        //        RT = 1.02
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2017, 4, 10),
+        //        Bsr = 1.13,
+        //        RT = 1.00
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2017, 4, 17),
+        //        Bsr = 1.04,
+        //        RT = 0.99
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2017, 4, 19),
+        //        Bsr = 1.16,
+        //        RT = 1.00
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2017, 5, 22),
+        //        Bsr = 1.10,
+        //        RT = 0.99
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2017, 7, 11),
+        //        Bsr = 1.20,
+        //        RT = 0.99
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2017, 8, 31),
+        //        Bsr = 1.15,
+        //        RT = 1.01
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2017, 11, 16),
+        //        Bsr = 1.02,
+        //        RT = 1.00
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2018, 3, 7),
+        //        Bsr = 0.9,
+        //        RT = 0.99
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2018, 4, 17),
+        //        Bsr = 1.08,
+        //        RT = 0.99
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2018, 4, 27),
+        //        Bsr = 0.81,
+        //        RT = 0.97
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2018, 5, 9),
+        //        Bsr = 1.21,
+        //        RT = 1.01
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2018, 7, 6),
+        //        Bsr = 1.48,
+        //        RT = 1.01
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2018, 8, 2),
+        //        Bsr = 0.79,
+        //        RT = 0.96
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2018, 8, 14),
+        //        Bsr = 0.69,
+        //        RT = 0.94
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2018, 8, 17),
+        //        Bsr = 0.69,
+        //        RT = 0.94
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2018, 11, 28),
+        //        Bsr = 0.29,
+        //        RT = 0.89
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2019, 1, 11),
+        //        Bsr = 0.64,
+        //        RT = 0.98
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2019, 3, 28),
+        //        Bsr = 1.66,
+        //        RT = 1.05
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2019, 6, 13),
+        //        Bsr = 0.46,
+        //        RT = 0.93
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2019, 9, 5),
+        //        Bsr = 0.55,
+        //        RT = 0.95
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewUp,
+        //        Date = new DateTime(2019, 10, 21),
+        //        Bsr = 0.96,
+        //        RT = 0.96
+        //    },
+        //    // ****************** DOWN SIGNALS
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2019, 10, 1),
+        //        Bsr = 0.33,
+        //        RT = 0.90
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2019, 8, 1),
+        //        Bsr = 0.61,
+        //        RT = 0.95
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2019, 5, 9),
+        //        Bsr = 0.49,
+        //        RT = 0.93
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2019, 3, 22),
+        //        Bsr = 1.65,
+        //        RT = 1.05
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2018, 12, 4),
+        //        Bsr = 0.19,
+        //        RT = 0.85
+        //    },
+        //    new SignalDay
+        //    {
+        //        // BEST Signal
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2018, 10, 1),
+        //        Bsr = 0.63,
+        //        RT = 0.95
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2018, 8, 15),
+        //        Bsr = 0.48,
+        //        RT = 0.92
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2018, 8, 13),
+        //        Bsr = 0.56,
+        //        RT = 0.93
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2019, 7, 30),
+        //        Bsr = 0.66,
+        //        RT = 0.95
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2018, 6, 27),
+        //        Bsr = 0.7,
+        //        RT = 0.96
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2018, 4, 30),
+        //        Bsr = 0.69,
+        //        RT = 0.96
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2018, 4, 24),
+        //        Bsr = 0.77,
+        //        RT = 0.96
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2018, 3, 22),
+        //        Bsr = 0.4,
+        //        RT = 0.93
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2018, 2, 5),
+        //        Bsr = 0.34,
+        //        RT = 0.91
+        //    },
+        //    new SignalDay
+        //    {
+        //        SignalType = SignalType.DewDown,
+        //        Date = new DateTime(2017, 11, 13),
+        //        Bsr = 1.15,
+        //        RT = 1.00
+        //    },
+        //};
 
         protected override void OnStart()
         {
-            _soldHalf = false;
+            ReadSignalData();
+
+            _closedHalf = false;
             _maCrossIndicator = Indicators.GetIndicator<MACrossOver>(SourceSeries, SlowPeriodParameter, MediumPeriodParameter, FastPeriodParameter);
             _fastMA = Indicators.MovingAverage(SourceSeries, FastPeriodParameter, MovingAverageType.Exponential);
             _mediumMA = Indicators.MovingAverage(SourceSeries, MediumPeriodParameter, MovingAverageType.Exponential);
@@ -237,6 +487,18 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
                 _runId = SaveRunToDatabase();
                 if (_runId <= 0)
                     throw new InvalidOperationException("Run Id was <= 0!");
+            }
+        }
+
+        private void ReadSignalData()
+        {
+            var desktopFolder = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            var filePath = Path.Combine(desktopFolder, "vv-signals.xml");
+            var serializer = new XmlSerializer(typeof(SignalDayCollection));
+
+            using (var reader = new StreamReader(filePath))
+            {
+                _signals = (SignalDayCollection)serializer.Deserialize(reader);               
             }
         }
 
@@ -359,13 +621,13 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
             //Print("Current date: " + Server.Time.ToString("dd/MMM/yyyy HH:mm"));
 
             // Add a trading day onto the signal date because that is the first chance we will get to react to it
-            if (_signalDate == DateTime.MinValue)
+            if (_upSignalDate == DateTime.MinValue)
             {
-                foreach (var signal in _signals)
+                foreach (var signal in _signals.Signals.Where(x => x.SignalType == SignalType.DewUp))
                 {
                     if (Server.Time.Date.CompareTo(signal.Date) == 0)
                     {
-                        _signalDate = signal.Date;
+                        _upSignalDate = signal.Date;
                         break;
                     }
                 }
@@ -374,8 +636,14 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
             }
 
             // Have we just passed a signal date, ticking over to the next trading day?
-            if (Server.Time.Day != _signalDate.Day && Server.Time.Date.Subtract(_signalDate).TotalDays <= 4)
+            if (Server.Time.Day != _upSignalDate.Day && Server.Time.Date.Subtract(_upSignalDate).TotalDays <= 4)
             {
+                // Forget about waking up early in the morning!
+                if (Server.Time.Hour <= 6)
+                {
+                    return false;
+                }
+
                 return true;
             }
 
@@ -390,19 +658,39 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
 
         protected override bool HasBearishSignal()
         {
-            // Assume we are back-testing with dates indicating when we get the DEW Down signal
-            var price = MarketSeries.Close.Last(1);
-            if (price < _fastMA.Result.LastValue)
+            // Add a trading day onto the signal date because that is the first chance we will get to react to it
+            if (_downSignalDate == DateTime.MinValue)
+            {
+                foreach (var signal in _signals.Signals.Where(x => x.SignalType == SignalType.DewDown))
+                {
+                    if (Server.Time.Date.CompareTo(signal.Date) == 0)
+                    {
+                        _downSignalDate = signal.Date;
+                        break;
+                    }
+                }
+
+                return false;
+            }
+
+            // Have we just passed a signal date, ticking over to the next trading day?
+            if (Server.Time.Day != _downSignalDate.Day && Server.Time.Date.Subtract(_downSignalDate).TotalDays <= 4)
             {
                 return true;
             }
+
+            //var price = MarketSeries.Close.Last(1);
+            //if (price < _fastMA.Result.LastValue)
+            //{
+            //    return true;
+            //}
 
             return false;
         }
 
         protected override void OnPositionOpened(PositionOpenedEventArgs args)
         {
-            _soldHalf = false;
+            _closedHalf = false;
             base.OnPositionOpened(args);
             ShouldTrail = false;
 
@@ -421,7 +709,7 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
             if (RecordSession)
                 SaveClosedPositionToDatabase(args.Position);
 
-            _signalDate = DateTime.MinValue;
+            _upSignalDate = DateTime.MinValue;
         }
 
         private void SaveClosedPositionToDatabase(Position position)
@@ -507,11 +795,11 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
 
             // Check for a close below the fast MA
             var price = MarketSeries.Close.LastValue;
-            if (!_soldHalf && price < _fastMA.Result.LastValue - 2 * Symbol.PipSize)
+            if (!_closedHalf && price < _fastMA.Result.LastValue - 2 * Symbol.PipSize)
             {
                 Print("Selling half now that we closed below the fast MA");
                 ModifyPosition(_currentPosition, _currentPosition.VolumeInUnits / 2);
-                _soldHalf = true;
+                _closedHalf = true;
                 return true;
             }
 
@@ -535,18 +823,17 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
             if (_rsi.Result.LastValue <= 20)
             {
                 Print("Closing position now that the RSI is extended");
-                _canOpenPosition = true;
                 _currentPosition.Close();
                 return true;
             }
 
             // Check for a close above the fast MA
             var price = MarketSeries.Close.LastValue;
-            if (!_soldHalf && price > _fastMA.Result.LastValue + 2 * Symbol.PipSize)
+            if (!_closedHalf && price > _fastMA.Result.LastValue + 2 * Symbol.PipSize)
             {
-                Print("Selling half now that we closed above the fast MA");
+                Print("Closing half now that we closed above the fast MA");
                 ModifyPosition(_currentPosition, _currentPosition.VolumeInUnits / 2);
-                _soldHalf = true;
+                _closedHalf = true;
                 return true;
             }
 
@@ -554,7 +841,6 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
             if (price > _slowMA.Result.LastValue + 2 * Symbol.PipSize)
             {
                 Print("Closing position now that we closed above the slow MA");
-                _canOpenPosition = true;
                 _currentPosition.Close();
                 return true;
             }
