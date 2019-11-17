@@ -492,7 +492,7 @@ namespace Powder.TradingLibrary
             }
             else
             {
-                lots = 1;
+                lots = 6;
             }
 
             _entryStopLossInPips = stopLossPips;

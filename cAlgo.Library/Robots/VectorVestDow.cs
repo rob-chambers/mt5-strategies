@@ -5,19 +5,36 @@ using cAlgo.API.Internals;
 using System.Data.SqlClient;
 using cAlgo.Library.Indicators;
 using Powder.TradingLibrary;
+using System.Collections.Generic;
 
 namespace cAlgo.Library.Robots.VectorVestDowBot
 {
+    /*
+     * RULES......................
+     *  Enter on pull back to the 21MA on an H4
+        Sell 1/2 on cross of 21MA on H4
+        If RSI gets above 80, sell
+        Close all on close below 89EMA
+
+        Instead of closing when RSI hits 80, if a down bar, move SL to low of down bar
+     */
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FullAccess)]
     public class VectorVestDowBot : BaseRobot
     {
         const string ConnectionString = @"Data Source = (localdb)\MSSQLLocalDB; Initial Catalog = cTrader; Integrated Security = True; Connect Timeout = 10; Encrypt = False;";
 
+        private class SignalDay
+        {
+            public DateTime Date { get; set; }
+            public double RT { get; set; }
+            public double Bsr { get; set; }
+        }
+
         #region Standard Parameters
         [Parameter("Take long trades?", DefaultValue = true)]
         public bool TakeLongsParameter { get; set; }
 
-        [Parameter("Take short trades?", DefaultValue = true)]
+        [Parameter("Take short trades?", DefaultValue = false)]
         public bool TakeShortsParameter { get; set; }
 
         [Parameter("Initial SL Rule", DefaultValue = 0)]
@@ -78,6 +95,103 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
         private RelativeStrengthIndex _rsi;
         private RelativeStrengthIndex _h4Rsi;
         private bool _soldHalf;
+        private DateTime _signalDate;
+
+        private readonly List<SignalDay> _signals = new List<SignalDay>
+        {
+            new SignalDay
+            {
+                 Date = new DateTime(2017, 11, 16),
+                 Bsr = 1.02,
+                 RT = 1.00
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2018, 3, 7),
+                 Bsr = 0.9,
+                 RT = 0.99
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2018, 4, 17),
+                 Bsr = 1.08,
+                 RT = 0.99
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2018, 4, 27),
+                 Bsr = 0.81,
+                 RT = 0.97
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2018, 5, 9),
+                 Bsr = 1.21,
+                 RT = 1.01
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2018, 7, 6),
+                 Bsr = 1.48,
+                 RT = 1.01
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2019, 8, 2),
+                 Bsr = 0.79,
+                 RT = 0.96
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2018, 8, 14),
+                 Bsr = 0.69,
+                 RT = 0.94
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2018, 8, 17),
+                 Bsr = 0.69,
+                 RT = 0.94
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2018, 11, 28),
+                 Bsr = 0.29,
+                 RT = 0.89
+            },
+
+
+            new SignalDay
+            {
+                 Date = new DateTime(2019, 1, 11),
+                 Bsr = 0.64,
+                 RT = 0.98
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2019, 3, 28),
+                 Bsr = 1.66,
+                 RT = 1.05
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2019, 6, 13),
+                 Bsr = 0.46,
+                 RT = 0.93
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2019, 9, 5),
+                 Bsr = 0.55,
+                 RT = 0.95
+            },
+            new SignalDay
+            {
+                 Date = new DateTime(2019, 10, 21),
+                 Bsr = 0.96,
+                 RT = 0.96
+            }
+        };
 
         protected override void OnStart()
         {
@@ -242,12 +356,34 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
 
         protected override bool HasBullishSignal()
         {
-            // Assume we are back-testing with dates indicating when we get the DEW Up signal
-            var price = MarketSeries.Close.Last(1);
-            if (price > _fastMA.Result.LastValue)
+            //Print("Current date: " + Server.Time.ToString("dd/MMM/yyyy HH:mm"));
+
+            // Add a trading day onto the signal date because that is the first chance we will get to react to it
+            if (_signalDate == DateTime.MinValue)
+            {
+                foreach (var signal in _signals)
+                {
+                    if (Server.Time.Date.CompareTo(signal.Date) == 0)
+                    {
+                        _signalDate = signal.Date;
+                        break;
+                    }
+                }
+
+                return false;
+            }
+
+            // Have we just passed a signal date, ticking over to the next trading day?
+            if (Server.Time.Day != _signalDate.Day && Server.Time.Date.Subtract(_signalDate).TotalDays <= 4)
             {
                 return true;
             }
+
+            //var price = MarketSeries.Close.Last(1);
+            //if (price > _fastMA.Result.LastValue)
+            //{
+            //    return true;
+            //}
 
             return false;
         }
@@ -284,6 +420,8 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
 
             if (RecordSession)
                 SaveClosedPositionToDatabase(args.Position);
+
+            _signalDate = DateTime.MinValue;
         }
 
         private void SaveClosedPositionToDatabase(Position position)
@@ -363,7 +501,6 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
             if (_rsi.Result.LastValue >= 80)
             {
                 Print("Closing position now that the RSI is extended");
-                _canOpenPosition = true;
                 _currentPosition.Close();
                 return true;
             }
@@ -382,7 +519,6 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
             if (price < _slowMA.Result.LastValue - 2 * Symbol.PipSize)
             {
                 Print("Closing position now that we closed below the slow MA");
-                _canOpenPosition = true;
                 _currentPosition.Close();
                 return true;
             }
