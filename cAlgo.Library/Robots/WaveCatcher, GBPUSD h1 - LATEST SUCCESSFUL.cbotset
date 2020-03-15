@@ -1,0 +1,35 @@
+﻿[ChartParameters]
+Symbol = GBPUSD
+Timeframe = h1
+
+[cBotParameters]
+TakeLongsParameter = True
+TakeShortsParameter = True
+InitialStopLossRule = 4
+CustomInitialStopLossRule = 1
+InitialStopLossInPips = 0
+TrailingStopLossRule = 0
+TrailingStopLossInPips = 10
+LotSizingRule = 0
+TakeProfitRule = 1
+TakeProfitInPips = 35
+MinutesToWaitAfterPositionClosed = 0
+MoveToBreakEven = False
+CloseHalfAtBreakEven = False
+DynamicRiskPercentage = 2
+SourceSeries = CloseB65C52E1-F7C0-4E62-9C94-5BA8E8F0FCEF
+SlowPeriodParameter = 89
+MediumPeriodParameter = 55
+FastPeriodParameter = 21
+H4MaPeriodParameter = 21
+MovingAveragesCrossThreshold = 30
+MaCrossRule = 0
+RecordSession = False
+EnterAtMarket = True
+CloseVsPriorCloseFilter = True
+CloseVsOpenFilter = False
+HighLowVsPriorHighLowFilter = False
+MADistanceFilter = False
+MAMaxDistanceFilter = False
+MAsFlatFilter = False
+NewHighLowFilter = True

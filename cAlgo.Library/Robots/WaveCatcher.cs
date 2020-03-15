@@ -154,6 +154,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("New high/low filter", DefaultValue = true)]
         public bool NewHighLowFilter { get; set; }
 
+        [Parameter("New high/low #bars", DefaultValue = 70)]
+        public int NewHighLowBars { get; set; }
+
         protected override string Name
         {
             get
@@ -564,9 +567,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (NewHighLowFilter)
             {
                 // Another filter - have we hit a new high?
-                const int highestHighPeriod = 70;
-
-                var high = Bars.HighPrices.Maximum(highestHighPeriod);
+                var high = Bars.HighPrices.Maximum(NewHighLowBars);
                 var priorHigh = Bars.HighPrices.Last(1);
                 if (Math.Abs(priorHigh - high) > Symbol.PipSize)
                 {
@@ -866,9 +867,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (NewHighLowFilter)
             {
                 // Another filter - have we hit a new low?
-                const int lowestLowPeriod = 70;
-
-                var low = Bars.LowPrices.Minimum(lowestLowPeriod);
+                var low = Bars.LowPrices.Minimum(NewHighLowBars);
                 var priorLow = Bars.LowPrices.Last(1);
                 if (Math.Abs(priorLow - low) > Symbol.PipSize)
                 {
