@@ -81,38 +81,44 @@ namespace cAlgo.Library.Indicators
             UpSignal[index] = double.NaN;
             DownSignal[index] = double.NaN;
 
-            if (IsBullishPinBar(index))
+            if (IsBullishBar(index))
             {
                 DrawBullishPoint(index);
             }
-            else if (IsBearishPinBar(index))
+            else if (IsBearishBar(index))
             {
                 DrawBearishPoint(index);
             }            
         }
 
-        private bool IsBullishPinBar(int index)
+        private bool IsBullishBar(int index)
         {
-            var lastBarIndex = index; // - 1;
-            var open = MarketSeries.Open[lastBarIndex];
-            var close = MarketSeries.Close[lastBarIndex];            
+            if (!AreMovingAveragesStackedBullishlyAtIndex(index))
+            {
+                return false;
+            }
 
-            if (!(close > open)) return false;
+            if (!AreMovingAveragesStackedBullishlyAtIndex(index - 1))
+            {
+                return true;
+            }
 
-            var cross = HasCrossedAllMovingAverages(lastBarIndex);
-            return cross && close > _fastMA.Result[index];
+            return false;
         }
 
-        private bool IsBearishPinBar(int index)
+        private bool IsBearishBar(int index)
         {
-            var lastBarIndex = index; // - 1;
-            var open = MarketSeries.Open[lastBarIndex];
-            var close = MarketSeries.Close[lastBarIndex];
+            if (!AreMovingAveragesStackedBearishlyAtIndex(index))
+            {
+                return false;
+            }
 
-            if (!(open > close)) return false;
+            if (!AreMovingAveragesStackedBearishlyAtIndex(index - 1))
+            {
+                return true;
+            }
 
-            var cross = HasCrossedAllMovingAverages(lastBarIndex);
-            return cross && close < _fastMA.Result[index];
+            return false;
         }
 
         private bool HasCrossedAllMovingAverages(int index)
@@ -130,6 +136,19 @@ namespace cAlgo.Library.Indicators
 
             return true;
         }
+
+        private bool AreMovingAveragesStackedBullishlyAtIndex(int index)
+        {
+            return index >= SlowPeriodParameter && _fastMA.Result[index] > _mediumMA.Result[index] &&
+                _mediumMA.Result[index] > _slowMA.Result[index];
+        }
+
+        private bool AreMovingAveragesStackedBearishlyAtIndex(int index)
+        {
+            return index >= SlowPeriodParameter && _fastMA.Result[index] < _mediumMA.Result[index] &&
+                _mediumMA.Result[index] < _slowMA.Result[index];
+        }
+
 
         private void DrawBullishPoint(int index)
         {

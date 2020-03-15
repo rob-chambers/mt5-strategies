@@ -4,6 +4,7 @@
     {
         None,
         CloseOnFastMaCross,
-        CloseOnMediumMaCross
+        CloseOnMediumMaCross,
+        CloseOnSlowMaCross
     }
 }

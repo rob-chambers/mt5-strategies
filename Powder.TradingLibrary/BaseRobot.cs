@@ -500,7 +500,7 @@ namespace Powder.TradingLibrary
             ExecuteMarketOrder(TradeType.Buy, SymbolName, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
         }
 
-        private double CalculatePositionQuantityInLots(double stopLossPips)
+        protected double CalculatePositionQuantityInLots(double stopLossPips)
         {
             if (_lotSizingRule == LotSizingRuleValues.Static)
             {
@@ -553,7 +553,7 @@ namespace Powder.TradingLibrary
             return null;
         }
 
-        private double? CalculateTakeProfit(double? stopLossPips)
+        protected double? CalculateTakeProfit(double? stopLossPips)
         {
             switch (_takeProfitRule)
             {
