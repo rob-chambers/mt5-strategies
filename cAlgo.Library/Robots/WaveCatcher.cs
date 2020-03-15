@@ -4,6 +4,8 @@ using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
 using System.Data.SqlClient;
 using System.Linq;
+// ReSharper disable UseStringInterpolation
+// ReSharper disable ArrangeAccessorOwnerBody
 
 namespace cAlgo.Library.Robots.WaveCatcher
 {
@@ -44,7 +46,14 @@ namespace cAlgo.Library.Robots.WaveCatcher
     {
         None,
         CloseOnFastMaCross,
-        CloseOnMediumMaCross
+        CloseOnMediumMaCross,
+        CloseOnSlowMaCross
+    }
+
+    public enum CustomInitialStopLossRule
+    {
+        MediumMa,
+        SlowMa
     }
 
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FullAccess)]
@@ -59,23 +68,26 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("Take short trades?", DefaultValue = true)]
         public bool TakeShortsParameter { get; set; }
 
-        [Parameter("Initial SL Rule", DefaultValue = 2)]
-        public int InitialStopLossRule { get; set; }
+        [Parameter("Initial SL Rule", DefaultValue = InitialStopLossRule.Custom)]
+        public InitialStopLossRule InitialStopLossRule { get; set; }
+
+        [Parameter("Custom Initial SL Rule", DefaultValue = CustomInitialStopLossRule.SlowMa)]
+        public CustomInitialStopLossRule CustomInitialStopLossRule { get; set; }
 
         [Parameter("Initial SL (pips)", DefaultValue = 5)]
         public int InitialStopLossInPips { get; set; }
 
-        [Parameter("Trailing SL Rule", DefaultValue = 0)]
-        public int TrailingStopLossRule { get; set; }
+        [Parameter("Trailing SL Rule", DefaultValue = TrailingStopLossRule.None)]
+        public TrailingStopLossRule TrailingStopLossRule { get; set; }
 
         [Parameter("Trailing SL (pips)", DefaultValue = 10)]
         public int TrailingStopLossInPips { get; set; }
 
-        [Parameter("Lot Sizing Rule", DefaultValue = 0)]
-        public int LotSizingRule { get; set; }
+        [Parameter("Lot Sizing Rule", DefaultValue = LotSizingRule.Dynamic)]
+        public LotSizingRule LotSizingRule { get; set; }
 
-        [Parameter("Take Profit Rule", DefaultValue = 0)]
-        public int TakeProfitRule { get; set; }
+        [Parameter("Take Profit Rule", DefaultValue = TakeProfitRule.None)]
+        public TakeProfitRule TakeProfitRule { get; set; }
 
         [Parameter("Take Profit (pips)", DefaultValue = 0)]
         public int TakeProfitInPips { get; set; }
@@ -112,8 +124,8 @@ namespace cAlgo.Library.Robots.WaveCatcher
         [Parameter("MAs Cross Threshold (# bars)", DefaultValue = 30)]
         public int MovingAveragesCrossThreshold { get; set; }
 
-        [Parameter("MA Cross Rule", DefaultValue = 1)]
-        public int MaCrossRule { get; set; }
+        [Parameter("MA Cross Rule", DefaultValue = MaCrossRule.CloseOnMediumMaCross)]
+        public MaCrossRule MaCrossRule { get; set; }
 
         [Parameter("Record", DefaultValue = false)]
         public bool RecordSession { get; set; }
@@ -169,9 +181,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
             _fastMA = Indicators.MovingAverage(SourceSeries, FastPeriodParameter, MovingAverageType.Exponential);
             _mediumMA = Indicators.MovingAverage(SourceSeries, MediumPeriodParameter, MovingAverageType.Exponential);
             _slowMA = Indicators.MovingAverage(SourceSeries, SlowPeriodParameter, MovingAverageType.Exponential);
-            var h4series = MarketData.GetSeries(TimeFrame.Hour4);
+            var h4series = MarketData.GetSeries(Symbol.Name, TimeFrame.Hour4);
+
             _h4Ma = Indicators.ExponentialMovingAverage(h4series.Close, H4MaPeriodParameter);
-            _rsi = Indicators.RelativeStrengthIndex(SourceSeries, 14);
             _h4Rsi = Indicators.RelativeStrengthIndex(h4series.Close, 14);
 
             Print("Take Longs: {0}", TakeLongsParameter);
@@ -226,12 +238,12 @@ namespace cAlgo.Library.Robots.WaveCatcher
         protected override void ValidateParameters(
             bool takeLongsParameter, 
             bool takeShortsParameter, 
-            int initialStopLossRule, 
+            InitialStopLossRule initialStopLossRule, 
             int initialStopLossInPips, 
-            int trailingStopLossRule, 
+            TrailingStopLossRule trailingStopLossRule, 
             int trailingStopLossInPips, 
-            int lotSizingRule, 
-            int takeProfitRule,
+            LotSizingRule lotSizingRule, 
+            TakeProfitRule takeProfitRule,
             int takeProfitInPips, 
             int minutesToWaitAfterPositionClosed, 
             bool moveToBreakEven, 
@@ -283,10 +295,10 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 throw new ArgumentException("Invalid MA Cross rule");
             }
 
-            var slRule = (InitialStopLossRule)initialStopLossRule;
-            var rule = (TrailingStopLossRule)trailingStopLossRule;
+            var slRule = initialStopLossRule;
+            var rule = trailingStopLossRule;
 
-            if (_maCrossRule == WaveCatcher.MaCrossRule.None && slRule == WaveCatcher.InitialStopLossRule.None && rule == WaveCatcher.TrailingStopLossRule.None)
+            if (_maCrossRule == MaCrossRule.None && slRule == InitialStopLossRule.None && rule == TrailingStopLossRule.None)
             {
                 throw new ArgumentException("The combination of parameters means that a position may incur a massive loss");
             }
@@ -323,7 +335,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             var volumeInUnits = 100000;
 
-            var priorBarRange = MarketSeries.High.Last(1) - MarketSeries.Low.Last(1);
+            var priorBarRange = Bars.HighPrices.Last(1) - Bars.LowPrices.Last(1);
             priorBarRange /= 4;
             var limitPrice = _fastMA.Result.LastValue + priorBarRange;
             var label = string.Format("BUY {0}", Symbol);
@@ -331,7 +343,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             var expiry = Server.Time.AddHours(6);
 
             Print("Placing limit order at {0} with stop {1}", limitPrice, stopLossPips);
-            _currentTradeResult = PlaceLimitOrder(TradeType.Buy, Symbol, volumeInUnits, limitPrice, label, stopLossPips, CalculateFibTakeProfit(), expiry);
+            _currentTradeResult = PlaceLimitOrder(TradeType.Buy, Symbol.Name, volumeInUnits, limitPrice, label, stopLossPips, CalculateFibTakeProfit(), expiry);
         }
 
         protected override void EnterShortPosition()
@@ -359,7 +371,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             }
 
             var volumeInUnits = 100000;
-            var priorBarRange = MarketSeries.High.Last(1) - MarketSeries.Low.Last(1);
+            var priorBarRange = Bars.HighPrices.Last(1) - Bars.LowPrices.Last(1);
             priorBarRange /= 4;
             var limitPrice = _fastMA.Result.LastValue - priorBarRange;
             var label = string.Format("SELL {0}", Symbol);
@@ -367,15 +379,25 @@ namespace cAlgo.Library.Robots.WaveCatcher
             var expiry = Server.Time.AddHours(6);
 
             Print("Placing limit order at {0} with stop {1}", limitPrice, stopLossPips);
-            _currentTradeResult = PlaceLimitOrder(TradeType.Sell, Symbol, volumeInUnits, limitPrice, label, stopLossPips, CalculateFibTakeProfit(), expiry);
+            _currentTradeResult = PlaceLimitOrder(TradeType.Sell, Symbol.Name, volumeInUnits, limitPrice, label, stopLossPips, CalculateFibTakeProfit(), expiry);
         }
 
         protected override double? CalculateInitialStopLossInPipsForLongPosition()
         {
-            if (_initialStopLossRule == WaveCatcher.InitialStopLossRule.Custom)
+            if (_initialStopLossRule != InitialStopLossRule.Custom)
             {
-                var stop = (Symbol.Ask - _mediumMA.Result.LastValue) / Symbol.PipSize;
-                return Math.Round(stop, 1);
+                return base.CalculateInitialStopLossInPipsForLongPosition();
+            }
+
+            switch (CustomInitialStopLossRule)
+            {
+                case CustomInitialStopLossRule.MediumMa:
+                    var stop = (Symbol.Ask - _mediumMA.Result.LastValue) / Symbol.PipSize;
+                    return Math.Round(stop, 1);
+
+                case CustomInitialStopLossRule.SlowMa:
+                    stop = (Symbol.Ask - _slowMA.Result.LastValue) / Symbol.PipSize;
+                    return Math.Round(stop, 1);
             }
 
             return base.CalculateInitialStopLossInPipsForLongPosition();
@@ -383,10 +405,20 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         protected override double? CalculateInitialStopLossInPipsForShortPosition()
         {
-            if (_initialStopLossRule == WaveCatcher.InitialStopLossRule.Custom)
+            if (_initialStopLossRule != InitialStopLossRule.Custom)
             {
-                var stop = (_mediumMA.Result.LastValue - Symbol.Bid) / Symbol.PipSize;
-                return Math.Round(stop, 1);
+                return base.CalculateInitialStopLossInPipsForShortPosition();
+            }
+
+            switch (CustomInitialStopLossRule)
+            {
+                case CustomInitialStopLossRule.MediumMa:
+                    var stop = (_mediumMA.Result.LastValue - Symbol.Bid) / Symbol.PipSize;
+                    return Math.Round(stop, 1);
+
+                case CustomInitialStopLossRule.SlowMa:
+                    stop = (_slowMA.Result.LastValue - Symbol.Bid) / Symbol.PipSize;
+                    return Math.Round(stop, 1);
             }
 
             return base.CalculateInitialStopLossInPipsForShortPosition();
@@ -398,11 +430,11 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
 
             // Find highest high from here back
-            //var highest = MarketSeries.High.Maximum(20);
+            //var highest = Bars.HighPrices.Maximum(20);
            
             //const double StandardFib = 1.382;
 
-            //var lowestLow = Common.LowestLow(MarketSeries.Low, 10, 6);
+            //var lowestLow = Common.LowestLow(Bars.LowPrices, 10, 6);
             //var level = Math.Round((highest - lowestLow) * StandardFib / Symbol.PipSize, 1);
 
             //Print("Fib TP calculation = {0} based on low of {1} and high of {2}",
@@ -430,7 +462,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 using (var command = new SqlCommand(sql, connection))
                 {
                     command.Parameters.AddWithValue("@CreatedDate", DateTime.Now);
-                    command.Parameters.AddWithValue("@Symbol", Symbol.Code);
+                    command.Parameters.AddWithValue("@Symbol", Symbol.Name);
                     command.Parameters.AddWithValue("@Timeframe", TimeFrame.ToString());
                     command.Parameters.AddWithValue("@TakeLongs", TakeLongsParameter);
                     command.Parameters.AddWithValue("@TakeShorts", TakeShortsParameter);
@@ -481,30 +513,30 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             Print("Bullish cross identified at index {0}", lastCross);
 
-            if (MarketSeries.Close.LastValue <= _fastMA.Result.LastValue)
+            if (Bars.ClosePrices.Last(1) <= _fastMA.Result.LastValue)
             {
                 //Print("Setup rejected as we closed lower than the fast MA");
                 return false;
             }
 
-            if (CloseVsPriorCloseFilter && MarketSeries.Close.Last(1) <= MarketSeries.Close.Last(2))
+            if (CloseVsPriorCloseFilter && Bars.ClosePrices.Last(1) <= Bars.ClosePrices.Last(2))
             {
                 //Print("Setup rejected as we closed lower than the prior close ({0} vs {1})",
-                //    MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
+                //    Bars.ClosePrices.Last(1), Bars.ClosePrices.Last(2));
                 return false;
             }
 
-            if (CloseVsOpenFilter && MarketSeries.Close.Last(1) <= MarketSeries.Open.Last(1))
+            if (CloseVsOpenFilter && Bars.ClosePrices.Last(1) <= Bars.OpenPrices.Last(1))
             {
                 //Print("Setup rejected as we closed lower than the open ({0} vs {1})",
-                //    MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
+                //    Bars.ClosePrices.Last(1), Bars.OpenPrices.Last(1));
                 return false;
             }
 
-            if (HighLowVsPriorHighLowFilter && MarketSeries.High.Last(1) <= MarketSeries.High.Last(2))
+            if (HighLowVsPriorHighLowFilter && Bars.HighPrices.Last(1) <= Bars.HighPrices.Last(2))
             {
                 //Print("Setup rejected as the high wasn't higher than the prior high ({0} vs {1})",
-                //    MarketSeries.High.Last(1), MarketSeries.High.Last(2));
+                //    Bars.HighPrices.Last(1), Bars.HighPrices.Last(2));
                 return false;
             }
 
@@ -532,13 +564,13 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (NewHighLowFilter)
             {
                 // Another filter - have we hit a new high?
-                const int HighestHighPeriod = 70;
+                const int highestHighPeriod = 70;
 
-                var high = MarketSeries.High.Maximum(HighestHighPeriod);
-                var priorHigh = MarketSeries.High.Last(1);
-                if (priorHigh != high)
+                var high = Bars.HighPrices.Maximum(highestHighPeriod);
+                var priorHigh = Bars.HighPrices.Last(1);
+                if (Math.Abs(priorHigh - high) > Symbol.PipSize)
                 {
-                    Print("Setup rejected as the prior high {0} has not gone higher than {1}", priorHigh, high);
+                    Print("Setup rejected as the prior high {0} has not gone higher than {1} (pip size = {2})", priorHigh, high, Symbol.PipSize);
                     return false;
                 }
 
@@ -556,9 +588,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             while (index <= 40)
             {
-                if (MarketSeries.Low.Last(index) < low)
+                if (Bars.LowPrices.Last(index) < low)
                 {
-                    low = MarketSeries.Low.Last(index);
+                    low = Bars.LowPrices.Last(index);
                     lowIndex = index;
                 }
 
@@ -579,9 +611,9 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             while (index <= 40)
             {
-                if (MarketSeries.High.Last(index) > high)
+                if (Bars.HighPrices.Last(index) > high)
                 {
-                    high = MarketSeries.High.Last(index);
+                    high = Bars.HighPrices.Last(index);
                     highIndex = index;
                 }
 
@@ -669,10 +701,10 @@ namespace cAlgo.Library.Robots.WaveCatcher
                             ? (object)position.TakeProfit.Value
                             : DBNull.Value);
 
-                    command.Parameters.AddWithValue("@Open", MarketSeries.Open.Last(1));
-                    command.Parameters.AddWithValue("@High", MarketSeries.High.Last(1));
-                    command.Parameters.AddWithValue("@Low", MarketSeries.Low.Last(1));
-                    command.Parameters.AddWithValue("@Close", MarketSeries.Close.Last(1));
+                    command.Parameters.AddWithValue("@Open", Bars.OpenPrices.Last(1));
+                    command.Parameters.AddWithValue("@High", Bars.HighPrices.Last(1));
+                    command.Parameters.AddWithValue("@Low", Bars.LowPrices.Last(1));
+                    command.Parameters.AddWithValue("@Close", Bars.ClosePrices.Last(1));
                     command.Parameters.AddWithValue("@MA21", _fastMA.Result.LastValue);
                     command.Parameters.AddWithValue("@MA55", _mediumMA.Result.LastValue);
                     command.Parameters.AddWithValue("@MA89", _slowMA.Result.LastValue);
@@ -736,7 +768,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             return -1;
         }
 
-        private int GetLastBearishBowtie()
+        private int GetLastBearishBowTie()
         {
             if (!AreMovingAveragesStackedBearishly())
             {
@@ -774,7 +806,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 return false;
             }
 
-            var lastCross = GetLastBearishBowtie();
+            var lastCross = GetLastBearishBowTie();
             if (lastCross == -1 || lastCross > MovingAveragesCrossThreshold)
             {
                 // Either there was no cross or it was too long ago and we have missed the move
@@ -783,30 +815,30 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             Print("Bearish cross identified at index {0}", lastCross);
 
-            if (MarketSeries.Close.LastValue >= _fastMA.Result.LastValue)
+            if (Bars.ClosePrices.Last(1) >= _fastMA.Result.LastValue)
             {
                 //Print("Setup rejected as we closed higher than the fast MA");
                 return false;
             }
 
-            if (CloseVsPriorCloseFilter && MarketSeries.Close.Last(1) >= MarketSeries.Close.Last(2))
+            if (CloseVsPriorCloseFilter && Bars.ClosePrices.Last(1) >= Bars.ClosePrices.Last(2))
             {
                 //Print("Setup rejected as we closed higher than the prior close ({0} vs {1})",
-                //    MarketSeries.Close.Last(1), MarketSeries.Close.Last(2));
+                //    Bars.ClosePrices.Last(1), Bars.ClosePrices.Last(2));
                 return false;
             }
 
-            if (CloseVsOpenFilter && MarketSeries.Close.Last(1) >= MarketSeries.Open.Last(1))
+            if (CloseVsOpenFilter && Bars.ClosePrices.Last(1) >= Bars.OpenPrices.Last(1))
             {
                 //Print("Setup rejected as we closed higher than the open ({0} vs {1})",
-                //    MarketSeries.Close.Last(1), MarketSeries.Open.Last(1));
+                //    Bars.ClosePrices.Last(1), Bars.OpenPrices.Last(1));
                 return false;
             }
 
-            if (HighLowVsPriorHighLowFilter && MarketSeries.Low.Last(1) >= MarketSeries.Low.Last(2))
+            if (HighLowVsPriorHighLowFilter && Bars.LowPrices.Last(1) >= Bars.LowPrices.Last(2))
             {
                 //Print("Setup rejected as the low wasn't lower than the prior low ({0} vs {1})",
-                //    MarketSeries.Low.Last(1), MarketSeries.Low.Last(2));
+                //    Bars.LowPrices.Last(1), Bars.LowPrices.Last(2));
                 return false;
             }
 
@@ -834,11 +866,11 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (NewHighLowFilter)
             {
                 // Another filter - have we hit a new low?
-                const int LowestLowPeriod = 70;
+                const int lowestLowPeriod = 70;
 
-                var low = MarketSeries.Low.Minimum(LowestLowPeriod);
-                var priorLow = MarketSeries.Low.Last(1);
-                if (priorLow != low)
+                var low = Bars.LowPrices.Minimum(lowestLowPeriod);
+                var priorLow = Bars.LowPrices.Last(1);
+                if (Math.Abs(priorLow - low) > Symbol.PipSize)
                 {
                     Print("Setup rejected as the prior low {0} has not gone lower than {1}", priorLow, low);
                     return false;
@@ -866,21 +898,26 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             switch (_maCrossRule)
             {
-                case WaveCatcher.MaCrossRule.CloseOnFastMaCross:
-                    value = _fastMA.Result.LastValue;
-                    maType = "fast";
+                case MaCrossRule.CloseOnSlowMaCross:
+                    value = _slowMA.Result.LastValue;
+                    maType = "slow";
                     break;
 
-                case WaveCatcher.MaCrossRule.CloseOnMediumMaCross:
+                case MaCrossRule.CloseOnMediumMaCross:
                     value = _mediumMA.Result.LastValue;
                     maType = "medium";
+                    break;
+
+                case MaCrossRule.CloseOnFastMaCross:
+                    value = _fastMA.Result.LastValue;
+                    maType = "fast";
                     break;
 
                 default:
                     return;
             }
 
-            if (MarketSeries.Close.Last(1) < value - 2 * Symbol.PipSize)
+            if (Symbol.Ask < value - 2 * Symbol.PipSize)
             {
                 Print("Closing position now that we closed below the {0} MA", maType);
                 _currentPosition.Close();
@@ -903,21 +940,26 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
             switch (_maCrossRule)
             {
-                case WaveCatcher.MaCrossRule.CloseOnFastMaCross:
-                    value = _fastMA.Result.LastValue;
-                    maType = "fast";
+                case MaCrossRule.CloseOnSlowMaCross:
+                    value = _slowMA.Result.LastValue;
+                    maType = "slow";
                     break;
 
-                case WaveCatcher.MaCrossRule.CloseOnMediumMaCross:
+                case MaCrossRule.CloseOnMediumMaCross:
                     value = _mediumMA.Result.LastValue;
                     maType = "medium";
+                    break;
+
+                case MaCrossRule.CloseOnFastMaCross:
+                    value = _fastMA.Result.LastValue;
+                    maType = "fast";
                     break;
 
                 default:
                     return;
             }
 
-            if (MarketSeries.Close.Last(1) > value + 2 * Symbol.PipSize)
+            if (Symbol.Bid > value + 2 * Symbol.PipSize)
             {
                 Print("Closing position now that we closed above the {0} MA", maType);
                 _currentPosition.Close();
@@ -965,13 +1007,13 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         protected void Init(
             bool takeLongsParameter, 
-            bool takeShortsParameter, 
-            int initialStopLossRule,
+            bool takeShortsParameter,
+            InitialStopLossRule initialStopLossRule,
             int initialStopLossInPips,
-            int trailingStopLossRule,
+            TrailingStopLossRule trailingStopLossRule,
             int trailingStopLossInPips,
-            int lotSizingRule,         
-            int takeProfitRule,
+            LotSizingRule lotSizingRule,         
+            TakeProfitRule takeProfitRule,
             int takeProfitInPips = 0,            
             int minutesToWaitAfterPositionClosed = 0,
             bool moveToBreakEven = false,
@@ -1008,13 +1050,13 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         protected virtual void ValidateParameters(
             bool takeLongsParameter, 
-            bool takeShortsParameter, 
-            int initialStopLossRule, 
-            int initialStopLossInPips, 
-            int trailingStopLossRule,
+            bool takeShortsParameter,
+            InitialStopLossRule initialStopLossRule, 
+            int initialStopLossInPips,
+            TrailingStopLossRule trailingStopLossRule,
             int trailingStopLossInPips,
-            int lotSizingRule,
-            int takeProfitRule,
+            LotSizingRule lotSizingRule,
+            TakeProfitRule takeProfitRule,
             int takeProfitInPips,
             int minutesToWaitAfterPositionClosed,
             bool moveToBreakEven,
@@ -1079,7 +1121,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             var lotSizing = (LotSizingRule)lotSizingRule;
             if (lotSizing == LotSizingRule.Dynamic && (dynamicRiskPercentage <= 0 || dynamicRiskPercentage >= 10))
             {
-                throw new ArgumentOutOfRangeException("Dynamic Risk value is out of range - it is a percentage (e.g. 2)");
+                throw new ArgumentOutOfRangeException($"Dynamic Risk Percentage", "Dynamic Risk value is out of range - it is a percentage (e.g. 2)");
             }
         }
 
@@ -1167,7 +1209,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (Symbol.Ask > RecentHigh + buffer && _currentPosition.Pips > 0)
             {
                 madeNewHigh = true;
-                RecentHigh = Math.Max(Symbol.Ask, MarketSeries.High.Maximum(BarsSinceEntry + 1));
+                RecentHigh = Math.Max(Symbol.Ask, Bars.HighPrices.Maximum(BarsSinceEntry + 1));
                 Print("Recent high set to {0}", RecentHigh);
             }
 
@@ -1176,7 +1218,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 return;
             }
 
-            var stop = CalulateTrailingStopForLongPosition();
+            var stop = CalculateTrailingStopForLongPosition();
             AdjustStopLossForLongPosition(stop);
         }
 
@@ -1188,7 +1230,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             ModifyPosition(_currentPosition, newStop, _currentPosition.TakeProfit);
         }
 
-        private double? CalulateTrailingStopForLongPosition()
+        private double? CalculateTrailingStopForLongPosition()
         {
             double? stop = null;
             switch (_trailingStopLossRule)
@@ -1198,11 +1240,11 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     break;
 
                 case TrailingStopLossRule.CurrentBarNPips:
-                    stop = MarketSeries.Low.Last(1) - _trailingStopLossInPips * Symbol.PipSize;
+                    stop = Bars.LowPrices.Last(1) - _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
                 case TrailingStopLossRule.PreviousBarNPips:
-                    var low = Math.Min(MarketSeries.Low.Last(1), MarketSeries.Low.Last(2));
+                    var low = Math.Min(Bars.LowPrices.Last(1), Bars.LowPrices.Last(2));
                     stop = low - _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
@@ -1256,7 +1298,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             if (Symbol.Bid < RecentLow - buffer && _currentPosition.Pips > 0)
             {
                 madeNewLow = true;
-                RecentLow = Math.Min(Symbol.Bid, MarketSeries.Low.Minimum(BarsSinceEntry + 1));
+                RecentLow = Math.Min(Symbol.Bid, Bars.LowPrices.Minimum(BarsSinceEntry + 1));
                 Print("Recent low set to {0}", RecentLow);
             }
 
@@ -1265,7 +1307,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 return;
             }
 
-            var stop = CalulateTrailingStopForShortPosition();
+            var stop = CalculateTrailingStopForShortPosition();
             AdjustStopLossForShortPosition(stop);
         }
 
@@ -1277,7 +1319,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             ModifyPosition(_currentPosition, newStop, _currentPosition.TakeProfit);
         }
 
-        private double? CalulateTrailingStopForShortPosition()
+        private double? CalculateTrailingStopForShortPosition()
         {
             double? stop = null;
             switch (_trailingStopLossRule)
@@ -1287,11 +1329,11 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     break;
 
                 case TrailingStopLossRule.CurrentBarNPips:
-                    stop = MarketSeries.High.Last(1) + _trailingStopLossInPips * Symbol.PipSize;
+                    stop = Bars.HighPrices.Last(1) + _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
                 case TrailingStopLossRule.PreviousBarNPips:
-                    var high = Math.Max(MarketSeries.High.Last(1), MarketSeries.High.Last(2));
+                    var high = Math.Max(Bars.HighPrices.Last(1), Bars.HighPrices.Last(2));
                     stop = high + _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
@@ -1309,7 +1351,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         private double? CalculateSmartTrailingStopForLong()
         {
-            var minStop = 20;
+            const int minStop = 20;
             double stop;
 
             if (_currentPosition.Pips < minStop)
@@ -1340,7 +1382,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
 
         private double? CalculateSmartTrailingStopForShort()
         {
-            var minStop = 20;
+            const int minStop = 20;
             double stop;
 
             if (_currentPosition.Pips < minStop)
@@ -1378,14 +1420,6 @@ namespace cAlgo.Library.Robots.WaveCatcher
                 return true;
             }
 
-            // Alternately, avoid trading on a Friday evening
-            var openTime = MarketSeries.OpenTime.LastValue;
-            if (openTime.DayOfWeek == DayOfWeek.Friday && openTime.Hour >= 16)
-            {
-                Print("Avoiding trading on a Friday afternoon");
-                return true;
-            }
-
             return false;
         }
 
@@ -1405,7 +1439,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             }
 
             var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
-            ExecuteMarketOrder(TradeType.Buy, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
+            ExecuteMarketOrder(TradeType.Buy, Symbol.Name, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
         }
 
         private double CalculatePositionQuantityInLots(double stopLossPips)
@@ -1439,14 +1473,14 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     break;
 
                 case InitialStopLossRule.CurrentBarNPips:
-                    stopLossPips = _initialStopLossInPips + (Symbol.Ask - MarketSeries.Low.Last(1)) / Symbol.PipSize;
+                    stopLossPips = _initialStopLossInPips + (Symbol.Ask - Bars.LowPrices.Last(1)) / Symbol.PipSize;
                     break;
 
                 case InitialStopLossRule.PreviousBarNPips:
-                    var low = MarketSeries.Low.Last(1);
-                    if (MarketSeries.Low.Last(2) < low)
+                    var low = Bars.LowPrices.Last(1);
+                    if (Bars.LowPrices.Last(2) < low)
                     {
-                        low = MarketSeries.Low.Last(2);
+                        low = Bars.LowPrices.Last(2);
                     }
 
                     stopLossPips = _initialStopLossInPips + (Symbol.Ask - low) / Symbol.PipSize;
@@ -1472,14 +1506,10 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     return _takeProfitInPips;
 
                 case TakeProfitRule.DoubleRisk:
-                    return stopLossPips.HasValue 
-                        ? stopLossPips.Value * 2 
-                        : (double?)null;
+                    return stopLossPips * 2;
 
                 case TakeProfitRule.TripleRisk:
-                    return stopLossPips.HasValue
-                        ? stopLossPips.Value * 3
-                        : (double?)null;
+                    return stopLossPips * 3;
 
                 default:
                     return null;
@@ -1502,7 +1532,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
             }
 
             var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
-            ExecuteMarketOrder(TradeType.Sell, Symbol, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
+            ExecuteMarketOrder(TradeType.Sell, Symbol.Name, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
         }
 
         protected virtual double? CalculateInitialStopLossInPipsForShortPosition()
@@ -1519,14 +1549,14 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     break;
 
                 case InitialStopLossRule.CurrentBarNPips:
-                    stopLossPips = _initialStopLossInPips + (MarketSeries.High.Last(1) - Symbol.Bid) / Symbol.PipSize;
+                    stopLossPips = _initialStopLossInPips + (Bars.HighPrices.Last(1) - Symbol.Bid) / Symbol.PipSize;
                     break;
 
                 case InitialStopLossRule.PreviousBarNPips:
-                    var high = MarketSeries.High.Last(1);
-                    if (MarketSeries.High.Last(2) > high)
+                    var high = Bars.HighPrices.Last(1);
+                    if (Bars.HighPrices.Last(2) > high)
                     {
-                        high = MarketSeries.High.Last(2);
+                        high = Bars.HighPrices.Last(2);
                     }
 
                     stopLossPips = _initialStopLossInPips + (high - Symbol.Bid) / Symbol.PipSize;
@@ -1625,7 +1655,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     if (_currentPosition.StopLoss.HasValue)
                     {
                         diff = _currentPosition.EntryPrice - _currentPosition.StopLoss.Value;
-                        return _currentPosition.EntryPrice + (diff * multiplier);
+                        return _currentPosition.EntryPrice + diff * multiplier;
                     }
 
                     break;
@@ -1634,7 +1664,7 @@ namespace cAlgo.Library.Robots.WaveCatcher
                     if (_currentPosition.StopLoss.HasValue)
                     {
                         diff = _currentPosition.StopLoss.Value - _currentPosition.EntryPrice;
-                        return _currentPosition.EntryPrice - (diff * multiplier);
+                        return _currentPosition.EntryPrice - diff * multiplier;
                     }
 
                     break;
