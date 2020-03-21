@@ -140,13 +140,15 @@ namespace cAlgo.Library.Indicators
         private bool AreMovingAveragesStackedBullishlyAtIndex(int index)
         {
             return index >= SlowPeriodParameter && _fastMA.Result[index] > _mediumMA.Result[index] &&
-                _mediumMA.Result[index] > _slowMA.Result[index];
+                _mediumMA.Result[index] > _slowMA.Result[index] &&
+                _fastMA.Result[index] > _slowMA.Result[index];
         }
 
         private bool AreMovingAveragesStackedBearishlyAtIndex(int index)
         {
             return index >= SlowPeriodParameter && _fastMA.Result[index] < _mediumMA.Result[index] &&
-                _mediumMA.Result[index] < _slowMA.Result[index];
+                _mediumMA.Result[index] < _slowMA.Result[index] &&
+                _fastMA.Result[index] < _slowMA.Result[index];
         }
 
 
