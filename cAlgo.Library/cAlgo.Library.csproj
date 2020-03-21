@@ -45,6 +45,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Indicators\OverBoughtSold.cs" />
     <Compile Include="Indicators\MACrossOver.cs" />
     <Compile Include="Indicators\KnockOutBar.cs" />
     <Compile Include="Indicators\PinBar.cs" />
@@ -68,6 +69,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Indicators\Copy-OverBoughtSold.bat" />
     <None Include="Indicators\copy-MACrossOver.bat" />
     <None Include="Robots\Analysis Queries\Database Analysis.xlsx" />
     <None Include="Robots\copy-HighProbability.bat" />
