@@ -55,6 +55,12 @@ namespace cAlgo.Library.Indicators
         [Parameter("Fast MA Period", DefaultValue = 21)]
         public int FastPeriodParameter { get; set; }
 
+        [Parameter("Send email alerts", DefaultValue = true)]
+        public bool SendEmailAlerts { get; set; }
+
+        [Parameter("Play alert sound", DefaultValue = true)]
+        public bool PlayAlertSound { get; set; }
+
         [Output("Up Signal", LineColor = "Lime")]
         public IndicatorDataSeries UpSignal { get; set; }
 
@@ -84,10 +90,12 @@ namespace cAlgo.Library.Indicators
             if (IsBullishBar(index))
             {
                 DrawBullishPoint(index);
+                HandleAlerts(true);
             }
             else if (IsBearishBar(index))
             {
                 DrawBearishPoint(index);
+                HandleAlerts(false);
             }            
         }
 
@@ -164,6 +172,28 @@ namespace cAlgo.Library.Indicators
             DownSignal[index] = 1.0;
             var y = MarketSeries.High[index] + _buffer;
             Chart.DrawIcon("bearsignal" + index, ChartIconType.DownArrow, index, y, Color.White);
+        }
+
+        private void HandleAlerts(bool isBullish)
+        {
+            // Make sure the email will be sent only at RealTime
+            if (!IsLastBar)
+                return;
+
+            if (SendEmailAlerts)
+            {
+                var subject = string.Format("{0} MA Cross formed on {1} {2}", 
+                    isBullish ? "Bullish" : "Bearish",
+                    Symbol.Name,
+                    MarketSeries.TimeFrame);
+
+                Notifications.SendEmail("MACrossOver@indicators.com", "rechambers11@gmail.com", subject, string.Empty);
+            }
+
+            if (PlayAlertSound)
+            {
+                Notifications.PlaySound(@"c:\windows\media\ring03.wav");
+            }
         }
     }
 }
