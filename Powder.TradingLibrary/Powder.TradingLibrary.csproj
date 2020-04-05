@@ -53,5 +53,6 @@
     <Compile Include="TakeProfitRuleValues.cs" />
     <Compile Include="TrailingStopLossRuleValues.cs" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

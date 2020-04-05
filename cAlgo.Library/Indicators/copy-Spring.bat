@@ -1,0 +1,1 @@
+copy "Spring.cs" "C:\Users\rob\Documents\cAlgo\Sources\Indicators\Spring\Spring\Spring.cs"
