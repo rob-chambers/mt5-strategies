@@ -1,7 +1,9 @@
 ﻿using cAlgo.API;
 using cAlgo.API.Indicators;
+using cAlgo.API.Internals;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 /*
  * Rules for new indicator:
@@ -11,6 +13,7 @@ using System.Collections.Generic;
    Current bar's close must be lower than prior close
    Current bar's close must be lower than its open
    At point of both swing highs, medium MA should be above long MA
+   At current bar, short term / fast MA must be higher than long term / slow MA
  */
 
 namespace cAlgo.Library.Indicators
@@ -27,6 +30,9 @@ namespace cAlgo.Library.Indicators
         [Parameter("Medium MA Period", DefaultValue = 55)]
         public int MediumPeriodParameter { get; set; }
 
+        [Parameter("Fast MA Period", DefaultValue = 21)]
+        public int FastPeriodParameter { get; set; }
+
         [Parameter("Send email alerts", DefaultValue = false)]
         public bool SendEmailAlerts { get; set; }
 
@@ -39,15 +45,19 @@ namespace cAlgo.Library.Indicators
         [Parameter("Period", DefaultValue = 13, MinValue = 3)]
         public int Period { get; set; }
 
+        private MovingAverage _fastMA;
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
+        private SwingHighLow _swingHighLowIndicator;
         private double _buffer;
 
         protected override void Initialize()
         {
             // Initialize and create nested indicators
+            _fastMA = Indicators.MovingAverage(Source, FastPeriodParameter, MovingAverageType.Exponential);
             _mediumMA = Indicators.MovingAverage(Source, MediumPeriodParameter, MovingAverageType.Exponential);
             _slowMA = Indicators.MovingAverage(Source, SlowPeriodParameter, MovingAverageType.Exponential);
+            _swingHighLowIndicator = Indicators.GetIndicator<SwingHighLow>(Bars.HighPrices, Bars.LowPrices, 3);
             _buffer = Symbol.PipSize * 5;
         }
 
@@ -69,23 +79,69 @@ namespace cAlgo.Library.Indicators
             if (Bars.ClosePrices[index] >= Bars.ClosePrices[index - 1]) return false;
             if (Bars.LowPrices[index] >= Bars.LowPrices[index - 1]) return false;
 
+            if (index >= SlowPeriodParameter &&
+                _fastMA.Result[index] < _slowMA.Result[index])
+            {
+                return false;
+            }
+
             var min = Math.Max(index - 50, 0);
             var i = index;
             var highs = new Stack<int>();
 
-            do
-            {                
-                if (IsLocalExtremum(i, true))
+            var recentSwingHigh = _swingHighLowIndicator.SwingHighPlot[i];
+            if (double.IsNaN(recentSwingHigh))
+            {
+                return false;
+            }
+
+            highs.Push(i);
+            double priorSwingHigh;
+            i--;
+            while (i > index - 100)
+            {
+                priorSwingHigh = _swingHighLowIndicator.SwingHighPlot[i];
+                if (double.IsNaN(priorSwingHigh) || (recentSwingHigh - priorSwingHigh) > Symbol.PipSize)
                 {
-                    highs.Push(i);
-                    if (highs.Count >= 2)
-                    {
-                        break;
-                    }
+                    return false;
                 }
 
-                i -= Period;
-            } while (i > min);
+                // Are they the same?
+                if (Math.Abs(priorSwingHigh - recentSwingHigh) <= Symbol.PipSize)
+                {
+                    // Give more time to find prior high
+                    i--;
+                }
+                else
+                {
+                    // We must have found a lower high
+                    highs.Push(i);
+                    break;
+                }
+            }
+
+            //Chart.DrawText("I" + index,
+            //    recentSwingHigh.ToString(),
+            //    index,
+            //    Bars.ClosePrices[index] - _buffer,
+            //    Color.Wheat);
+
+
+            //do
+            //{
+            //    _swingHighLowIndicator.SwingHighPlot.Last(i);
+
+            //    if (IsLocalExtremum(i, true))
+            //    {
+            //        highs.Push(i);
+            //        if (highs.Count >= 2)
+            //        {
+            //            break;
+            //        }
+            //    }
+
+            //    i -= Period;
+            //} while (i > min);
 
             if (highs.Count != 2)
             {
@@ -109,27 +165,71 @@ namespace cAlgo.Library.Indicators
             var priorHighPrice = Source[priorHighIndex];
             var recentHighPrice = Source[recentHighIndex];
 
-            var info = string.Format("I:{0},RH:{1},PH:{2}", index, recentHighIndex, priorHighIndex);
+            //var info = string.Format("I:{0},RH:{1},PH:{2}", index, recentHighIndex, priorHighIndex);
 
-            Chart.DrawText("I" + index,
-                info,
-                index,
-                Bars.ClosePrices[index] - _buffer,
-                Color.Wheat);
+            //Chart.DrawText("I" + index,
+            //    info,
+            //    index,
+            //    Bars.ClosePrices[index] - _buffer,
+            //    Color.Wheat);
 
-            Chart.DrawText("PH" + priorHighIndex, 
-                priorHighPrice.ToString("G"), 
-                priorHighIndex, 
-                priorHighPrice - _buffer, 
-                Color.Pink);
+            //Chart.DrawText("PH" + priorHighIndex, 
+            //    priorHighPrice.ToString("G"), 
+            //    priorHighIndex, 
+            //    priorHighPrice - _buffer, 
+            //    Color.Pink);
 
-            Chart.DrawText("RH" + recentHighIndex,
-                recentHighPrice.ToString("G"),
-                recentHighIndex,
-                recentHighPrice - _buffer,
-                Color.Aqua);
+            //Chart.DrawText("RH" + recentHighIndex,
+            //    recentHighPrice.ToString("G"),
+            //    recentHighIndex,
+            //    recentHighPrice - _buffer,
+            //    Color.Aqua);
+
+
+
+
+
+
+
+            i = index - 1;
+            var recentSwingLow = double.NaN;
+            double priorSwingLow = 0;
+
+            var currentLow = Bars.LowPrices[index];
+            for (i = index; i > index - 100; i--)
+            {
+                var low = _swingHighLowIndicator.SwingLowPlot[i];
+                if (double.IsNaN(low) || DoublesEqual(low, 0))
+                {
+                    continue;
+                }
+
+                if (double.IsNaN(recentSwingLow))
+                {
+                    recentSwingLow = low;
+                }
+                else if (DoublesEqual(recentSwingLow, low))
+                {
+                    continue;
+                }
+                else
+                {
+                    priorSwingLow = low;
+                    break;
+                }
+            }
+
+            if (!(currentLow < priorSwingLow && currentLow < recentSwingLow))
+            {
+                return false;
+            }
 
             return true;
+        }
+
+        private bool DoublesEqual(double value1, double value2)
+        {
+            return Math.Abs(value1 - value2) < Symbol.PipSize;
         }
 
         private bool IsLocalExtremum(int index, bool findMax)

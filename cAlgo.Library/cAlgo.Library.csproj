@@ -53,6 +53,7 @@
     <Compile Include="Indicators\KnockOutBar.cs" />
     <Compile Include="Indicators\PinBar.cs" />
     <Compile Include="Indicators\QualitativeQuantitativeE.cs" />
+    <Compile Include="Indicators\SwingHighLow.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Robots\VVBot.cs" />
     <Compile Include="Robots\HighProbabilityOscillator.cs" />
