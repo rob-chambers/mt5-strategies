@@ -45,6 +45,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Indicators\MacdPlatinum.cs" />
     <Compile Include="Indicators\QMPFilter.cs" />
     <Compile Include="Indicators\OverBoughtSold.cs" />
     <Compile Include="Indicators\MACrossOver.cs" />
@@ -71,6 +72,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Indicators\copy-MacdPlatinum.bat" />
     <None Include="Indicators\copy-QMPFilter.bat" />
     <None Include="Indicators\Copy-OverBoughtSold.bat" />
     <None Include="Indicators\copy-MACrossOver.bat" />
