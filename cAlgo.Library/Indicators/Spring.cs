@@ -3,7 +3,6 @@ using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 /*
  * Rules for new indicator:
@@ -14,6 +13,8 @@ using System.Linq;
    Current bar's close must be lower than its open
    At point of both swing highs, medium MA should be above long MA
    At current bar, short term / fast MA must be higher than long term / slow MA
+   Current bar must have a decent range - at least one ATR
+   We must be at a 20 period low
  */
 
 namespace cAlgo.Library.Indicators
@@ -49,6 +50,7 @@ namespace cAlgo.Library.Indicators
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
         private SwingHighLow _swingHighLowIndicator;
+        private AverageTrueRange _atr;
         private double _buffer;
 
         protected override void Initialize()
@@ -58,6 +60,7 @@ namespace cAlgo.Library.Indicators
             _mediumMA = Indicators.MovingAverage(Source, MediumPeriodParameter, MovingAverageType.Exponential);
             _slowMA = Indicators.MovingAverage(Source, SlowPeriodParameter, MovingAverageType.Exponential);
             _swingHighLowIndicator = Indicators.GetIndicator<SwingHighLow>(Bars.HighPrices, Bars.LowPrices, 3);
+            _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
             _buffer = Symbol.PipSize * 5;
         }
 
@@ -81,6 +84,12 @@ namespace cAlgo.Library.Indicators
 
             if (index >= SlowPeriodParameter &&
                 _fastMA.Result[index] < _slowMA.Result[index])
+            {
+                return false;
+            }
+
+            var range = Bars.HighPrices[index] - Bars.LowPrices[index];
+            if (range < _atr.Result[index])
             {
                 return false;
             }
