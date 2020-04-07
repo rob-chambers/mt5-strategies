@@ -70,6 +70,7 @@ namespace cAlgo.Library.Indicators
         private MovingAverage _fastMA;
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
+        private MovingAverage _higherTimeframeMA;
         private double _buffer;
 
         protected override void Initialize()
@@ -78,6 +79,10 @@ namespace cAlgo.Library.Indicators
             _fastMA = Indicators.MovingAverage(SourceSeries, FastPeriodParameter, MovingAverageType.Exponential);
             _mediumMA = Indicators.MovingAverage(SourceSeries, MediumPeriodParameter, MovingAverageType.Exponential);
             _slowMA = Indicators.MovingAverage(SourceSeries, SlowPeriodParameter, MovingAverageType.Exponential);
+
+            var higherSeries = MarketData.GetBars(TimeFrame.Hour);
+            _higherTimeframeMA = Indicators.MovingAverage(higherSeries.ClosePrices, FastPeriodParameter, MovingAverageType.Exponential);
+
             _buffer = Symbol.PipSize * 5;
         }
 
@@ -101,6 +106,11 @@ namespace cAlgo.Library.Indicators
 
         private bool IsBullishBar(int index)
         {
+            if (Bars.ClosePrices[index] < _higherTimeframeMA.Result[index])
+            {
+                return false;
+            }
+
             if (!AreMovingAveragesStackedBullishlyAtIndex(index))
             {
                 return false;
@@ -116,6 +126,11 @@ namespace cAlgo.Library.Indicators
 
         private bool IsBearishBar(int index)
         {
+            if (Bars.ClosePrices[index] > _higherTimeframeMA.Result[index])
+            {
+                return false;
+            }
+
             if (!AreMovingAveragesStackedBearishlyAtIndex(index))
             {
                 return false;
@@ -131,8 +146,8 @@ namespace cAlgo.Library.Indicators
 
         private bool HasCrossedAllMovingAverages(int index)
         {
-            var currentLow = MarketSeries.Low[index];
-            var currentHigh = MarketSeries.High[index];
+            var currentLow = Bars.LowPrices[index];
+            var currentHigh = Bars.HighPrices[index];
 
             if (!(currentHigh >= _slowMA.Result[index])) return false;
             if (!(currentHigh >= _mediumMA.Result[index])) return false;
@@ -163,14 +178,14 @@ namespace cAlgo.Library.Indicators
         private void DrawBullishPoint(int index)
         {
             UpSignal[index] = 1.0;
-            var y = MarketSeries.Low[index] - _buffer;            
+            var y = Bars.LowPrices[index] - _buffer;            
             Chart.DrawIcon("bullsignal" + index, ChartIconType.UpArrow, index, y, Color.Lime);
         }
 
         private void DrawBearishPoint(int index)
         {
             DownSignal[index] = 1.0;
-            var y = MarketSeries.High[index] + _buffer;
+            var y = Bars.HighPrices[index] + _buffer;
             Chart.DrawIcon("bearsignal" + index, ChartIconType.DownArrow, index, y, Color.White);
         }
 
@@ -185,7 +200,7 @@ namespace cAlgo.Library.Indicators
                 var subject = string.Format("{0} MA Cross formed on {1} {2}", 
                     isBullish ? "Bullish" : "Bearish",
                     Symbol.Name,
-                    MarketSeries.TimeFrame);
+                    Bars.TimeFrame);
 
                 Notifications.SendEmail("MACrossOver@indicators.com", "rechambers11@gmail.com", subject, string.Empty);
             }

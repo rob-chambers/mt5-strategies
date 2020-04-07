@@ -8,6 +8,13 @@ using Powder.TradingLibrary;
 
 namespace cAlgo.Library.Robots.MACrosser
 {
+    public enum Confidence
+    {
+        Low,
+        Medium,
+        High
+    }
+
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FullAccess)]
     public class MACrosserBot : BaseRobot
     {
@@ -17,10 +24,10 @@ namespace cAlgo.Library.Robots.MACrosser
         [Parameter("Take long trades?", DefaultValue = true)]
         public bool TakeLongsParameter { get; set; }
 
-        [Parameter("Take short trades?", DefaultValue = true)]
+        [Parameter("Take short trades?", DefaultValue = false)]
         public bool TakeShortsParameter { get; set; }
 
-        [Parameter("Initial SL Rule", DefaultValue = 2)]
+        [Parameter("Initial SL Rule", DefaultValue = 4)]
         public int InitialStopLossRule { get; set; }
 
         [Parameter("Initial SL (pips)", DefaultValue = 5)]
@@ -85,32 +92,32 @@ namespace cAlgo.Library.Robots.MACrosser
         [Parameter("Enter at Market", DefaultValue = true)]
         public bool EnterAtMarket { get; set; }
 
-        [Parameter("Apply closing vs prior close filter", DefaultValue = true)]
-        public bool CloseVsPriorCloseFilter { get; set; }
+        //[Parameter("Apply closing vs prior close filter", DefaultValue = true)]
+        //public bool CloseVsPriorCloseFilter { get; set; }
 
-        [Parameter("Apply close vs open filter", DefaultValue = true)]
-        public bool CloseVsOpenFilter { get; set; }
+        //[Parameter("Apply close vs open filter", DefaultValue = true)]
+        //public bool CloseVsOpenFilter { get; set; }
 
-        [Parameter("Apply high/low vs prior high/low filter", DefaultValue = true)]
-        public bool HighLowVsPriorHighLowFilter { get; set; }
+        //[Parameter("Apply high/low vs prior high/low filter", DefaultValue = true)]
+        //public bool HighLowVsPriorHighLowFilter { get; set; }
 
-        [Parameter("Apply MA Distance filter", DefaultValue = true)]
-        public bool MADistanceFilter { get; set; }
+        //[Parameter("Apply MA Distance filter", DefaultValue = true)]
+        //public bool MADistanceFilter { get; set; }
 
-        [Parameter("Apply MA Max Distance filter", DefaultValue = true)]
-        public bool MAMaxDistanceFilter { get; set; }
+        //[Parameter("Apply MA Max Distance filter", DefaultValue = true)]
+        //public bool MAMaxDistanceFilter { get; set; }
 
-        [Parameter("Apply Flat MAs filter", DefaultValue = true)]
-        public bool MAsFlatFilter { get; set; }
+        //[Parameter("Apply Flat MAs filter", DefaultValue = true)]
+        //public bool MAsFlatFilter { get; set; }
 
-        [Parameter("New high/low filter", DefaultValue = true)]
-        public bool NewHighLowFilter { get; set; }
+        //[Parameter("New high/low filter", DefaultValue = true)]
+        //public bool NewHighLowFilter { get; set; }
 
         protected override string Name
         {
             get
             {
-                return "WaveCatcher";
+                return "MACrosser";
             }
         }
 
@@ -120,21 +127,25 @@ namespace cAlgo.Library.Robots.MACrosser
         private MovingAverage _slowMA;        
         private int _runId;
         private int _currentPositionId;
-        private ExponentialMovingAverage _h4Ma;
+        //private ExponentialMovingAverage _h4Ma;
         private RelativeStrengthIndex _rsi;
-        private RelativeStrengthIndex _h4Rsi;
+        private AverageTrueRange _atr;
+
+        //private RelativeStrengthIndex _h4Rsi;
         private TradeResult _currentTradeResult;
+        private Confidence _confidence;
 
         protected override void OnStart()
         {
-            _maCrossIndicator = Indicators.GetIndicator<MACrossOver>(SourceSeries, SlowPeriodParameter, MediumPeriodParameter, FastPeriodParameter);
+            _maCrossIndicator = Indicators.GetIndicator<MACrossOver>(SourceSeries, SlowPeriodParameter, MediumPeriodParameter, FastPeriodParameter, false, false);
             _fastMA = Indicators.MovingAverage(SourceSeries, FastPeriodParameter, MovingAverageType.Exponential);
             _mediumMA = Indicators.MovingAverage(SourceSeries, MediumPeriodParameter, MovingAverageType.Exponential);
             _slowMA = Indicators.MovingAverage(SourceSeries, SlowPeriodParameter, MovingAverageType.Exponential);
-            var h4series = MarketData.GetSeries(TimeFrame.Hour4);
-            _h4Ma = Indicators.ExponentialMovingAverage(h4series.Close, H4MaPeriodParameter);
+            //var h4series = MarketData.GetSeries(TimeFrame.Hour4);
+            //_h4Ma = Indicators.ExponentialMovingAverage(h4series.Close, H4MaPeriodParameter);
             _rsi = Indicators.RelativeStrengthIndex(SourceSeries, 14);
-            _h4Rsi = Indicators.RelativeStrengthIndex(h4series.Close, 14);
+            //_h4Rsi = Indicators.RelativeStrengthIndex(h4series.Close, 14);
+            _atr = Indicators.AverageTrueRange(Bars, 14, MovingAverageType.Exponential);
 
             Print("Take Longs: {0}", TakeLongsParameter);
             Print("Take Shorts: {0}", TakeShortsParameter);
@@ -152,12 +163,12 @@ namespace cAlgo.Library.Robots.MACrosser
             Print("H4MA: {0}", H4MaPeriodParameter);
             Print("Recording: {0}", RecordSession);
             Print("Enter at Market: {0}", EnterAtMarket);
-            Print("CloseVsPriorCloseFilter: {0}", CloseVsPriorCloseFilter);
-            Print("CloseVsOpenFilter: {0}", CloseVsOpenFilter);
-            Print("HighVsPriorHighFilter: {0}", HighLowVsPriorHighLowFilter);
-            Print("MADistanceFilter: {0}", MADistanceFilter);
-            Print("MAsFlatFilter: {0}", MAsFlatFilter);
-            Print("NewHighLowFilter: {0}", NewHighLowFilter);
+            //Print("CloseVsPriorCloseFilter: {0}", CloseVsPriorCloseFilter);
+            //Print("CloseVsOpenFilter: {0}", CloseVsOpenFilter);
+            //Print("HighVsPriorHighFilter: {0}", HighLowVsPriorHighLowFilter);
+            //Print("MADistanceFilter: {0}", MADistanceFilter);
+            //Print("MAsFlatFilter: {0}", MAsFlatFilter);
+            //Print("NewHighLowFilter: {0}", NewHighLowFilter);
             Print("BarsToAllowTradeToDevelop: {0}", BarsToAllowTradeToDevelop);            
 
             Init(TakeLongsParameter, 
@@ -271,7 +282,7 @@ namespace cAlgo.Library.Robots.MACrosser
 
             var volumeInUnits = 100000;
 
-            var priorBarRange = MarketSeries.High.Last(1) - MarketSeries.Low.Last(1);
+            var priorBarRange = Bars.HighPrices.Last(1) - Bars.LowPrices.Last(1);
             priorBarRange /= 4;
             var limitPrice = _fastMA.Result.LastValue + priorBarRange;
             var label = string.Format("BUY {0}", Symbol);
@@ -307,7 +318,7 @@ namespace cAlgo.Library.Robots.MACrosser
             }
 
             var volumeInUnits = 100000;
-            var priorBarRange = MarketSeries.High.Last(1) - MarketSeries.Low.Last(1);
+            var priorBarRange = Bars.HighPrices.Last(1) - Bars.LowPrices.Last(1);
             priorBarRange /= 4;
             var limitPrice = _fastMA.Result.LastValue - priorBarRange;
             var label = string.Format("SELL {0}", Symbol);
@@ -322,11 +333,88 @@ namespace cAlgo.Library.Robots.MACrosser
         {
             if (_initialStopLossRule == InitialStopLossRuleValues.Custom)
             {
-                var stop = (Symbol.Ask - _mediumMA.Result.LastValue) / Symbol.PipSize;
+                //var distance = Math.Abs(Symbol.Ask - _mediumMA.Result.LastValue);
+                //if (distance < _atr.Result.LastValue)
+                //{
+                //    Print("Increasing stop distance as MA is too close to price.");
+                //    distance = _atr.Result.LastValue;                    
+                //}
+
+                //var stop = distance / Symbol.PipSize;
+                var stop = GetSmartStopForLong(Symbol.Ask);
+
+                CalculateConfidence(Symbol.Ask);
+
                 return Math.Round(stop, 1);
             }
 
             return base.CalculateInitialStopLossInPipsForLongPosition();
+        }
+
+        private double GetSmartStopForLong(double price)
+        {
+            var threshold = price - _atr.Result.LastValue * 2;
+            var margin = 2 * Symbol.PipSize;
+            var minStop = price - 6 * Symbol.PipSize;
+            var stop = double.NaN;
+
+            Print("Threshold: {0}", threshold);
+
+            // Keep going back until we find a bar that is far enough away from the price
+            for (var i = 2; i < 20; i++)
+            {
+                var low = Bars.LowPrices.Last(i);
+                if (low < threshold)
+                {
+                    Print("low={0}, index={1}, price={2}", low, i, price);
+                    stop = low - margin;
+                    break;
+                }
+            }
+
+            if (double.IsNaN(stop))
+            {
+                // Really? - Must be very flat - use an ATR stop
+                stop = 2 * _atr.Result.LastValue;
+            }
+
+            stop = Math.Max(minStop, stop);
+
+            // Calculate actual difference between this stop price and price to get pips
+            stop = Symbol.Ask - stop;
+            return stop / Symbol.PipSize;
+        }
+
+        private void CalculateConfidence(double price)
+        {
+            var diff = Math.Abs(price - _mediumMA.Result.LastValue);
+
+            var distanceMultiple = diff / _atr.Result.LastValue;
+
+            var maDiff = Math.Abs(_mediumMA.Result.LastValue - _fastMA.Result.LastValue);
+            maDiff = maDiff / _atr.Result.LastValue;
+
+            if (distanceMultiple > 4)
+            {
+                _confidence = Confidence.Low;
+            }
+            else if (distanceMultiple > 3.5)
+            {
+                if (maDiff < 1)
+                {
+                    _confidence = Confidence.High;
+                }
+                else
+                {
+                    _confidence = Confidence.Medium;
+                }                
+            }
+            else
+            {
+                _confidence = Confidence.High;
+            }
+
+            Print("Confidence={0}, Distance={1}, MADiff={2}", _confidence, distanceMultiple, maDiff);
         }
 
         protected override double? CalculateInitialStopLossInPipsForShortPosition()
@@ -338,6 +426,27 @@ namespace cAlgo.Library.Robots.MACrosser
             }
 
             return base.CalculateInitialStopLossInPipsForShortPosition();
+        }
+
+        protected override double? CalculateTakeProfit(double? stopLossPips)
+        {
+            switch (_confidence)
+            {
+                case Confidence.Low:
+                    return stopLossPips.HasValue
+                        ? stopLossPips.Value
+                        : (double?)null;
+
+                case Confidence.Medium:
+                    return stopLossPips.HasValue
+                        ? stopLossPips.Value * 2
+                        : (double?)null;
+
+                default:
+                    return stopLossPips.HasValue
+                        ? stopLossPips.Value * 3
+                        : (double?)null;
+            }
         }
 
         private double? CalculateFibTakeProfit()
@@ -618,8 +727,8 @@ namespace cAlgo.Library.Robots.MACrosser
                     command.Parameters.AddWithValue("@MA55", _mediumMA.Result.LastValue);
                     command.Parameters.AddWithValue("@MA89", _slowMA.Result.LastValue);
                     command.Parameters.AddWithValue("@RSI", _rsi.Result.LastValue);
-                    command.Parameters.AddWithValue("@H4MA", _h4Ma.Result.LastValue);
-                    command.Parameters.AddWithValue("@H4RSI", _h4Rsi.Result.LastValue);
+                    //command.Parameters.AddWithValue("@H4MA", _h4Ma.Result.LastValue);
+                    //command.Parameters.AddWithValue("@H4RSI", _h4Rsi.Result.LastValue);
 
                     connection.Open();
                     identity = Convert.ToInt32(command.ExecuteScalar());
@@ -816,7 +925,7 @@ namespace cAlgo.Library.Robots.MACrosser
                     return true;
             }
 
-            if (MarketSeries.Close.Last(1) < value - 2 * Symbol.PipSize)
+            if (Bars.ClosePrices.Last(1) < value - 2 * Symbol.PipSize)
             {
                 Print("Closing position now that we closed below the {0} MA", maType);
                 _canOpenPosition = true;
@@ -857,7 +966,7 @@ namespace cAlgo.Library.Robots.MACrosser
                     return true;
             }
 
-            if (MarketSeries.Close.Last(1) > value + 2 * Symbol.PipSize)
+            if (Bars.ClosePrices.Last(1) > value + 2 * Symbol.PipSize)
             {
                 Print("Closing position now that we closed above the {0} MA", maType);
                 _currentPosition.Close();
@@ -1341,7 +1450,7 @@ namespace cAlgo.Library.Robots.MACrosser
     //        {
     //            return 1;
     //        }
-           
+
     //        var risk = Account.Equity * _dynamicRiskPercentage / 100;
     //        var oneLotRisk = Symbol.PipValue * stopLossPips * Symbol.LotSize;
     //        var quantity = Math.Round(risk / oneLotRisk, 1);
@@ -1386,31 +1495,6 @@ namespace cAlgo.Library.Robots.MACrosser
     //        }
 
     //        return null;
-    //    }
-
-    //    private double? CalculateTakeProfit(double? stopLossPips)
-    //    {
-    //        switch (_takeProfitRule)
-    //        {
-    //            case TakeProfitRule.None:
-    //                return null;
-
-    //            case TakeProfitRule.StaticPipsValue:
-    //                return _takeProfitInPips;
-
-    //            case TakeProfitRule.DoubleRisk:
-    //                return stopLossPips.HasValue 
-    //                    ? stopLossPips.Value * 2 
-    //                    : (double?)null;
-
-    //            case TakeProfitRule.TripleRisk:
-    //                return stopLossPips.HasValue
-    //                    ? stopLossPips.Value * 3
-    //                    : (double?)null;
-
-    //            default:
-    //                return null;
-    //        }
     //    }
 
     //    protected virtual void EnterShortPosition()
@@ -1507,7 +1591,7 @@ namespace cAlgo.Library.Robots.MACrosser
     //                {
     //                    BreakEvenPrice = Symbol.Ask * 2 - _currentPosition.StopLoss.Value;
     //                }
-                    
+
     //                break;
 
     //            case TradeType.Sell:

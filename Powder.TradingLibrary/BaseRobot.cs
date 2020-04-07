@@ -553,7 +553,7 @@ namespace Powder.TradingLibrary
             return null;
         }
 
-        protected double? CalculateTakeProfit(double? stopLossPips)
+        protected virtual double? CalculateTakeProfit(double? stopLossPips)
         {
             switch (_takeProfitRule)
             {
