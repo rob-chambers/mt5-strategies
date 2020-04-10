@@ -1,7 +1,8 @@
 {
   "profiles": {
     "cTrader.Deploy": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "-t r -f MACrosser"
     }
   }
 }

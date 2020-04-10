@@ -1,4 +1,5 @@
-﻿using cAlgo.API;
+// Version 2020-04-10 18:05
+using cAlgo.API;
 using cAlgo.API.Indicators;
 
 /*

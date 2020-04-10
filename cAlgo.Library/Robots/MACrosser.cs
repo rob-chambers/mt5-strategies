@@ -1,4 +1,4 @@
-// Version 2020-04-10 14:59
+// Version 2020-04-10 17:54
 using System;
 using cAlgo.API;
 using cAlgo.API.Indicators;
@@ -19,7 +19,7 @@ namespace cAlgo.Library.Robots.MACrosser
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FullAccess)]
     public class MACrosserBot : BaseRobot
     {
-        const string ConnectionString = @"Data Source = (localdb)\MSSQLLocalDB; Initial Catalog = cTrader; Integrated Security = True; Connect Timeout = 10; Encrypt = False;";
+        private const string ConnectionString = @"Data Source = (localdb)\MSSQLLocalDB; Initial Catalog = cTrader; Integrated Security = True; Connect Timeout = 10; Encrypt = False;";
 
         #region Standard Parameters
         [Parameter("Take long trades?", DefaultValue = true)]
@@ -379,7 +379,7 @@ namespace cAlgo.Library.Robots.MACrosser
                 stop = 2 * _atr.Result.LastValue;
             }
 
-            stop = Math.Max(minStop, stop);
+            stop = Math.Min(minStop, stop);
 
             // Calculate actual difference between this stop price and price to get pips
             stop = Symbol.Ask - stop;
@@ -518,7 +518,47 @@ namespace cAlgo.Library.Robots.MACrosser
         {
             var value = _maCrossIndicator.UpSignal.Last(1);
             if (!value.Equals(double.NaN))
+            {
+                // What's the distance between the MAs?  Avoid noise and ensure there's been a breakout
+                var distance = _fastMA.Result.LastValue - _slowMA.Result.LastValue;
+                var distanceInPips = distance / Symbol.PipSize;
+                Print("Distance: {0}", distanceInPips);
+
+
+                distance /= _atr.Result.LastValue;
+                Print("Ratio: {0}", distance);
+
+                // ratio of 0.74 - 0.82
+
+
+                if (distance <= 0.4 || distanceInPips <= 1.5)
+                {
+                    Print("Setup rejected as there wasn't enough distance between the fast and slow MAs");
+                    return false;
+                }
+
+                // What's the distance between price and the slow MA?  Perhaps we missed the move
+                distance = Symbol.Ask - _slowMA.Result.LastValue;
+                distance /= _atr.Result.LastValue;
+
+                Print("Price ratio to slow MA: {0}", distance);
+                if (distance >= 3.5)
+                {
+                    Print("Setup rejected as it looks like we have missed the move");
+                    return false;
+                }
+
+                // What's the distance between the fast and medium MAs?  Avoid noise and ensure there's been a breakout
+                distance = _fastMA.Result.LastValue - _mediumMA.Result.LastValue;
+                distanceInPips = distance / Symbol.PipSize;
+                if (distanceInPips < 1)
+                {
+                    Print("Setup rejected as there wasn't enough distance between the fast and medium MAs: {0}", distanceInPips);
+                    return false;
+                }
+
                 return true;
+            }
 
             //if (!AreMovingAveragesStackedBullishly())
             //{
@@ -611,9 +651,9 @@ namespace cAlgo.Library.Robots.MACrosser
 
             while (index <= 40)
             {
-                if (MarketSeries.Low.Last(index) < low)
+                if (Bars.LowPrices.Last(index) < low)
                 {
-                    low = MarketSeries.Low.Last(index);
+                    low = Bars.LowPrices.Last(index);
                     lowIndex = index;
                 }
 
@@ -634,9 +674,9 @@ namespace cAlgo.Library.Robots.MACrosser
 
             while (index <= 40)
             {
-                if (MarketSeries.High.Last(index) > high)
+                if (Bars.HighPrices.Last(index) > high)
                 {
-                    high = MarketSeries.High.Last(index);
+                    high = Bars.HighPrices.Last(index);
                     highIndex = index;
                 }
 
@@ -720,10 +760,10 @@ namespace cAlgo.Library.Robots.MACrosser
                             ? (object)position.TakeProfit.Value
                             : DBNull.Value);
 
-                    command.Parameters.AddWithValue("@Open", MarketSeries.Open.Last(1));
-                    command.Parameters.AddWithValue("@High", MarketSeries.High.Last(1));
-                    command.Parameters.AddWithValue("@Low", MarketSeries.Low.Last(1));
-                    command.Parameters.AddWithValue("@Close", MarketSeries.Close.Last(1));
+                    command.Parameters.AddWithValue("@Open", Bars.OpenPrices.Last(1));
+                    command.Parameters.AddWithValue("@High", Bars.HighPrices.Last(1));
+                    command.Parameters.AddWithValue("@Low", Bars.LowPrices.Last(1));
+                    command.Parameters.AddWithValue("@Close", Bars.ClosePrices.Last(1));
                     command.Parameters.AddWithValue("@MA21", _fastMA.Result.LastValue);
                     command.Parameters.AddWithValue("@MA55", _mediumMA.Result.LastValue);
                     command.Parameters.AddWithValue("@MA89", _slowMA.Result.LastValue);
@@ -898,6 +938,9 @@ namespace cAlgo.Library.Robots.MACrosser
 
         protected override bool ManageLongPosition()
         {
+            if (BarsSinceEntry <= BarsToAllowTradeToDevelop)
+                return false;
+
             if (!ShouldTrail && Symbol.Ask > TrailingInitiationPrice)
             {
                 ShouldTrail = true;
@@ -938,6 +981,9 @@ namespace cAlgo.Library.Robots.MACrosser
 
         protected override bool ManageShortPosition()
         {
+            if (BarsSinceEntry <= BarsToAllowTradeToDevelop)
+                return false;
+
             if (!ShouldTrail && Symbol.Bid < TrailingInitiationPrice)
             {
                 ShouldTrail = true;

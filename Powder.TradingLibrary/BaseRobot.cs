@@ -240,7 +240,7 @@ namespace Powder.TradingLibrary
             if (Symbol.Ask > RecentHigh + buffer && _currentPosition.Pips > 0)
             {
                 madeNewHigh = true;
-                RecentHigh = Math.Max(Symbol.Ask, MarketSeries.High.Maximum(BarsSinceEntry + 1));
+                RecentHigh = Math.Max(Symbol.Ask, Bars.HighPrices.Maximum(BarsSinceEntry + 1));
                 Print("Recent high set to {0}", RecentHigh);
             }
 
@@ -273,11 +273,11 @@ namespace Powder.TradingLibrary
                     break;
 
                 case TrailingStopLossRuleValues.CurrentBarNPips:
-                    stop = MarketSeries.Low.Last(1) - _trailingStopLossInPips * Symbol.PipSize;
+                    stop = Bars.LowPrices.Last(1) - _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
                 case TrailingStopLossRuleValues.PreviousBarNPips:
-                    var low = Math.Min(MarketSeries.Low.Last(1), MarketSeries.Low.Last(2));
+                    var low = Math.Min(Bars.LowPrices.Last(1), Bars.LowPrices.Last(2));
                     stop = low - _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
@@ -329,7 +329,7 @@ namespace Powder.TradingLibrary
             if (Symbol.Bid < RecentLow - buffer && _currentPosition.Pips > 0)
             {
                 madeNewLow = true;
-                RecentLow = Math.Min(Symbol.Bid, MarketSeries.Low.Minimum(BarsSinceEntry + 1));
+                RecentLow = Math.Min(Symbol.Bid, Bars.LowPrices.Minimum(BarsSinceEntry + 1));
                 Print("Recent low set to {0}", RecentLow);
             }
 
@@ -359,11 +359,11 @@ namespace Powder.TradingLibrary
                     break;
 
                 case TrailingStopLossRuleValues.CurrentBarNPips:
-                    stop = MarketSeries.High.Last(1) + _trailingStopLossInPips * Symbol.PipSize;
+                    stop = Bars.HighPrices.Last(1) + _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
                 case TrailingStopLossRuleValues.PreviousBarNPips:
-                    var high = Math.Max(MarketSeries.High.Last(1), MarketSeries.High.Last(2));
+                    var high = Math.Max(Bars.HighPrices.Last(1), Bars.HighPrices.Last(2));
                     stop = high + _trailingStopLossInPips * Symbol.PipSize;
                     break;
 
@@ -470,7 +470,7 @@ namespace Powder.TradingLibrary
             }
 
             // Alternately, avoid trading on a Friday evening
-            var openTime = MarketSeries.OpenTime.LastValue;
+            var openTime = Bars.OpenTimes.LastValue;
             if (openTime.DayOfWeek == DayOfWeek.Friday && openTime.Hour >= 16)
             {
                 Print("Avoiding trading on a Friday afternoon");
@@ -531,14 +531,14 @@ namespace Powder.TradingLibrary
                     break;
 
                 case InitialStopLossRuleValues.CurrentBarNPips:
-                    stopLossPips = _initialStopLossInPips + (Symbol.Ask - MarketSeries.Low.Last(1)) / Symbol.PipSize;
+                    stopLossPips = _initialStopLossInPips + (Symbol.Ask - Bars.LowPrices.Last(1)) / Symbol.PipSize;
                     break;
 
                 case InitialStopLossRuleValues.PreviousBarNPips:
-                    var low = MarketSeries.Low.Last(1);
-                    if (MarketSeries.Low.Last(2) < low)
+                    var low = Bars.LowPrices.Last(1);
+                    if (Bars.LowPrices.Last(2) < low)
                     {
-                        low = MarketSeries.Low.Last(2);
+                        low = Bars.LowPrices.Last(2);
                     }
 
                     stopLossPips = _initialStopLossInPips + (Symbol.Ask - low) / Symbol.PipSize;
@@ -612,14 +612,14 @@ namespace Powder.TradingLibrary
                     break;
 
                 case InitialStopLossRuleValues.CurrentBarNPips:
-                    stopLossPips = _initialStopLossInPips + (MarketSeries.High.Last(1) - Symbol.Bid) / Symbol.PipSize;
+                    stopLossPips = _initialStopLossInPips + (Bars.HighPrices.Last(1) - Symbol.Bid) / Symbol.PipSize;
                     break;
 
                 case InitialStopLossRuleValues.PreviousBarNPips:
-                    var high = MarketSeries.High.Last(1);
-                    if (MarketSeries.High.Last(2) > high)
+                    var high = Bars.HighPrices.Last(1);
+                    if (Bars.HighPrices.Last(2) > high)
                     {
-                        high = MarketSeries.High.Last(2);
+                        high = Bars.HighPrices.Last(2);
                     }
 
                     stopLossPips = _initialStopLossInPips + (high - Symbol.Bid) / Symbol.PipSize;
@@ -788,7 +788,7 @@ namespace Powder.TradingLibrary
                 exitPrice = position.EntryPrice - diff;
             }
 
-            return 0;
+            return exitPrice;
         }
     }
 }
