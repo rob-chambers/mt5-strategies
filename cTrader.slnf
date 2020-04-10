@@ -1,0 +1,9 @@
+{
+  "solution": {
+    "path": "MetaTraderStrategies.sln",
+    "projects": [
+      "Powder.TradingLibrary\\Powder.TradingLibrary.csproj",
+      "cAlgo.Library\\cAlgo.Library.csproj"
+    ]
+  }
+}
