@@ -1,4 +1,5 @@
-﻿using System;
+// Version 2020-04-10 14:59
+using System;
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;

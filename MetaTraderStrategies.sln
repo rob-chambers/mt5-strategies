@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrendTestingResultsAnalyzer
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Powder.TradingLibrary", "Powder.TradingLibrary\Powder.TradingLibrary.csproj", "{B8A11471-C3FE-41B2-A825-CF9622950D51}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "cTrader.Deploy", "cTrader.Deploy\cTrader.Deploy.csproj", "{49C17846-6523-4C3B-AFEE-1827C92CCC10}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,6 +40,10 @@ Global
 		{B8A11471-C3FE-41B2-A825-CF9622950D51}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B8A11471-C3FE-41B2-A825-CF9622950D51}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B8A11471-C3FE-41B2-A825-CF9622950D51}.Release|Any CPU.Build.0 = Release|Any CPU
+		{49C17846-6523-4C3B-AFEE-1827C92CCC10}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{49C17846-6523-4C3B-AFEE-1827C92CCC10}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{49C17846-6523-4C3B-AFEE-1827C92CCC10}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{49C17846-6523-4C3B-AFEE-1827C92CCC10}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
