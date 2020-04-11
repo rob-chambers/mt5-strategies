@@ -75,19 +75,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Indicators\copy-MacdPlatinum.bat" />
-    <None Include="Indicators\copy-Spring.bat" />
-    <None Include="Indicators\copy-QMPFilter.bat" />
-    <None Include="Indicators\Copy-OverBoughtSold.bat" />
-    <None Include="Indicators\copy-MACrossOver.bat" />
     <None Include="Robots\Analysis Queries\Database Analysis.xlsx" />
-    <None Include="Robots\copy-HighProbability.bat" />
-    <None Include="Robots\copy-MAAdvancedCrosser.bat" />
-    <None Include="Robots\copy-VVBot.bat" />
-    <None Include="Robots\copy-VectorVestDow.bat" />
-    <None Include="Robots\copy-newbreakout.bat" />
-    <None Include="Robots\copy-MACrosser.bat" />
-    <None Include="Robots\copy-WaveCatcher.bat" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Robots\ClearDatabase.sql" />

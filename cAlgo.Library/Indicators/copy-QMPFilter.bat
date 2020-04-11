@@ -1,1 +1,0 @@
-copy "QMPFilter.cs" "C:\Users\rob\Documents\cAlgo\Sources\Indicators\QMPFilter\QMPFilter\QMPFilter.cs"

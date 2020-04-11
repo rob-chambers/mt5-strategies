@@ -1,1 +1,0 @@
-copy "VVBot.cs" "C:\Users\rob\Documents\cAlgo\Sources\Robots\VVBot\VVBot\VVBot.cs"

@@ -1,1 +1,0 @@
-copy "MacdPlatinum.cs" "C:\Users\rob\Documents\cAlgo\Sources\Indicators\MacdPlatinum\MacdPlatinum\MacdPlatinum.cs"
