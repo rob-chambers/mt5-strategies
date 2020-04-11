@@ -22,7 +22,6 @@ namespace Powder.TradingLibrary
         protected double? TrailingInitiationPrice { get; private set; }
         protected bool _canOpenPosition;
         protected InitialStopLossRuleValues _initialStopLossRule;
-        protected MaCrossRuleValues _maCrossRule;
 
         private bool _takeLongsParameter;
         private bool _takeShortsParameter;
@@ -59,28 +58,26 @@ namespace Powder.TradingLibrary
             bool moveToBreakEven = false,
             bool closeHalfAtBreakEven = false,
             double dynamicRiskPercentage = 2,
-            int barsToAllowTradeToDevelop = 0,
-            MaCrossRuleValues maCrossRule = 0)
+            int barsToAllowTradeToDevelop = 0)
         {
             ValidateParameters(takeLongsParameter, takeShortsParameter, initialStopLossRule, initialStopLossInPips,
                     trailingStopLossRule, trailingStopLossInPips, lotSizingRule, takeProfitRule, takeProfitInPips,
-                    minutesToWaitAfterPositionClosed, moveToBreakEven, closeHalfAtBreakEven, dynamicRiskPercentage, barsToAllowTradeToDevelop, maCrossRule);
+                    minutesToWaitAfterPositionClosed, moveToBreakEven, closeHalfAtBreakEven, dynamicRiskPercentage, barsToAllowTradeToDevelop);
 
             _takeLongsParameter = takeLongsParameter;
             _takeShortsParameter = takeShortsParameter;
-            _initialStopLossRule = (InitialStopLossRuleValues)initialStopLossRule;
+            _initialStopLossRule = initialStopLossRule;
             _initialStopLossInPips = initialStopLossInPips;
-            _trailingStopLossRule = (TrailingStopLossRuleValues)trailingStopLossRule;
+            _trailingStopLossRule = trailingStopLossRule;
             _trailingStopLossInPips = trailingStopLossInPips;
-            _lotSizingRule = (LotSizingRuleValues)lotSizingRule;
-            _takeProfitRule = (TakeProfitRuleValues)takeProfitRule;
+            _lotSizingRule = lotSizingRule;
+            _takeProfitRule = takeProfitRule;
             _takeProfitInPips = takeProfitInPips;
             _minutesToWaitAfterPositionClosed = minutesToWaitAfterPositionClosed;
             _moveToBreakEven = moveToBreakEven;
             _closeHalfAtBreakEven = closeHalfAtBreakEven;
             _dynamicRiskPercentage = dynamicRiskPercentage;
             _barsToAllowTradeToDevelop = barsToAllowTradeToDevelop;
-            _maCrossRule = (MaCrossRuleValues)maCrossRule;
 
             _canOpenPosition = true;
 
@@ -106,8 +103,7 @@ namespace Powder.TradingLibrary
             bool moveToBreakEven,
             bool closeHalfAtBreakEven,
             double dynamicRiskPercentage,
-            int barsToAllowTradeToDevelop,
-            MaCrossRuleValues maCrossRule)
+            int barsToAllowTradeToDevelop)
         {
             if (!takeLongsParameter && !takeShortsParameter)
                 throw new ArgumentException("Must take at least longs or shorts");
@@ -147,9 +143,6 @@ namespace Powder.TradingLibrary
 
             if (barsToAllowTradeToDevelop < 0 || barsToAllowTradeToDevelop > 99)
                 throw new ArgumentOutOfRangeException("BarsToAllowTradeToDevelop is out of range - must be between 0 and 99");
-
-            if (!Enum.IsDefined(typeof(MaCrossRuleValues), maCrossRule))
-                throw new ArgumentException("Invalid MA Cross rule");
         }
 
         protected override void OnTick()

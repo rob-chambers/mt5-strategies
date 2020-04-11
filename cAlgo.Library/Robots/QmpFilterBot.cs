@@ -1,4 +1,4 @@
-// Version 2020-04-11 14:20
+// Version 2020-04-11 15:35
 using System;
 using cAlgo.API;
 using cAlgo.API.Indicators;
@@ -13,13 +13,14 @@ namespace cAlgo.Library.Robots.QmpFilterBot
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.None)]
     public class QmpFilterBot : BaseRobot
     {
-        [Parameter("Take long trades?", DefaultValue = true)]
+        [Parameter("Take long trades?", DefaultValue = false)]
         public bool TakeLongsParameter { get; set; }
 
-        [Parameter("Take short trades?", DefaultValue = false)]
+        [Parameter("Take short trades?", DefaultValue = true)]
         public bool TakeShortsParameter { get; set; }
 
-        [Parameter] public DataSeries SourceSeries { get; set; }
+        [Parameter]
+        public DataSeries SourceSeries { get; set; }
 
         [Parameter("Slow MA Period", DefaultValue = 89)]
         public int SlowPeriodParameter { get; set; }
@@ -44,21 +45,14 @@ namespace cAlgo.Library.Robots.QmpFilterBot
             } 
         }
 
-        private QMPFilter _qmpFilterIndicator;
+        private QualitativeQuantitativeE _qqeAdv;
         private MovingAverage _fastMA;
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
 
         protected override void OnStart()
         {
-            _fastMA = Indicators.MovingAverage(SourceSeries, FastPeriodParameter, MovingAverageType.Exponential);
-            _mediumMA = Indicators.MovingAverage(SourceSeries, MediumPeriodParameter, MovingAverageType.Exponential);
-            _slowMA = Indicators.MovingAverage(SourceSeries, SlowPeriodParameter, MovingAverageType.Exponential);
-
-            Print("Take Longs: {0}", TakeLongsParameter);
-            Print("Take Shorts: {0}", TakeShortsParameter);
-
-            _qmpFilterIndicator = Indicators.GetIndicator<QMPFilter>(SourceSeries, false, false);
+            _qqeAdv = Indicators.GetIndicator<QualitativeQuantitativeE>(8);
             _fastMA = Indicators.MovingAverage(SourceSeries, FastPeriodParameter, MovingAverageType.Exponential);
             _mediumMA = Indicators.MovingAverage(SourceSeries, MediumPeriodParameter, MovingAverageType.Exponential);
             _slowMA = Indicators.MovingAverage(SourceSeries, SlowPeriodParameter, MovingAverageType.Exponential);
@@ -80,34 +74,8 @@ namespace cAlgo.Library.Robots.QmpFilterBot
                 false,
                 false,
                 DynamicRiskPercentage,
-                5,
-                MaCrossRuleValues.CloseOnMediumMaCross);
+                5);
         }
-
-        //protected void Init(
-        //    bool takeLongsParameter,
-        //    bool takeShortsParameter,
-        //    LotSizingRuleValues lotSizingRule,
-        //    double dynamicRiskPercentage)
-        //{
-        //    _takeLongsParameter = takeLongsParameter;
-        //    _takeShortsParameter = takeShortsParameter;
-        //    _maCrossRule = maCrossRule;
-        //    _lotSizingRule = lotSizingRule;
-        //    _dynamicRiskPercentage = dynamicRiskPercentage;
-        //    var lotSizing = (LotSizingRuleValues)lotSizingRule;
-        //    if (lotSizing == LotSizingRuleValues.Dynamic && (dynamicRiskPercentage <= 0 || dynamicRiskPercentage >= 10))
-        //        throw new ArgumentOutOfRangeException($"Dynamic Risk value is out of range - it is a percentage (e.g. 2)");
-
-        //    _canOpenPosition = true;
-
-        //    Positions.Opened += OnPositionOpened;
-        //    Positions.Closed += OnPositionClosed;
-
-        //    Print("Symbol.TickSize: {0}, Symbol.Digits: {1}, Symbol.PipSize: {2}",
-        //        Symbol.TickSize, Symbol.Digits, Symbol.PipSize);
-        //}
-
 
         protected override bool HasBullishSignal()
         {
@@ -116,7 +84,13 @@ namespace cAlgo.Library.Robots.QmpFilterBot
 
         protected override bool HasBearishSignal()
         {
-            return false;
+            var signal =                
+                _qqeAdv.Result.Last(1) < _qqeAdv.ResultS.Last(1) &&
+                _qqeAdv.Result.Last(2) >= _qqeAdv.ResultS.Last(2);
+
+            Print(signal);
+            
+            return signal;
         }
     }
 }

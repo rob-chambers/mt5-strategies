@@ -1,4 +1,4 @@
-// Version 2020-04-11 14:17
+// Version 2020-04-11 15:35
 using System;
 using cAlgo.API;
 using cAlgo.API.Indicators;
@@ -478,8 +478,7 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
                 false,
                 false,
                 DynamicRiskPercentage,
-                BarsToAllowTradeToDevelop,
-                0);
+                BarsToAllowTradeToDevelop);
 
             Notifications.SendEmail("rechambers11@gmail.com", "rechambers11@gmail.com", "MA Cross Over robot initialized", "This is a test");
 
@@ -517,8 +516,7 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
             bool moveToBreakEven, 
             bool closeHalfAtBreakEven,
             double dynamicRiskPercentage,
-            int barsToAllowTradeToDevelop,
-            MaCrossRuleValues maCrossRule)
+            int barsToAllowTradeToDevelop)
         {
             base.ValidateParameters(
                 takeLongsParameter, 
@@ -534,8 +532,7 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
                 moveToBreakEven, 
                 closeHalfAtBreakEven,
                 dynamicRiskPercentage,
-                barsToAllowTradeToDevelop,
-                maCrossRule);
+                barsToAllowTradeToDevelop);
 
             if (FastPeriodParameter <= 0 || FastPeriodParameter > 999)
                 throw new ArgumentException("Invalid 'Fast MA Period' - must be between 1 and 999");

@@ -1,4 +1,4 @@
-// Version 2020-04-11 14:15
+// Version 2020-04-11 15:35
 using System;
 using cAlgo.API;
 using cAlgo.API.Indicators;
@@ -153,8 +153,7 @@ namespace cAlgo.Library.Robots.MACrosser
                 MoveToBreakEven,
                 CloseHalfAtBreakEven,
                 DynamicRiskPercentage,
-                BarsToAllowTradeToDevelop,
-                MaCrossRule);
+                BarsToAllowTradeToDevelop);
 
             Notifications.SendEmail("rechambers11@gmail.com", "rechambers11@gmail.com", "MA Cross Over robot initialized", "This is a test");
 
@@ -180,8 +179,7 @@ namespace cAlgo.Library.Robots.MACrosser
             bool moveToBreakEven, 
             bool closeHalfAtBreakEven,
             double dynamicRiskPercentage,
-            int barsToAllowTradeToDevelop,
-            MaCrossRuleValues maCrossRule)
+            int barsToAllowTradeToDevelop)
         {
             base.ValidateParameters(
                 takeLongsParameter, 
@@ -197,8 +195,7 @@ namespace cAlgo.Library.Robots.MACrosser
                 moveToBreakEven, 
                 closeHalfAtBreakEven,
                 dynamicRiskPercentage,
-                barsToAllowTradeToDevelop,
-                maCrossRule);
+                barsToAllowTradeToDevelop);
 
             if (FastPeriodParameter <= 0 || FastPeriodParameter > 999)
                 throw new ArgumentException("Invalid 'Fast MA Period' - must be between 1 and 999");
@@ -215,7 +212,8 @@ namespace cAlgo.Library.Robots.MACrosser
             if (MovingAveragesCrossThreshold <= 0 || MovingAveragesCrossThreshold > 999)
                 throw new ArgumentException("MAs Cross Threshold - must be between 1 and 999");
 
-            if (_maCrossRule == MaCrossRuleValues.None && initialStopLossRule == InitialStopLossRuleValues.None && 
+            if (MaCrossRule == MaCrossRuleValues.None && 
+                initialStopLossRule == InitialStopLossRuleValues.None && 
                 trailingStopLossRule == TrailingStopLossRuleValues.None)
                 throw new ArgumentException("The combination of parameters means that a position may incur a massive loss");
 
@@ -676,7 +674,7 @@ namespace cAlgo.Library.Robots.MACrosser
             double value;
             string maType;
 
-            switch (_maCrossRule)
+            switch (MaCrossRule)
             {
                 case MaCrossRuleValues.CloseOnFastMaCross:
                     value = _fastMA.Result.LastValue;
@@ -719,7 +717,7 @@ namespace cAlgo.Library.Robots.MACrosser
             double value;
             string maType;
 
-            switch (_maCrossRule)
+            switch (MaCrossRule)
             {
                 case MaCrossRuleValues.CloseOnFastMaCross:
                     value = _fastMA.Result.LastValue;

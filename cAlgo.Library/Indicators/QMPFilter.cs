@@ -1,6 +1,5 @@
 // Version 2020-04-11 14:14
 using cAlgo.API;
-using cAlgo.Indicators;
 
 namespace cAlgo.Library.Indicators
 {
