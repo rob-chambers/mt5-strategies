@@ -1,4 +1,5 @@
-﻿using cAlgo.API;
+// Version 2020-04-11 12:20
+using cAlgo.API;
 using cAlgo.API.Indicators;
 using System.Diagnostics;
 using System.Linq;
@@ -113,9 +114,9 @@ namespace cAlgo.Library.Indicators
 
         private bool HasBullishReversalSignal(int index)
         {
-            if (MarketSeries.Close[index - 1] < MarketSeries.Open[index - 1] &&
-                MarketSeries.Close[index] > MarketSeries.Open[index] &&
-                MarketSeries.Close[index] > MarketSeries.High[index - 1])
+            if (Bars.ClosePrices[index - 1] < Bars.OpenPrices[index - 1] &&
+                Bars.ClosePrices[index] > Bars.OpenPrices[index] &&
+                Bars.ClosePrices[index] > Bars.HighPrices[index - 1])
             {
                 return true;
             }
@@ -125,9 +126,9 @@ namespace cAlgo.Library.Indicators
 
         private bool HasBearishReversalSignal(int index)
         {
-            if (MarketSeries.Close[index - 1] > MarketSeries.Open[index - 1] &&
-                MarketSeries.Close[index] < MarketSeries.Open[index] &&
-                MarketSeries.Close[index] < MarketSeries.Low[index - 1])
+            if (Bars.ClosePrices[index - 1] > Bars.OpenPrices[index - 1] &&
+                Bars.ClosePrices[index] < Bars.OpenPrices[index] &&
+                Bars.ClosePrices[index] < Bars.LowPrices[index - 1])
             {
                 return true;
             }
@@ -139,7 +140,7 @@ namespace cAlgo.Library.Indicators
         {
             Print("bullish signal at index {0}", index);
             UpSignal[index] = 1.0;
-            var y = MarketSeries.Low[index] - _buffer;
+            var y = Bars.LowPrices[index] - _buffer;
             Chart.DrawIcon("bullsignal" + index, ChartIconType.UpArrow, index, y, Color.Lime);
         }
 
@@ -147,7 +148,7 @@ namespace cAlgo.Library.Indicators
         {
             Print("bearish signal at index {0}", index);
             DownSignal[index] = 1.0;
-            var y = MarketSeries.High[index] + _buffer;
+            var y = Bars.HighPrices[index] + _buffer;
             Chart.DrawIcon("bearsignal" + index, ChartIconType.DownArrow, index, y, Color.White);
         }
     }
