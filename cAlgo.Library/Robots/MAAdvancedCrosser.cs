@@ -1,4 +1,5 @@
-﻿using System;
+// Version 2020-04-11 14:15
+using System;
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -18,22 +19,22 @@ namespace cAlgo.Library.Robots.MAAdvancedCrosser
         public bool TakeShortsParameter { get; set; }
 
         [Parameter("Initial SL Rule", DefaultValue = 4)]
-        public int InitialStopLossRule { get; set; }
+        public InitialStopLossRuleValues InitialStopLossRule { get; set; }
 
         [Parameter("Initial SL (pips)", DefaultValue = 5)]
         public int InitialStopLossInPips { get; set; }
 
         [Parameter("Trailing SL Rule", DefaultValue = 0)]
-        public int TrailingStopLossRule { get; set; }
+        public TrailingStopLossRuleValues TrailingStopLossRule { get; set; }
 
         [Parameter("Trailing SL (pips)", DefaultValue = 10)]
         public int TrailingStopLossInPips { get; set; }
 
         [Parameter("Lot Sizing Rule", DefaultValue = 0)]
-        public int LotSizingRule { get; set; }
+        public LotSizingRuleValues LotSizingRule { get; set; }
 
         [Parameter("Take Profit Rule", DefaultValue = 2)]
-        public int TakeProfitRule { get; set; }
+        public TakeProfitRuleValues TakeProfitRule { get; set; }
 
         [Parameter("Take Profit (pips)", DefaultValue = 0)]
         public int TakeProfitInPips { get; set; }
@@ -68,7 +69,7 @@ namespace cAlgo.Library.Robots.MAAdvancedCrosser
         public int FastPeriodParameter { get; set; }
 
         [Parameter("MA Cross Rule", DefaultValue = 2)]
-        public int MaCrossRule { get; set; }
+        public MaCrossRuleValues MaCrossRule { get; set; }
 
         [Parameter("Apply MA Distance filter", DefaultValue = false)]
         public bool MADistanceFilter { get; set; }
@@ -145,19 +146,19 @@ namespace cAlgo.Library.Robots.MAAdvancedCrosser
         protected override void ValidateParameters(
             bool takeLongsParameter, 
             bool takeShortsParameter, 
-            int initialStopLossRule, 
+            InitialStopLossRuleValues initialStopLossRule, 
             int initialStopLossInPips, 
-            int trailingStopLossRule, 
+            TrailingStopLossRuleValues trailingStopLossRule, 
             int trailingStopLossInPips, 
-            int lotSizingRule, 
-            int takeProfitRule,
+            LotSizingRuleValues lotSizingRule, 
+            TakeProfitRuleValues takeProfitRule,
             int takeProfitInPips, 
             int minutesToWaitAfterPositionClosed, 
             bool moveToBreakEven, 
             bool closeHalfAtBreakEven,
             double dynamicRiskPercentage,
             int barsToAllowTradeToDevelop,
-            int maCrossRule)
+            MaCrossRuleValues maCrossRule)
         {
             base.ValidateParameters(
                 takeLongsParameter, 
@@ -366,7 +367,7 @@ namespace cAlgo.Library.Robots.MAAdvancedCrosser
                     return true;
             }
 
-            if (MarketSeries.Close.Last(1) < value - 2 * Symbol.PipSize)
+            if (Bars.ClosePrices.Last(1) < value - 2 * Symbol.PipSize)
             {
                 Print("Closing position now that we closed below the {0} MA", maType);
                 _canOpenPosition = true;
@@ -407,7 +408,7 @@ namespace cAlgo.Library.Robots.MAAdvancedCrosser
                     return true;
             }
 
-            if (MarketSeries.Close.Last(1) > value + 2 * Symbol.PipSize)
+            if (Bars.ClosePrices.Last(1) > value + 2 * Symbol.PipSize)
             {
                 Print("Closing position now that we closed above the {0} MA", maType);
                 _currentPosition.Close();

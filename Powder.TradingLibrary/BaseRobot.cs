@@ -48,19 +48,19 @@ namespace Powder.TradingLibrary
         protected void Init(
             bool takeLongsParameter,
             bool takeShortsParameter,
-            int initialStopLossRule,
+            InitialStopLossRuleValues initialStopLossRule,
             int initialStopLossInPips,
-            int trailingStopLossRule,
+            TrailingStopLossRuleValues trailingStopLossRule,
             int trailingStopLossInPips,
-            int lotSizingRule,
-            int takeProfitRule,
+            LotSizingRuleValues lotSizingRule,
+            TakeProfitRuleValues takeProfitRule,
             int takeProfitInPips = 0,
             int minutesToWaitAfterPositionClosed = 0,
             bool moveToBreakEven = false,
             bool closeHalfAtBreakEven = false,
             double dynamicRiskPercentage = 2,
             int barsToAllowTradeToDevelop = 0,
-            int maCrossRule = 0)
+            MaCrossRuleValues maCrossRule = 0)
         {
             ValidateParameters(takeLongsParameter, takeShortsParameter, initialStopLossRule, initialStopLossInPips,
                     trailingStopLossRule, trailingStopLossInPips, lotSizingRule, takeProfitRule, takeProfitInPips,
@@ -95,19 +95,19 @@ namespace Powder.TradingLibrary
         protected virtual void ValidateParameters(
             bool takeLongsParameter,
             bool takeShortsParameter,
-            int initialStopLossRule,
+            InitialStopLossRuleValues initialStopLossRule,
             int initialStopLossInPips,
-            int trailingStopLossRule,
+            TrailingStopLossRuleValues trailingStopLossRule,
             int trailingStopLossInPips,
-            int lotSizingRule,
-            int takeProfitRule,
+            LotSizingRuleValues lotSizingRule,
+            TakeProfitRuleValues takeProfitRule,
             int takeProfitInPips,
             int minutesToWaitAfterPositionClosed,
             bool moveToBreakEven,
             bool closeHalfAtBreakEven,
             double dynamicRiskPercentage,
             int barsToAllowTradeToDevelop,
-            int maCrossRule)
+            MaCrossRuleValues maCrossRule)
         {
             if (!takeLongsParameter && !takeShortsParameter)
                 throw new ArgumentException("Must take at least longs or shorts");
@@ -133,7 +133,7 @@ namespace Powder.TradingLibrary
             if (!Enum.IsDefined(typeof(TakeProfitRuleValues), takeProfitRule))
                 throw new ArgumentException("Invalid take profit rule");
 
-            if ((TakeProfitRuleValues)takeProfitRule != TakeProfitRuleValues.StaticPipsValue && takeProfitInPips != 0)
+            if (takeProfitRule != TakeProfitRuleValues.StaticPipsValue && takeProfitInPips != 0)
                 throw new ArgumentException("Invalid take profit - must be 0 when Take Profit Rule is not Static Pips");
 
             if (minutesToWaitAfterPositionClosed < 0 || minutesToWaitAfterPositionClosed > 60 * 24)
@@ -142,8 +142,7 @@ namespace Powder.TradingLibrary
             if (!moveToBreakEven && closeHalfAtBreakEven)
                 throw new ArgumentException("'Close half at breakeven?' is only valid when 'Move to breakeven?' is set");
 
-            var lotSizing = (LotSizingRuleValues)lotSizingRule;
-            if (lotSizing == LotSizingRuleValues.Dynamic && (dynamicRiskPercentage <= 0 || dynamicRiskPercentage >= 10))
+            if (lotSizingRule == LotSizingRuleValues.Dynamic && (dynamicRiskPercentage <= 0 || dynamicRiskPercentage >= 10))
                 throw new ArgumentOutOfRangeException("Dynamic Risk value is out of range - it is a percentage (e.g. 2)");
 
             if (barsToAllowTradeToDevelop < 0 || barsToAllowTradeToDevelop > 99)
@@ -427,7 +426,6 @@ namespace Powder.TradingLibrary
             var stop = RecentHigh - ratio * Symbol.PipSize;
             return stop;
         }
-
 
         private double? CalculateSmartTrailingStopForShort()
         {

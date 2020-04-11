@@ -1,4 +1,4 @@
-// Version 2020-04-10 20:54
+// Version 2020-04-11 14:15
 using System;
 using cAlgo.API;
 using cAlgo.API.Indicators;
@@ -29,22 +29,22 @@ namespace cAlgo.Library.Robots.MACrosser
         public bool TakeShortsParameter { get; set; }
 
         [Parameter("Initial SL Rule", DefaultValue = 4)]
-        public int InitialStopLossRule { get; set; }
+        public InitialStopLossRuleValues InitialStopLossRule { get; set; }
 
         [Parameter("Initial SL (pips)", DefaultValue = 5)]
         public int InitialStopLossInPips { get; set; }
 
         [Parameter("Trailing SL Rule", DefaultValue = 0)]
-        public int TrailingStopLossRule { get; set; }
+        public TrailingStopLossRuleValues TrailingStopLossRule { get; set; }
 
         [Parameter("Trailing SL (pips)", DefaultValue = 10)]
         public int TrailingStopLossInPips { get; set; }
 
         [Parameter("Lot Sizing Rule", DefaultValue = 0)]
-        public int LotSizingRule { get; set; }
+        public LotSizingRuleValues LotSizingRule { get; set; }
 
         [Parameter("Take Profit Rule", DefaultValue = 0)]
-        public int TakeProfitRule { get; set; }
+        public TakeProfitRuleValues TakeProfitRule { get; set; }
 
         [Parameter("Take Profit (pips)", DefaultValue = 0)]
         public int TakeProfitInPips { get; set; }
@@ -85,7 +85,7 @@ namespace cAlgo.Library.Robots.MACrosser
         public int MovingAveragesCrossThreshold { get; set; }
 
         [Parameter("MA Cross Rule", DefaultValue = 2)]
-        public int MaCrossRule { get; set; }
+        public MaCrossRuleValues MaCrossRule { get; set; }
 
         [Parameter("Record", DefaultValue = false)]
         public bool RecordSession { get; set; }
@@ -169,19 +169,19 @@ namespace cAlgo.Library.Robots.MACrosser
         protected override void ValidateParameters(
             bool takeLongsParameter, 
             bool takeShortsParameter, 
-            int initialStopLossRule, 
+            InitialStopLossRuleValues initialStopLossRule, 
             int initialStopLossInPips, 
-            int trailingStopLossRule, 
+            TrailingStopLossRuleValues trailingStopLossRule, 
             int trailingStopLossInPips, 
-            int lotSizingRule, 
-            int takeProfitRule,
+            LotSizingRuleValues lotSizingRule, 
+            TakeProfitRuleValues takeProfitRule,
             int takeProfitInPips, 
             int minutesToWaitAfterPositionClosed, 
             bool moveToBreakEven, 
             bool closeHalfAtBreakEven,
             double dynamicRiskPercentage,
             int barsToAllowTradeToDevelop,
-            int maCrossRule)
+            MaCrossRuleValues maCrossRule)
         {
             base.ValidateParameters(
                 takeLongsParameter, 
@@ -215,10 +215,8 @@ namespace cAlgo.Library.Robots.MACrosser
             if (MovingAveragesCrossThreshold <= 0 || MovingAveragesCrossThreshold > 999)
                 throw new ArgumentException("MAs Cross Threshold - must be between 1 and 999");
 
-            var initialSLRule = (InitialStopLossRuleValues)initialStopLossRule;
-            var trailingSLRule = (TrailingStopLossRuleValues)trailingStopLossRule;
-
-            if (_maCrossRule == MaCrossRuleValues.None && initialSLRule == InitialStopLossRuleValues.None && trailingSLRule == TrailingStopLossRuleValues.None)
+            if (_maCrossRule == MaCrossRuleValues.None && initialStopLossRule == InitialStopLossRuleValues.None && 
+                trailingStopLossRule == TrailingStopLossRuleValues.None)
                 throw new ArgumentException("The combination of parameters means that a position may incur a massive loss");
 
             if (H4MaPeriodParameter < 10 || H4MaPeriodParameter > 99)

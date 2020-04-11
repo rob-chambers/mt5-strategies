@@ -1,4 +1,5 @@
-﻿using cAlgo.API;
+// Version 2020-04-11 14:14
+using cAlgo.API;
 using cAlgo.Indicators;
 
 namespace cAlgo.Library.Indicators
@@ -68,14 +69,14 @@ namespace cAlgo.Library.Indicators
         private void DrawBullishPoint(int index)
         {
             UpSignal[index] = 1.0;
-            var y = MarketSeries.Low[index] - _buffer;            
+            var y = Bars.LowPrices[index] - _buffer;            
             Chart.DrawIcon("bullsignal" + index, ChartIconType.UpArrow, index, y, Color.Lime);
         }
 
         private void DrawBearishPoint(int index)
         {
             DownSignal[index] = 1.0;
-            var y = MarketSeries.High[index] + _buffer;
+            var y = Bars.HighPrices[index] + _buffer;
             Chart.DrawIcon("bearsignal" + index, ChartIconType.DownArrow, index, y, Color.White);
         }
 
@@ -90,7 +91,7 @@ namespace cAlgo.Library.Indicators
                 var subject = string.Format("{0} MA Cross formed on {1} {2}", 
                     isBullish ? "Bullish" : "Bearish",
                     Symbol.Name,
-                    MarketSeries.TimeFrame);
+                    Bars.TimeFrame);
 
                 Notifications.SendEmail("MACrossOver@indicators.com", "rechambers11@gmail.com", subject, string.Empty);
             }

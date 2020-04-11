@@ -1,4 +1,5 @@
-﻿using System;
+// Version 2020-04-11 14:17
+using System;
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -73,7 +74,7 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
         public bool TakeShortsParameter { get; set; }
 
         [Parameter("Initial SL Rule", DefaultValue = 0)]
-        public int InitialStopLossRule { get; set; }
+        public InitialStopLossRuleValues InitialStopLossRule { get; set; }
 
         [Parameter("Initial SL (pips)", DefaultValue = 5)]
         public int InitialStopLossInPips { get; set; }
@@ -82,7 +83,7 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
         public int TrailingStopLossInPips { get; set; }
 
         [Parameter("Lot Sizing Rule", DefaultValue = 0)]
-        public int LotSizingRule { get; set; }
+        public LotSizingRuleValues LotSizingRule { get; set; }
 
         [Parameter("Take Profit (pips)", DefaultValue = 0)]
         public int TakeProfitInPips { get; set; }
@@ -505,19 +506,19 @@ namespace cAlgo.Library.Robots.VectorVestDowBot
         protected override void ValidateParameters(
             bool takeLongsParameter, 
             bool takeShortsParameter, 
-            int initialStopLossRule, 
+            InitialStopLossRuleValues initialStopLossRule, 
             int initialStopLossInPips, 
-            int trailingStopLossRule, 
+            TrailingStopLossRuleValues trailingStopLossRule, 
             int trailingStopLossInPips, 
-            int lotSizingRule, 
-            int takeProfitRule,
+            LotSizingRuleValues lotSizingRule, 
+            TakeProfitRuleValues takeProfitRule,
             int takeProfitInPips, 
             int minutesToWaitAfterPositionClosed, 
             bool moveToBreakEven, 
             bool closeHalfAtBreakEven,
             double dynamicRiskPercentage,
             int barsToAllowTradeToDevelop,
-            int maCrossRule)
+            MaCrossRuleValues maCrossRule)
         {
             base.ValidateParameters(
                 takeLongsParameter, 
