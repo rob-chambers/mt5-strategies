@@ -491,7 +491,7 @@ namespace Powder.TradingLibrary
             ExecuteMarketOrder(TradeType.Buy, SymbolName, volumeInUnits, Name, stopLossPips, CalculateTakeProfit(stopLossPips));
         }
 
-        protected double CalculatePositionQuantityInLots(double stopLossPips)
+        protected virtual double CalculatePositionQuantityInLots(double stopLossPips)
         {
             if (_lotSizingRule == LotSizingRuleValues.Static)
             {
