@@ -1,5 +1,6 @@
-// Version 2020-04-11 14:14
+// Version 2020-04-13 10:27
 using cAlgo.API;
+using System.Collections.Generic;
 
 namespace cAlgo.Library.Indicators
 {
@@ -15,14 +16,15 @@ namespace cAlgo.Library.Indicators
         [Parameter("Play alert sound", DefaultValue = true)]
         public bool PlayAlertSound { get; set; }
 
-        [Output("Up Signal", LineColor = "Lime")]
+        [Output("Up Signal")]
         public IndicatorDataSeries UpSignal { get; set; }
 
-        [Output("Down Signal", LineColor = "White")]
+        [Output("Down Signal")]
         public IndicatorDataSeries DownSignal { get; set; }
 
         private QualitativeQuantitativeE _qqeAdv;
         private double _buffer;
+        private List<int> _notifications = new List<int>();
 
         protected override void Initialize()
         {
@@ -41,13 +43,13 @@ namespace cAlgo.Library.Indicators
             {
                 // The cross occurred on the previous bar
                 DrawBullishPoint(index - 1);
-                HandleAlerts(true);
+                HandleAlerts(true, index);
             }
             else if (IsBearishBar(index))
             {
                 // The cross occurred on the previous bar
                 DrawBearishPoint(index - 1);
-                HandleAlerts(false);
+                HandleAlerts(false, index);
             }            
         }
 
@@ -69,30 +71,35 @@ namespace cAlgo.Library.Indicators
         {
             UpSignal[index] = 1.0;
             var y = Bars.LowPrices[index] - _buffer;            
-            Chart.DrawIcon("bullsignal" + index, ChartIconType.UpArrow, index, y, Color.Lime);
+            Chart.DrawIcon("bullsignal" + index, ChartIconType.UpTriangle, index, y, Color.SpringGreen);
         }
 
         private void DrawBearishPoint(int index)
         {
             DownSignal[index] = 1.0;
             var y = Bars.HighPrices[index] + _buffer;
-            Chart.DrawIcon("bearsignal" + index, ChartIconType.DownArrow, index, y, Color.White);
+            Chart.DrawIcon("bearsignal" + index, ChartIconType.DownTriangle, index, y, Color.Magenta);
         }
 
-        private void HandleAlerts(bool isBullish)
+        private void HandleAlerts(bool isBullish, int index)
         {
             // Make sure the email will be sent only at RealTime
             if (!IsLastBar)
                 return;
 
+            // The indicator is called every tick - ensure we haven't already handled this alert
+            if (_notifications.Contains(index))
+                return;
+
+            _notifications.Add(index);
             if (SendEmailAlerts)
             {
-                var subject = string.Format("{0} MA Cross formed on {1} {2}", 
+                var subject = string.Format("{0} QMP Filter signal fired on {1} {2}", 
                     isBullish ? "Bullish" : "Bearish",
                     Symbol.Name,
                     Bars.TimeFrame);
 
-                Notifications.SendEmail("MACrossOver@indicators.com", "rechambers11@gmail.com", subject, string.Empty);
+                Notifications.SendEmail("QMPFilter@indicators.com", "rechambers11@gmail.com", subject, string.Empty);
             }
 
             if (PlayAlertSound)
