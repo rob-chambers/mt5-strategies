@@ -1,6 +1,7 @@
-// Version 2020-04-10 18:05
+// Version 2020-04-13 10:30
 using cAlgo.API;
 using cAlgo.API.Indicators;
+using System.Collections.Generic;
 
 /*
  * Rules for new indicator:
@@ -73,6 +74,7 @@ namespace cAlgo.Library.Indicators
         private MovingAverage _slowMA;
         private MovingAverage _higherTimeframeMA;
         private double _buffer;
+        private List<int> _notifications = new List<int>();
 
         protected override void Initialize()
         {
@@ -96,12 +98,12 @@ namespace cAlgo.Library.Indicators
             if (IsBullishBar(index))
             {
                 DrawBullishPoint(index);
-                HandleAlerts(true);
+                HandleAlerts(true, index);
             }
             else if (IsBearishBar(index))
             {
                 DrawBearishPoint(index);
-                HandleAlerts(false);
+                HandleAlerts(false, index);
             }            
         }
 
@@ -190,11 +192,17 @@ namespace cAlgo.Library.Indicators
             Chart.DrawIcon("bearsignal" + index, ChartIconType.DownArrow, index, y, Color.White);
         }
 
-        private void HandleAlerts(bool isBullish)
+        private void HandleAlerts(bool isBullish, int index)
         {
             // Make sure the email will be sent only at RealTime
             if (!IsLastBar)
                 return;
+
+            // The indicator is called every tick - ensure we haven't already handled this alert
+            if (_notifications.Contains(index))
+                return;
+
+            _notifications.Add(index);
 
             if (SendEmailAlerts)
             {
