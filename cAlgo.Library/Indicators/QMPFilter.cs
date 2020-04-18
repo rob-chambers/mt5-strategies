@@ -1,10 +1,11 @@
-// Version 2020-04-13 10:27
+// Version 2020-04-18 14:38
 using cAlgo.API;
+using Powder.TradingLibrary;
 using System.Collections.Generic;
 
 namespace cAlgo.Library.Indicators
 {
-    [Indicator(IsOverlay = true, TimeZone = TimeZones.UTC, AutoRescale = false, AccessRights = AccessRights.None)]
+    [Indicator(IsOverlay = true, TimeZone = TimeZones.UTC, AutoRescale = false, AccessRights = AccessRights.FileSystem)]
     public class QMPFilter : Indicator
     {
         [Parameter()]
@@ -15,6 +16,9 @@ namespace cAlgo.Library.Indicators
 
         [Parameter("Play alert sound", DefaultValue = true)]
         public bool PlayAlertSound { get; set; }
+
+        [Parameter("Show alert message", DefaultValue = true)]
+        public bool ShowMessage { get; set; }
 
         [Output("Up Signal")]
         public IndicatorDataSeries UpSignal { get; set; }
@@ -92,19 +96,24 @@ namespace cAlgo.Library.Indicators
                 return;
 
             _notifications.Add(index);
+            var subject = string.Format("{0} QMP Filter signal fired on {1} {2}",
+                isBullish ? "Bullish" : "Bearish",
+                Symbol.Name,
+                Bars.TimeFrame);
+
             if (SendEmailAlerts)
             {
-                var subject = string.Format("{0} QMP Filter signal fired on {1} {2}", 
-                    isBullish ? "Bullish" : "Bearish",
-                    Symbol.Name,
-                    Bars.TimeFrame);
-
                 Notifications.SendEmail("QMPFilter@indicators.com", "rechambers11@gmail.com", subject, string.Empty);
             }
 
             if (PlayAlertSound)
             {
                 Notifications.PlaySound(@"c:\windows\media\ring03.wav");
+            }
+
+            if (ShowMessage)
+            {
+                AlertService.SendAlert(new Alert("QMP Filter", Symbol.Name, Bars.TimeFrame.ToString()));
             }
         }
     }

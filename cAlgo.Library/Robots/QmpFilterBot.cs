@@ -1,4 +1,4 @@
-// Version 2020-04-11 18:41
+// Version 2020-04-18 14:38
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
@@ -7,7 +7,7 @@ using System;
 
 namespace cAlgo.Library.Robots.QmpFilterBot
 {
-    [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.None)]
+    [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FileSystem)]
     public class QmpFilterBot : BaseRobot
     {
         [Parameter("Take long trades?", DefaultValue = false)]
@@ -92,14 +92,28 @@ namespace cAlgo.Library.Robots.QmpFilterBot
 
         protected override bool HasBullishSignal()
         {
-            return _qqeAdv.Result.Last(1) > _qqeAdv.ResultS.Last(1) &&
+            var hasSignal = _qqeAdv.Result.Last(1) > _qqeAdv.ResultS.Last(1) &&
                 _qqeAdv.Result.Last(2) <= _qqeAdv.ResultS.Last(2);
+
+            if (hasSignal)
+            {
+                AlertService.SendAlert(new Alert("QMP Filter", Symbol.Name, Bars.TimeFrame.ToString()));
+            }
+
+            return hasSignal;
         }
 
         protected override bool HasBearishSignal()
         {
-            return _qqeAdv.Result.Last(1) < _qqeAdv.ResultS.Last(1) &&
+            var hasSignal = _qqeAdv.Result.Last(1) < _qqeAdv.ResultS.Last(1) &&
                 _qqeAdv.Result.Last(2) >= _qqeAdv.ResultS.Last(2);
+
+            if (hasSignal)
+            {
+                AlertService.SendAlert(new Alert("QMP Filter", Symbol.Name, Bars.TimeFrame.ToString()));
+            }
+
+            return hasSignal;
         }
 
         protected override bool ManageLongPosition()

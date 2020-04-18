@@ -45,6 +45,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Alert.cs" />
+    <Compile Include="AlertService.cs" />
     <Compile Include="BaseRobot.cs" />
     <Compile Include="InitialStopLossRuleValues.cs" />
     <Compile Include="LotSizingRuleValues.cs" />
