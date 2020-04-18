@@ -5,6 +5,7 @@ namespace cTrader.DesktopNotifications
     public partial class AlertForm : Form
     {
         private bool _exiting;
+        private delegate void SetAlertCallback(Alert alert);
 
         public AlertForm()
         {
@@ -51,6 +52,27 @@ namespace cTrader.DesktopNotifications
                 {
                     WindowState = FormWindowState.Normal;
                 }
+            }
+        }
+
+        public void SetAlert(Alert alert)
+        {
+            if (InvokeRequired)
+            {
+                var d = new SetAlertCallback(SetAlert);
+                Invoke(d, new object[] { alert });
+            }
+            else
+            {
+                var item = alertList.Items.Add(alert.TriggerTimeStamp.ToString("MMM dd HH:mm:ss"));
+                item.SubItems.Add(new ListViewItem.ListViewSubItem(item, alert.Indicator));
+                item.SubItems.Add(new ListViewItem.ListViewSubItem(item, alert.Pair));
+                item.SubItems.Add(new ListViewItem.ListViewSubItem(item, alert.TimeFrame));
+                item.Selected = true;
+
+                var message = string.Format("{0} Alert on {1} {2}", alert.Indicator, alert.Pair, alert.TimeFrame);
+                MessageBox.Show(message, "Alert", MessageBoxButtons.OK, MessageBoxIcon.Information,
+                    MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
             }
         }
     }

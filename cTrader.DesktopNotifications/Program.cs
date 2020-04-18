@@ -30,13 +30,12 @@ namespace cTrader.DesktopNotifications
 
         private static void OnFileWatchingServiceAlert(object sender, Alert alert)
         {
-            _alertForm.WindowState = FormWindowState.Normal;
-            _alertForm.Show();
-            _alertForm.Activate();
+            AddAlert(alert);
+        }
 
-            var message = string.Format("{0} Alert on {1} {2}", alert.Indicator, alert.Pair, alert.TimeFrame);
-            MessageBox.Show(message, "Alert", MessageBoxButtons.OK, MessageBoxIcon.Information, 
-                MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+        private static void AddAlert(Alert alert)
+        {            
+            _alertForm.SetAlert(alert);
         }
 
         private static void OnMainFormClosed(object sender, FormClosedEventArgs e)
