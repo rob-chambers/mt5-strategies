@@ -1,7 +1,6 @@
-// Version 2020-04-18 14:38
+// Version 2020-04-18 17:12
 using cAlgo.API;
 using Powder.TradingLibrary;
-using System.Collections.Generic;
 
 namespace cAlgo.Library.Indicators
 {
@@ -28,7 +27,7 @@ namespace cAlgo.Library.Indicators
 
         private QualitativeQuantitativeE _qqeAdv;
         private double _buffer;
-        private List<int> _notifications = new List<int>();
+        private int _lastAlertBarIndex;
 
         protected override void Initialize()
         {
@@ -87,15 +86,11 @@ namespace cAlgo.Library.Indicators
 
         private void HandleAlerts(bool isBullish, int index)
         {
-            // Make sure the email will be sent only at RealTime
-            if (!IsLastBar)
+            // Make sure the alert will only be triggered in Real Time and ensure we haven't triggered already because this is called every tick
+            if (!IsLastBar || _lastAlertBarIndex == index)
                 return;
 
-            // The indicator is called every tick - ensure we haven't already handled this alert
-            if (_notifications.Contains(index))
-                return;
-
-            _notifications.Add(index);
+            _lastAlertBarIndex = index;
             var subject = string.Format("{0} QMP Filter signal fired on {1} {2}",
                 isBullish ? "Bullish" : "Bearish",
                 Symbol.Name,

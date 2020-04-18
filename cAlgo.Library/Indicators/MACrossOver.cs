@@ -1,6 +1,7 @@
-// Version 2020-04-13 10:30
+// Version 2020-04-18 17:12
 using cAlgo.API;
 using cAlgo.API.Indicators;
+using Powder.TradingLibrary;
 using System.Collections.Generic;
 
 /*
@@ -63,6 +64,9 @@ namespace cAlgo.Library.Indicators
         [Parameter("Play alert sound", DefaultValue = true)]
         public bool PlayAlertSound { get; set; }
 
+        [Parameter("Show alert message", DefaultValue = true)]
+        public bool ShowMessage { get; set; }
+
         [Output("Up Signal", LineColor = "Lime")]
         public IndicatorDataSeries UpSignal { get; set; }
 
@@ -74,7 +78,7 @@ namespace cAlgo.Library.Indicators
         private MovingAverage _slowMA;
         private MovingAverage _higherTimeframeMA;
         private double _buffer;
-        private List<int> _notifications = new List<int>();
+        private int _lastAlertBarIndex;
 
         protected override void Initialize()
         {
@@ -194,16 +198,11 @@ namespace cAlgo.Library.Indicators
 
         private void HandleAlerts(bool isBullish, int index)
         {
-            // Make sure the email will be sent only at RealTime
-            if (!IsLastBar)
+            // Make sure the alert will only be triggered in Real Time and ensure we haven't triggered already because this is called every tick
+            if (!IsLastBar || _lastAlertBarIndex == index)
                 return;
 
-            // The indicator is called every tick - ensure we haven't already handled this alert
-            if (_notifications.Contains(index))
-                return;
-
-            _notifications.Add(index);
-
+            _lastAlertBarIndex = index;
             if (SendEmailAlerts)
             {
                 var subject = string.Format("{0} MA Cross formed on {1} {2}", 
@@ -217,6 +216,11 @@ namespace cAlgo.Library.Indicators
             if (PlayAlertSound)
             {
                 Notifications.PlaySound(@"c:\windows\media\ring03.wav");
+            }
+
+            if (ShowMessage)
+            {
+                AlertService.SendAlert(new Alert("MA Cross Over", Symbol.Name, Bars.TimeFrame.ToString()));
             }
         }
     }
