@@ -1,4 +1,4 @@
-// Version 2020-04-18 17:41
+// Version 2020-04-19 11:53
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
@@ -74,7 +74,7 @@ namespace cAlgo.Library.Robots.QmpFilterBot
             Init(TakeLongsParameter,
                 TakeShortsParameter,
                 InitialStopLossRuleValues.PreviousBarNPips,
-                2,
+                5,
                 TrailingStopLossRuleValues.None,
                 0,
                 LotSizingRule,

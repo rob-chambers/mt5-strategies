@@ -495,7 +495,7 @@ namespace Powder.TradingLibrary
         {
             if (_lotSizingRule == LotSizingRuleValues.Static)
             {
-                return 1;
+                return 3;
             }
 
             var risk = Account.Equity * _dynamicRiskPercentage / 100;
