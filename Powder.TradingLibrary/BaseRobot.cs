@@ -87,6 +87,85 @@ namespace Powder.TradingLibrary
 
             Print("Symbol.TickSize: {0}, Symbol.Digits: {1}, Symbol.PipSize: {2}",
                 Symbol.TickSize, Symbol.Digits, Symbol.PipSize);
+
+            AttachExistingPosition();
+        }
+
+        protected override void OnStop()
+        {
+            // if we are backtesting then just close all the trades to simplify results
+            if (!IsBacktesting)
+            {
+                return;
+            }
+
+            foreach (var position in Positions)
+            {
+                position.Close();
+            }
+        }
+
+        private void AttachExistingPosition()
+        {
+            // If we have started the robot on a chart with an existing position then we want to manage this position
+            var position = Positions.SingleOrDefault(p => p.SymbolName == Symbol.Name);
+            if (position == null)
+            {
+                return;
+            }
+
+            if (_takeLongsParameter && position.TradeType == TradeType.Buy)
+            {
+                SetOpenPosition(position, printPositionInfo: false);
+            }
+            else if (_takeShortsParameter && position.TradeType == TradeType.Sell)
+            {
+                SetOpenPosition(position, printPositionInfo: false);
+            }
+
+            if (_currentPosition == null)
+            {
+                return;
+            }
+
+            CalcCorrectBarsSinceEntry();
+        }
+
+        private void CalcCorrectBarsSinceEntry()
+        {
+            var divisor = 0;
+
+            if (Bars.TimeFrame.Equals(TimeFrame.Minute15))
+            {
+                divisor = 15;
+            }
+            else if (Bars.TimeFrame.Equals(TimeFrame.Minute5))
+            {
+                divisor = 5;
+            }
+            else if (Bars.TimeFrame.Equals(TimeFrame.Minute30))
+            {
+                divisor = 30;
+            }
+            else if (Bars.TimeFrame.Equals(TimeFrame.Hour))
+            {
+                divisor = 60;
+            }
+            else if (Bars.TimeFrame.Equals(TimeFrame.Hour4))
+            {
+                divisor = 240;
+            }
+            else
+            {
+                Print("Warning: Current timeframe unahandled for calculation of BarsSinceEntry on existing position.");
+            }
+
+            if (divisor != 0)
+            {
+                var minutes = Server.TimeInUtc.Subtract(_currentPosition.EntryTime).TotalMinutes;                
+                BarsSinceEntry = Convert.ToInt32(Math.Floor(minutes / divisor));
+                Print("BarsSinceEntry calculation: {0}, {1}", minutes / divisor, BarsSinceEntry);
+            }
         }
 
         protected virtual void ValidateParameters(
@@ -627,20 +706,28 @@ namespace Powder.TradingLibrary
 
         protected virtual void OnPositionOpened(PositionOpenedEventArgs args)
         {
+            SetOpenPosition(args.Position);
+        }
+
+        private void SetOpenPosition(Position position, bool printPositionInfo = true)
+        {
             BarsSinceEntry = 0;
             RecentHigh = InitialRecentHigh;
             RecentLow = InitialRecentLow;
-            _currentPosition = args.Position;
-            var position = args.Position;
-            var sl = position.StopLoss.HasValue
-                ? string.Format(" (SL={0})", position.StopLoss.Value)
-                : string.Empty;
+            _currentPosition = position;
 
-            var tp = position.TakeProfit.HasValue
-                ? string.Format(" (TP={0})", position.TakeProfit.Value)
-                : string.Empty;
+            if (printPositionInfo)
+            {
+                var sl = position.StopLoss.HasValue
+                    ? string.Format(" (SL={0})", position.StopLoss.Value)
+                    : string.Empty;
 
-            Print("{0} {1:N} at {2}{3}{4}", position.TradeType, position.VolumeInUnits, position.EntryPrice, sl, tp);
+                var tp = position.TakeProfit.HasValue
+                    ? string.Format(" (TP={0})", position.TakeProfit.Value)
+                    : string.Empty;
+
+                Print("{0} {1:N} at {2}{3}{4}", position.TradeType, position.VolumeInUnits, position.EntryPrice, sl, tp);
+            }
 
             CalculateBreakEvenPrice();
             CalculateDoubleRiskPrice();

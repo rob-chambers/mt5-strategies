@@ -1,4 +1,4 @@
-// Version 2020-04-19 11:53
+// Version 2020-04-19 14:54
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
@@ -10,31 +10,34 @@ namespace cAlgo.Library.Robots.QmpFilterBot
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FileSystem)]
     public class QmpFilterBot : BaseRobot
     {
-        [Parameter("Take long trades?", DefaultValue = false)]
+        private const string SignalGroup = "Signal";
+        private const string RiskGroup = "Risk Management";
+
+        [Parameter("Take long trades?", Group = SignalGroup, DefaultValue = false)]
         public bool TakeLongsParameter { get; set; }
 
-        [Parameter("Take short trades?", DefaultValue = false)]
+        [Parameter("Take short trades?", Group = "Signal", DefaultValue = false)]
         public bool TakeShortsParameter { get; set; }
 
-        [Parameter]
+        [Parameter(Group = SignalGroup)]
         public DataSeries SourceSeries { get; set; }
 
-        [Parameter("Slow MA Period", DefaultValue = 89)]
+        [Parameter("Slow MA Period", Group = SignalGroup, DefaultValue = 89)]
         public int SlowPeriodParameter { get; set; }
 
-        [Parameter("Medium MA Period", DefaultValue = 55)]
+        [Parameter("Medium MA Period", Group = SignalGroup, DefaultValue = 55)]
         public int MediumPeriodParameter { get; set; }
 
-        [Parameter("Fast MA Period", DefaultValue = 21)]
+        [Parameter("Fast MA Period", Group = SignalGroup, DefaultValue = 21)]
         public int FastPeriodParameter { get; set; }
 
-        [Parameter("Lot Sizing Rule", DefaultValue = LotSizingRuleValues.Static)]
+        [Parameter("Lot Sizing Rule", Group = RiskGroup, DefaultValue = LotSizingRuleValues.Static)]
         public LotSizingRuleValues LotSizingRule { get; set; }
 
-        [Parameter("Dynamic Risk %age", DefaultValue = 2)]
+        [Parameter("Dynamic Risk %age", Group = RiskGroup, DefaultValue = 2)]
         public double DynamicRiskPercentage { get; set; }
 
-        [Parameter("Use Martingale?", DefaultValue = false)]
+        [Parameter("Use Martingale?", Group = RiskGroup, DefaultValue = false)]
         public bool UseMartingale { get; set; }
 
         protected override string Name
@@ -95,12 +98,7 @@ namespace cAlgo.Library.Robots.QmpFilterBot
             var hasSignal = _qqeAdv.Result.Last(1) > _qqeAdv.ResultS.Last(1) &&
                 _qqeAdv.Result.Last(2) <= _qqeAdv.ResultS.Last(2);
 
-            if (hasSignal)
-            {
-                AlertService.SendAlert(new Alert("QMP Filter", Symbol.Name, Bars.TimeFrame.ToString()));
-            }
-
-            return hasSignal;
+            return hasSignal && Symbol.Ask > _mediumMA.Result.LastValue;
         }
 
         protected override bool HasBearishSignal()
@@ -108,12 +106,7 @@ namespace cAlgo.Library.Robots.QmpFilterBot
             var hasSignal = _qqeAdv.Result.Last(1) < _qqeAdv.ResultS.Last(1) &&
                 _qqeAdv.Result.Last(2) >= _qqeAdv.ResultS.Last(2);
 
-            if (hasSignal)
-            {
-                AlertService.SendAlert(new Alert("QMP Filter", Symbol.Name, Bars.TimeFrame.ToString()));
-            }
-
-            return hasSignal;
+            return hasSignal && Symbol.Ask < _mediumMA.Result.LastValue;
         }
 
         protected override bool ManageLongPosition()
