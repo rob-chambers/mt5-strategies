@@ -1,4 +1,4 @@
-// Version 2020-04-18 18:30
+// Version 2020-04-19 17:35
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -173,7 +173,7 @@ namespace cAlgo.Library.Indicators
         private void HandleAlerts(bool isBullish, int index)
         {
             // Make sure the alert will only be triggered in Real Time and ensure we haven't triggered already because this is called every tick
-            if (!IsLastBar || _lastAlertBarIndex == index)
+            if (!IsLastBar || _lastAlertBarIndex == index || IsBacktesting)
                 return;
 
             _lastAlertBarIndex = index;
