@@ -48,6 +48,7 @@
     <Compile Include="Alert.cs" />
     <Compile Include="AlertService.cs" />
     <Compile Include="BaseRobot.cs" />
+    <Compile Include="Common.cs" />
     <Compile Include="InitialStopLossRuleValues.cs" />
     <Compile Include="LotSizingRuleValues.cs" />
     <Compile Include="MaCrossRuleValues.cs" />
