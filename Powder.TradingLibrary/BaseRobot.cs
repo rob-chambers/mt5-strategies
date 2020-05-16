@@ -326,7 +326,7 @@ namespace Powder.TradingLibrary
             return true;
         }
 
-        private void AdjustStopLossForLongPosition(double? newStop)
+        protected void AdjustStopLossForLongPosition(double? newStop)
         {
             if (!newStop.HasValue || _currentPosition.StopLoss.HasValue && _currentPosition.StopLoss.Value >= newStop.Value)
                 return;
@@ -334,7 +334,7 @@ namespace Powder.TradingLibrary
             ModifyPosition(_currentPosition, newStop, _currentPosition.TakeProfit);
         }
 
-        private double? CalulateTrailingStopForLongPosition()
+        protected double? CalulateTrailingStopForLongPosition()
         {
             double? stop = null;
             switch (_trailingStopLossRule)
@@ -420,7 +420,7 @@ namespace Powder.TradingLibrary
             ModifyPosition(_currentPosition, newStop, _currentPosition.TakeProfit);
         }
 
-        private double? CalulateTrailingStopForShortPosition()
+        protected double? CalulateTrailingStopForShortPosition()
         {
             double? stop = null;
             switch (_trailingStopLossRule)

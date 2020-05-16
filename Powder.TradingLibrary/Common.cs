@@ -25,9 +25,9 @@ namespace Powder.TradingLibrary
             return lowestIndex;
         }
 
-        public static double LowestLow(DataSeries dataSeries, int periods, int startIndex = 1)
+        public static double LowestLow(DataSeries dataSeries, int periods)
         {
-            var index = startIndex;
+            var index = 1;
             var lowest = double.MaxValue;
 
             while (index < periods)
@@ -42,6 +42,25 @@ namespace Powder.TradingLibrary
             }
 
             return lowest;
+        }
+
+        public static double HighestHigh(DataSeries dataSeries, int periods)
+        {
+            var index = 1;
+            var highest = double.MinValue;
+
+            while (index < periods)
+            {
+                var high = dataSeries.Last(index);
+                if (high > highest)
+                {
+                    highest = high;
+                }
+
+                index++;
+            }
+
+            return highest;
         }
     }
 }
