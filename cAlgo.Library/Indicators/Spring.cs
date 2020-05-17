@@ -1,4 +1,4 @@
-// Version 2020-05-17 15:10
+// Version 2020-05-17 20:24
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -44,6 +44,9 @@ namespace cAlgo.Library.Indicators
         [Parameter("Play alert sound", DefaultValue = false, Group = NotificationsGroup)]
         public bool PlayAlertSound { get; set; }
 
+        [Parameter("Show alert message", DefaultValue = false, Group = NotificationsGroup)]
+        public bool ShowMessage { get; set; }
+
         [Output("Up Signal", LineColor = "Lime")]
         public IndicatorDataSeries UpSignal { get; set; }
 
@@ -69,7 +72,6 @@ namespace cAlgo.Library.Indicators
         private MovingAverage _slowMA;
         private SwingHighLow _swingHighLowIndicator;
         private AverageTrueRange _atr;
-        private double _buffer;
         private int _latestSignalIndex;
 
         protected override void Initialize()
@@ -79,7 +81,6 @@ namespace cAlgo.Library.Indicators
             _slowMA = Indicators.MovingAverage(Source, SlowPeriodParameter, MovingAverageType.Exponential);
             _swingHighLowIndicator = Indicators.GetIndicator<SwingHighLow>(Bars.HighPrices, Bars.LowPrices, SwingHighStrength);
             _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
-            _buffer = Symbol.PipSize * 5;
         }
 
         public override void Calculate(int index)
@@ -286,15 +287,23 @@ namespace cAlgo.Library.Indicators
         }
 
         private void DrawBullishPoint(int index)
-        {            
-            var y = Bars.LowPrices[index] - _buffer;            
-            Chart.DrawIcon("bullsignal" + index, ChartIconType.UpArrow, index, y, Color.Lime);
+        {
+            var diff = GetVerticalDrawingBuffer();
+            var y = Bars.LowPrices[index] - diff;
+            Chart.DrawIcon("bullsignal" + index, ChartIconType.Diamond, index, y, Color.HotPink);
+        }
+
+        private double GetVerticalDrawingBuffer()
+        {
+            var diff = Chart.TopY - Chart.BottomY;
+            diff /= 25;
+            return diff;
         }
 
         private void HandleAlerts()
         {
             // Make sure the email will be sent only at RealTime
-            if (!IsLastBar)
+            if (IsBacktesting || !IsLastBar)
                 return;
 
             if (SendEmailAlerts)
@@ -307,9 +316,10 @@ namespace cAlgo.Library.Indicators
             }
 
             if (PlayAlertSound)
-            {
                 Notifications.PlaySound(@"c:\windows\media\ring03.wav");
-            }
+
+            if (ShowMessage)
+                AlertService.SendAlert(new Alert("Spring", Symbol.Name, Bars.TimeFrame.ToString()));
         }
     }
 }

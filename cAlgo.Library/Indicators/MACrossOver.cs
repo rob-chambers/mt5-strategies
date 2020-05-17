@@ -1,8 +1,7 @@
-// Version 2020-04-18 17:12
+// Version 2020-05-17 20:24
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using Powder.TradingLibrary;
-using System.Collections.Generic;
 
 /*
  * Rules for new indicator:
@@ -77,7 +76,6 @@ namespace cAlgo.Library.Indicators
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
         private MovingAverage _higherTimeframeMA;
-        private double _buffer;
         private int _lastAlertBarIndex;
 
         protected override void Initialize()
@@ -89,8 +87,6 @@ namespace cAlgo.Library.Indicators
 
             var higherSeries = MarketData.GetBars(TimeFrame.Hour);
             _higherTimeframeMA = Indicators.MovingAverage(higherSeries.ClosePrices, FastPeriodParameter, MovingAverageType.Exponential);
-
-            _buffer = Symbol.PipSize * 5;
         }
 
         public override void Calculate(int index)
@@ -101,32 +97,61 @@ namespace cAlgo.Library.Indicators
 
             if (IsBullishBar(index))
             {
-                DrawBullishPoint(index);
-                HandleAlerts(true, index);
+                if (HasVeryRecentSignal(index))
+                {
+                    _lastAlertBarIndex = index;
+                    return;
+                }
+
+                AddSignal(index, true);
             }
             else if (IsBearishBar(index))
             {
+                if (HasVeryRecentSignal(index))
+                {
+                    _lastAlertBarIndex = index;
+                    return;
+                }
+
+                AddSignal(index, false);
+            }            
+        }        
+
+        private bool HasVeryRecentSignal(int index)
+        {
+            const int ThresholdForRecent = 3;
+
+            var diff = index - _lastAlertBarIndex;
+            return diff <= ThresholdForRecent;
+        }
+
+        private void AddSignal(int index, bool isBullish)
+        {
+            _lastAlertBarIndex = index;
+            if (isBullish)
+            {
+                UpSignal[index] = 1.0;
+                DrawBullishPoint(index);
+                HandleAlerts(true, index);
+            }
+            else
+            {
+                DownSignal[index] = 1.0;
                 DrawBearishPoint(index);
                 HandleAlerts(false, index);
-            }            
+            }
         }
 
         private bool IsBullishBar(int index)
         {
             if (Bars.ClosePrices[index] < _higherTimeframeMA.Result[index])
-            {
                 return false;
-            }
 
             if (!AreMovingAveragesStackedBullishlyAtIndex(index))
-            {
                 return false;
-            }
 
             if (!AreMovingAveragesStackedBullishlyAtIndex(index - 1))
-            {
                 return true;
-            }
 
             return false;
         }
@@ -134,38 +159,32 @@ namespace cAlgo.Library.Indicators
         private bool IsBearishBar(int index)
         {
             if (Bars.ClosePrices[index] > _higherTimeframeMA.Result[index])
-            {
                 return false;
-            }
 
             if (!AreMovingAveragesStackedBearishlyAtIndex(index))
-            {
                 return false;
-            }
 
             if (!AreMovingAveragesStackedBearishlyAtIndex(index - 1))
-            {
                 return true;
-            }
 
             return false;
         }
 
-        private bool HasCrossedAllMovingAverages(int index)
-        {
-            var currentLow = Bars.LowPrices[index];
-            var currentHigh = Bars.HighPrices[index];
+        //private bool HasCrossedAllMovingAverages(int index)
+        //{
+        //    var currentLow = Bars.LowPrices[index];
+        //    var currentHigh = Bars.HighPrices[index];
 
-            if (!(currentHigh >= _slowMA.Result[index])) return false;
-            if (!(currentHigh >= _mediumMA.Result[index])) return false;
-            if (!(currentHigh >= _fastMA.Result[index])) return false;
+        //    if (!(currentHigh >= _slowMA.Result[index])) return false;
+        //    if (!(currentHigh >= _mediumMA.Result[index])) return false;
+        //    if (!(currentHigh >= _fastMA.Result[index])) return false;
 
-            if (!(currentLow <= _fastMA.Result[index])) return false;
-            if (!(currentLow <= _mediumMA.Result[index])) return false;
-            if (!(currentLow <= _slowMA.Result[index])) return false;
+        //    if (!(currentLow <= _fastMA.Result[index])) return false;
+        //    if (!(currentLow <= _mediumMA.Result[index])) return false;
+        //    if (!(currentLow <= _slowMA.Result[index])) return false;
 
-            return true;
-        }
+        //    return true;
+        //}
 
         private bool AreMovingAveragesStackedBullishlyAtIndex(int index)
         {
@@ -181,25 +200,31 @@ namespace cAlgo.Library.Indicators
                 _fastMA.Result[index] < _slowMA.Result[index];
         }
 
-
         private void DrawBullishPoint(int index)
         {
-            UpSignal[index] = 1.0;
-            var y = Bars.LowPrices[index] - _buffer;            
+            var diff = GetVerticalDrawingBuffer();
+            var y = Bars.LowPrices[index] - diff;            
             Chart.DrawIcon("bullsignal" + index, ChartIconType.UpArrow, index, y, Color.Lime);
         }
 
         private void DrawBearishPoint(int index)
         {
-            DownSignal[index] = 1.0;
-            var y = Bars.HighPrices[index] + _buffer;
+            var diff = GetVerticalDrawingBuffer();
+            var y = Bars.HighPrices[index] + diff;
             Chart.DrawIcon("bearsignal" + index, ChartIconType.DownArrow, index, y, Color.White);
+        }
+
+        private double GetVerticalDrawingBuffer()
+        {
+            var diff = Chart.TopY - Chart.BottomY;
+            diff /= 25;
+            return diff;
         }
 
         private void HandleAlerts(bool isBullish, int index)
         {
             // Make sure the alert will only be triggered in Real Time and ensure we haven't triggered already because this is called every tick
-            if (!IsLastBar || _lastAlertBarIndex == index)
+            if (IsBacktesting || !IsLastBar || _lastAlertBarIndex == index)
                 return;
 
             _lastAlertBarIndex = index;

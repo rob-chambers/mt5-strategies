@@ -1,4 +1,4 @@
-// Version 2020-04-11 15:35
+// Version 2020-05-17 20:24
 using System;
 using cAlgo.API;
 using cAlgo.API.Indicators;
@@ -115,7 +115,7 @@ namespace cAlgo.Library.Robots.MACrosser
 
         protected override void OnStart()
         {
-            _maCrossIndicator = Indicators.GetIndicator<MACrossOver>(SourceSeries, SlowPeriodParameter, MediumPeriodParameter, FastPeriodParameter, false, false);
+            _maCrossIndicator = Indicators.GetIndicator<MACrossOver>(SourceSeries, SlowPeriodParameter, MediumPeriodParameter, FastPeriodParameter, false, false, false);
             _fastMA = Indicators.MovingAverage(SourceSeries, FastPeriodParameter, MovingAverageType.Exponential);
             _mediumMA = Indicators.MovingAverage(SourceSeries, MediumPeriodParameter, MovingAverageType.Exponential);
             _slowMA = Indicators.MovingAverage(SourceSeries, SlowPeriodParameter, MovingAverageType.Exponential);

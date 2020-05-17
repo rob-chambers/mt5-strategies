@@ -1,4 +1,4 @@
-// Version 2020-04-19 17:35
+// Version 2020-05-17 20:24
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -34,7 +34,6 @@ namespace cAlgo.Library.Indicators
         public IndicatorDataSeries DownSignal { get; set; }
 
         private QualitativeQuantitativeE _qqeAdv;
-        private double _buffer;
         private int _lastAlertBarIndex;
         private MovingAverage _fastMA;
         private MovingAverage _slowMA;
@@ -43,20 +42,14 @@ namespace cAlgo.Library.Indicators
         {
             // Initialize and create nested indicators
             _qqeAdv = Indicators.GetIndicator<QualitativeQuantitativeE>(8);
-            _buffer = Symbol.PipSize * 5;
             var h4series = MarketData.GetSeries(TimeFrame.Hour4);
             //_h4Rsi = Indicators.RelativeStrengthIndex(h4series.Close, 14);
 
             if (IsFastMaFilterInUse)
-            {
                 _fastMA = Indicators.MovingAverage(h4series.Close, 21, MovingAverageType.Exponential);
-            }
 
             if (IsSlowMaFilterInUse)
-            {
-
                 _slowMA = Indicators.MovingAverage(h4series.Close, 89, MovingAverageType.Exponential);
-            }                       
         }
 
         private bool IsFastMaFilterInUse
@@ -72,50 +65,87 @@ namespace cAlgo.Library.Indicators
             get
             {
                 return UseSlowH4Filter && Bars.TimeFrame < TimeFrame.Hour4;
-            }            
+            }
         }
 
         public override void Calculate(int index)
         {
-            // Calculate value at specified index
             UpSignal[index] = double.NaN;
             DownSignal[index] = double.NaN;
 
+            if (IsBullishBar(index))
+                HandleBullishSetUp(index);
+            else if (IsBearishBar(index))
+                HandleBearishSetup(index);
+        }
+
+        private void HandleBullishSetUp(int index)
+        {
+            if (HasVeryRecentSignal(index))
+            {
+                _lastAlertBarIndex = index;
+                return;
+            }
+
             var slowMaRule = false;
             var fastMaRule = false;
-            if (IsBullishBar(index))
-            {                
-                if (IsSlowMaFilterInUse && Bars.ClosePrices[index] > _slowMA.Result[index])
-                {
-                    slowMaRule = true;
-                }
 
-                if (IsFastMaFilterInUse && Bars.ClosePrices[index] > _fastMA.Result[index])
-                {
-                    fastMaRule = true;
-                }
+            if (IsSlowMaFilterInUse && Bars.ClosePrices[index] > _slowMA.Result[index])
+                slowMaRule = true;
 
-                // The cross occurred on the previous bar
-                DrawBullishPoint(index - 1, slowMaRule, fastMaRule);
+            if (IsFastMaFilterInUse && Bars.ClosePrices[index] > _fastMA.Result[index])
+                fastMaRule = true;
 
+            AddSignal(index, true, slowMaRule, fastMaRule);
+        }
+
+        private void HandleBearishSetup(int index)
+        {
+            if (HasVeryRecentSignal(index))
+            {
+                _lastAlertBarIndex = index;
+                return;
+            }
+
+            var slowMaRule = false;
+            var fastMaRule = false;
+
+            if (IsSlowMaFilterInUse && Bars.ClosePrices[index] < _slowMA.Result[index])
+                slowMaRule = true;
+
+            if (IsFastMaFilterInUse && Bars.ClosePrices[index] < _fastMA.Result[index])
+                fastMaRule = true;
+
+            AddSignal(index, false, slowMaRule, fastMaRule);
+        }
+
+        private bool HasVeryRecentSignal(int index)
+        {
+            const int ThresholdForRecent = 3;
+
+            var diff = index - _lastAlertBarIndex;
+            return diff <= ThresholdForRecent;
+        }
+
+        private void AddSignal(int index, bool isBullish, bool slowMaRule, bool fastMaRule)
+        {
+            _lastAlertBarIndex = index;
+
+            // The cross occurred on the previous bar
+            var drawingIndex = index - 1;
+
+            if (isBullish)
+            {
+                UpSignal[index] = 1.0;
+                DrawBullishPoint(drawingIndex, slowMaRule, fastMaRule);
                 HandleAlerts(true, index);
             }
-            else if (IsBearishBar(index))
+            else
             {
-                if (IsSlowMaFilterInUse && Bars.ClosePrices[index] < _slowMA.Result[index])
-                {
-                    slowMaRule = true;
-                }
-
-                if (IsFastMaFilterInUse && Bars.ClosePrices[index] < _fastMA.Result[index])
-                {
-                    fastMaRule = true;
-                }
-
-                // The cross occurred on the previous bar
-                DrawBearishPoint(index - 1, slowMaRule, fastMaRule);
+                DownSignal[index] = 1.0;
+                DrawBearishPoint(drawingIndex, slowMaRule, fastMaRule);
                 HandleAlerts(false, index);
-            }            
+            }
         }
 
         private bool IsBullishBar(int index)
@@ -134,40 +164,47 @@ namespace cAlgo.Library.Indicators
 
         private void DrawBullishPoint(int index, bool slowMaRule, bool fastMaRule)
         {
-            UpSignal[index] = 1.0;
-            var y = Bars.LowPrices[index] - _buffer;            
-            Chart.DrawIcon("bullsignal" + index, ChartIconType.UpTriangle, index, y, Color.SpringGreen);
+            var diff = GetVerticalDrawingBuffer();
+            var y = Bars.LowPrices[index] - diff;            
+            Chart.DrawIcon("qmpbull" + index, ChartIconType.UpTriangle, index, y, Color.SpringGreen);
 
             if (slowMaRule)
             {
-                y += _buffer / 2;
+                y += diff / 2;
                 Chart.DrawIcon("slowmasignal" + index, ChartIconType.Star, index, y, Color.Lime);
             }
 
             if (fastMaRule)
             {
-                y += _buffer / 2;
+                y += diff / 2;
                 Chart.DrawText("fastma" + index, "*", index, y, Color.White);
             }
         }
 
         private void DrawBearishPoint(int index, bool slowMaRule, bool fastMaRule)
         {
-            DownSignal[index] = 1.0;
-            var y = Bars.HighPrices[index] + _buffer;
+            var diff = GetVerticalDrawingBuffer();
+            var y = Bars.HighPrices[index] + diff;
             Chart.DrawIcon("bearsignal" + index, ChartIconType.DownTriangle, index, y, Color.Magenta);
 
             if (slowMaRule)
             {
-                y -= _buffer / 2;
+                y -= diff / 2;
                 Chart.DrawIcon("slowmasignal" + index, ChartIconType.Star, index, y, Color.Magenta);
             }
 
             if (fastMaRule)
             {
-                y -= _buffer / 2;
+                y -= diff / 2;
                 Chart.DrawText("fastma" + index, "*", index, y, Color.White);
             }
+        }
+
+        private double GetVerticalDrawingBuffer()
+        {
+            var diff = Chart.TopY - Chart.BottomY;
+            diff /= 25;
+            return diff;
         }
 
         private void HandleAlerts(bool isBullish, int index)
@@ -176,26 +213,19 @@ namespace cAlgo.Library.Indicators
             if (!IsLastBar || _lastAlertBarIndex == index || IsBacktesting)
                 return;
 
-            _lastAlertBarIndex = index;
             var subject = string.Format("{0} QMP Filter signal fired on {1} {2}",
                 isBullish ? "Bullish" : "Bearish",
                 Symbol.Name,
                 Bars.TimeFrame);
 
             if (SendEmailAlerts)
-            {
                 Notifications.SendEmail("QMPFilter@indicators.com", "rechambers11@gmail.com", subject, string.Empty);
-            }
 
             if (PlayAlertSound)
-            {
                 Notifications.PlaySound(@"c:\windows\media\ring03.wav");
-            }
 
             if (ShowMessage)
-            {
                 AlertService.SendAlert(new Alert("QMP Filter", Symbol.Name, Bars.TimeFrame.ToString()));
-            }
         }
     }
 }

@@ -1,4 +1,4 @@
-// Version 2020-05-17 15:29
+// Version 2020-05-17 20:24
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
@@ -79,6 +79,9 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
         [Parameter("Play alert sound", DefaultValue = false, Group = GroupNames.Notifications)]
         public bool PlayAlertSound { get; set; }
 
+        [Parameter("Show alert message", DefaultValue = false, Group = GroupNames.Notifications)]
+        public bool ShowMessage { get; set; }
+
         #endregion
 
         #region Trade Management Parameters
@@ -122,7 +125,7 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
                 BarsToAllowTradeToDevelop);
 
             _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
-            _spring = Indicators.GetIndicator<Spring>(SourceSeries, 89, 55, 21, SendEmailAlerts, PlayAlertSound, 
+            _spring = Indicators.GetIndicator<Spring>(SourceSeries, 89, 55, 21, SendEmailAlerts, PlayAlertSound, ShowMessage,
                 SignalBarRangeMultiplier, MaFlatFilter, BreakoutFilter, MinimumBarsForLowestLow, SwingHighStrength, BigMoveFilter);
             _minimumBuffer = Symbol.PipSize * 6;
             _timeFrameInMinutes = GetTimeFrameInMinutes();
