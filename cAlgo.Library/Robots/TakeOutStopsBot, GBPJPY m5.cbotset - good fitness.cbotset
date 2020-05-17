@@ -1,0 +1,21 @@
+﻿[ChartParameters]
+Symbol = GBPJPY
+Timeframe = m5
+
+[cBotParameters]
+LotSizingRule = 1
+DynamicRiskPercentage = 2
+SourceSeries = CloseB65C52E1-F7C0-4E62-9C94-5BA8E8F0FCEF
+SendEmailAlerts = False
+PlayAlertSound = False
+InitialStopLossInPips = 9
+TrailingStopLossRule = 6
+TrailingStopLossInPips = 7
+SignalBarRangeMultiplier = 1.8
+MaFlatFilter = False
+BreakoutFilter = True
+MinimumBarsForLowestLow = 70
+SwingHighStrength = 2
+BigMoveFilter = True
+BarsToExpireOrder = 12
+BarsToAllowTradeToDevelop = 6

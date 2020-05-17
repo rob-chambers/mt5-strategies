@@ -1,6 +1,7 @@
-// Version 2020-05-12 20:50
+// Version 2020-05-17 15:29
 using cAlgo.API;
 using cAlgo.API.Indicators;
+using cAlgo.Library.Indicators;
 using Powder.TradingLibrary;
 using System;
 using System.Linq;
@@ -10,25 +11,82 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FileSystem)]
     public class TakeOutStopsBot : BaseRobot
     {
-        private const string SignalGroup = "Signal";
-        private const string RiskGroup = "Risk Management";
+        private static class GroupNames
+        {
+            public const string Signal = "Signal";
+            public const string Risk = "Risk Management";
+            public const string Notifications = "Notifications";
+        }
+
         private AverageTrueRange _atr;
         private double _initialStopPrice;
+        private Spring _spring;
+        private int _timeFrameInMinutes;
+        private double _minimumBuffer;
 
-        [Parameter("Take long trades?", Group = SignalGroup, DefaultValue = true)]
-        public bool TakeLongsParameter { get; set; }
+        #region Risk Parameters
 
-        [Parameter("Take short trades?", Group = "Signal", DefaultValue = false)]
-        public bool TakeShortsParameter { get; set; }
-
-        [Parameter(Group = SignalGroup)]
-        public DataSeries SourceSeries { get; set; }
-
-        [Parameter("Lot Sizing Rule", Group = RiskGroup, DefaultValue = LotSizingRuleValues.Static)]
+        [Parameter("Lot Sizing Rule", Group = GroupNames.Risk, DefaultValue = LotSizingRuleValues.Dynamic)]
         public LotSizingRuleValues LotSizingRule { get; set; }
 
-        [Parameter("Dynamic Risk %age", Group = RiskGroup, DefaultValue = 2)]
+        [Parameter("Dynamic Risk %age", Group = GroupNames.Risk, DefaultValue = 2)]
         public double DynamicRiskPercentage { get; set; }
+
+        [Parameter("Initial SL (pips)", DefaultValue = 9, MinValue = 0, MaxValue = 20, Group = GroupNames.Risk)]
+        public int InitialStopLossInPips { get; set; }
+
+        [Parameter("Trailing SL Rule", DefaultValue = TrailingStopLossRuleValues.OppositeColourBar, Group = GroupNames.Risk)]
+        public TrailingStopLossRuleValues TrailingStopLossRule { get; set; }
+
+        [Parameter("Trailing SL (pips)", DefaultValue = 7, MinValue = 0, MaxValue = 20, Group = GroupNames.Risk)]
+        public int TrailingStopLossInPips { get; set; }
+
+        #endregion
+
+        #region Signal Parameters
+
+        [Parameter(Group = GroupNames.Signal)]
+        public DataSeries SourceSeries { get; set; }
+
+        [Parameter("SignalBarRangeMultiplier", DefaultValue = 1.2, MinValue = 0.5, MaxValue = 5, Step = 0.1, Group = GroupNames.Signal)]
+        public double SignalBarRangeMultiplier { get; set; }
+
+        [Parameter("MA Flat Filter", DefaultValue = false, Group = GroupNames.Signal)]
+        public bool MaFlatFilter { get; set; }
+
+        [Parameter("Breakout Filter", DefaultValue = true, Group = GroupNames.Signal)]
+        public bool BreakoutFilter { get; set; }
+
+        [Parameter("Min Bars For Lowest Low", DefaultValue = 65, MinValue = 10, MaxValue = 100, Step = 5, Group = GroupNames.Signal)]
+        public int MinimumBarsForLowestLow { get; set; }
+
+        [Parameter("Swing High Strength", DefaultValue = 3, MinValue = 1, MaxValue = 5, Group = GroupNames.Signal)]
+        public int SwingHighStrength { get; set; }
+
+        [Parameter("Big Move Filter", DefaultValue = true, Group = GroupNames.Signal)]
+        public bool BigMoveFilter { get; set; }
+
+        [Parameter("Bars To Expire Order", DefaultValue = 12, MinValue = 3, MaxValue =20, Group = GroupNames.Signal)]
+        public int BarsToExpireOrder { get; set; }
+
+        #endregion
+
+        #region Notification Parameters
+
+        [Parameter("Send email alerts", DefaultValue = false, Group = GroupNames.Notifications)]
+        public bool SendEmailAlerts { get; set; }
+
+        [Parameter("Play alert sound", DefaultValue = false, Group = GroupNames.Notifications)]
+        public bool PlayAlertSound { get; set; }
+
+        #endregion
+
+        #region Trade Management Parameters
+
+        [Parameter("Bars for trade development", DefaultValue = 3)]
+        public int BarsToAllowTradeToDevelop { get; set; }
+
+        #endregion
 
         protected override string Name
         {
@@ -40,14 +98,6 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
 
         protected override void OnStart()
         {
-            Print("Take Longs: {0}", TakeLongsParameter);
-            Print("Take Shorts: {0}", TakeShortsParameter);
-
-            if (!TakeLongsParameter && !TakeShortsParameter)
-            {
-                throw new ArgumentException("Both longs and shorts are disabled");
-            }
-
             Print("Lot sizing rule: {0}", LotSizingRule);
 
             var symbolLeverage = Symbol.DynamicLeverage[0].Leverage;
@@ -56,44 +106,32 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
             var realLeverage = Math.Min(symbolLeverage, Account.PreciseLeverage);
             Print("Account leverage: {0}", Account.PreciseLeverage);
 
-            Init(TakeLongsParameter,
-                TakeShortsParameter,
+            Init(true,
+                false,
                 InitialStopLossRuleValues.None,
-                0,
-                TrailingStopLossRuleValues.None,
-                0,
+                InitialStopLossInPips,
+                TrailingStopLossRule,
+                TrailingStopLossInPips,
                 LotSizingRule,
-                TakeProfitRuleValues.DoubleRisk,
+                TakeProfitRuleValues.None,
                 0,
                 0,
                 false,
                 false,
                 DynamicRiskPercentage,
-                0);
+                BarsToAllowTradeToDevelop);
 
             _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
+            _spring = Indicators.GetIndicator<Spring>(SourceSeries, 89, 55, 21, SendEmailAlerts, PlayAlertSound, 
+                SignalBarRangeMultiplier, MaFlatFilter, BreakoutFilter, MinimumBarsForLowestLow, SwingHighStrength, BigMoveFilter);
+            _minimumBuffer = Symbol.PipSize * 6;
+            _timeFrameInMinutes = GetTimeFrameInMinutes();
         }
 
         protected override bool HasBullishSignal()
         {
-            // 1) Look for a larger bar than normal.  Range should be e.g. 1.5 x average
-            var priorBarRange = Bars.HighPrices.Last(1) - Bars.LowPrices.Last(1);
-            const double RangeMultiplier = 1.5;
-
-            if (priorBarRange < _atr.Result.Last(1) * RangeMultiplier)
-            {
-                return false;
-            }
-
-            // 2) We must have made a new low over x bars
-            const int BarsToTestForNewLowHigh = 40;
-
-            if (Common.IndexOfLowestLow(Bars.ClosePrices, BarsToTestForNewLowHigh) != 1)
-            {
-                return false;
-            }
-
-            return true;
+            var hasSignal = !double.IsNaN(_spring.UpSignal.Last(1));
+            return hasSignal;
         }
 
         protected override bool HasBearishSignal()
@@ -103,28 +141,31 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
 
         protected override void EnterLongPosition()
         {
-            var volumeInUnits = 100000;
-
-            //var priorBarRange = Bars.HighPrices.Last(1) - Bars.LowPrices.Last(1);
-            //priorBarRange /= 4;
-            var buffer = _atr.Result.LastValue / 4;
-            var entryPrice = Bars.HighPrices.Last(1) + buffer;
-            _initialStopPrice = Bars.LowPrices.Last(1) - buffer;
-
-            var label = string.Format("BUY {0}", Symbol);
+            var entryPrice = Bars.HighPrices.Last(1) + Symbol.PipSize * 2;
+            _initialStopPrice = CalculateInitialStopLossInPipsForLongPosition().Value;
+            
             double? stopLossPips = Math.Round((entryPrice - _initialStopPrice) / Symbol.PipSize, 1);
+            var lots = CalculatePositionQuantityInLots(stopLossPips.Value);
+            var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
 
-            const int BarsToExpireOrder = 10;
-
-            var expiry = Server.Time.AddMinutes(BarsToExpireOrder * GetTimeFrameInMinutes());            
+            var expiry = Server.Time.AddMinutes(BarsToExpireOrder * _timeFrameInMinutes);            
 
             Print("Placing BUY STOP order at {0} with stop {1}", entryPrice, stopLossPips);
             var takeProfitPips = CalculateTakeProfit(stopLossPips);
+            var label = string.Format("BUY {0}", Symbol);
             PlaceStopOrder(TradeType.Buy, Symbol.Name, volumeInUnits, entryPrice, label, stopLossPips, takeProfitPips, expiry);
 
+            // Reset recent low
             RecentLow = InitialRecentLow;
         }
-        
+
+        protected override double? CalculateInitialStopLossInPipsForLongPosition()
+        {
+            // Assume we're on the signal bar
+            var low = Bars.LowPrices.Last(1);
+            return low - GetBuffer();
+        }
+
         private int GetTimeFrameInMinutes()
         {
             if (Bars.TimeFrame == TimeFrame.Minute)
@@ -136,52 +177,34 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
             else if (Bars.TimeFrame == TimeFrame.Hour)
                 return 60;
 
-            throw new ArgumentOutOfRangeException("Invalid timeframe");
+            throw new ArgumentOutOfRangeException("Unsupported timeframe");
+        }
+
+        protected override void OnPositionOpened(PositionOpenedEventArgs args)
+        {            
+            base.OnPositionOpened(args);
+            ShouldTrail = false;
         }
 
         protected override bool ManageLongPosition()
         {
-            // Are we making higher highs?
-            var madeNewHigh = false;
+            if (BarsSinceEntry <= BarsToAllowTradeToDevelop)
+                return false;
 
-            // Avoid adjusting trailing stop too often by adding a buffer
-            var buffer = Symbol.PipSize * 3;
-
-            if (Symbol.Ask > RecentHigh + buffer && _currentPosition.Pips > 0)
+            if (!ShouldTrail && Symbol.Ask > TrailingInitiationPrice)
             {
-                madeNewHigh = true;
-                RecentHigh = Math.Max(Symbol.Ask, Bars.HighPrices.Maximum(BarsSinceEntry + 1));
-                Print("Recent high set to {0}", RecentHigh);
+                ShouldTrail = true;
+                Print("Initiating trailing now that we have reached trailing initiation price");
             }
 
-            if (!madeNewHigh)
-            {
-                return true;
-            }
-
-            var diff = _currentPosition.EntryPrice - _initialStopPrice;
-            var trailPrice = _currentPosition.EntryPrice + diff / 2;
-
-            double newStop;
-            if (Symbol.Ask > trailPrice)
-            {
-                // Don't lose more than half our profit
-                newStop = _currentPosition.EntryPrice + _currentPosition.Pips / 2 * Symbol.PipSize;
-
-                //var stop = CalulateTrailingStopForLongPosition();
-
-                AdjustStopLossForLongPosition(newStop);
-            }
-
-            return true;
+            // Important - call base functionality to trail stop higher
+            return base.ManageLongPosition();
         }
 
         protected override void OnBar()
         {
             if (PendingOrders.Any())
-            {
                 CheckToAdjustPendingOrder();
-            }
 
             base.OnBar();
         }
@@ -193,13 +216,7 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
                 return;
 
             if (pendingOrder.TradeType == TradeType.Buy)
-            {
                 CheckToAdjustLongPendingOrder(pendingOrder);
-            }
-            else
-            {
-                CheckToAdjustShortPendingOrder(pendingOrder);
-            }
         }
 
         private void CheckToAdjustLongPendingOrder(PendingOrder order)
@@ -214,24 +231,34 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
                 Print("Recent low set to {0}", RecentLow);
             }
 
-            if (!madeNewLow) return;
+            if (!madeNewLow) 
+                return;
 
             var newStop = CalculateStopLossInPips(order);
 
-            Print("Moving initial stop loss on pending order lower, down to {0}", newStop);
-            order.ModifyStopLossPips(newStop);
+            // Safety check - is the new stop actually lower than the current stop?  i.e. Is the stop BIGGER in pips?
+            if (order.StopLossPips.HasValue && newStop > order.StopLossPips.Value)
+            {
+                Print("Moving initial stop loss on pending order lower - {0} pips from entry price", newStop);
+                order.ModifyStopLossPips(newStop);
+            }
         }
 
         private double CalculateStopLossInPips(PendingOrder order)
         {
-            var buffer = _atr.Result.LastValue / 4;
-            var stop = order.TargetPrice - (RecentLow - buffer);
+            var buffer = GetBuffer();
+            var stop = order.TargetPrice - RecentLow - buffer;
 
             return Math.Round(stop / Symbol.PipSize, 1);
         }
 
-        private void CheckToAdjustShortPendingOrder(PendingOrder pendingOrder)
-        {           
+        private double GetBuffer()
+        {
+            var buffer = _atr.Result.LastValue / 4;           
+            if (buffer < _minimumBuffer)
+                buffer = _minimumBuffer;
+
+            return buffer;
         }
     }
 }

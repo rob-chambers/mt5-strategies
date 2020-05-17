@@ -40,6 +40,7 @@ namespace Powder.TradingLibrary
         private bool _alreadyMovedToBreakEven;
         private bool _isClosingHalf;
         private double? _entryStopLossInPips;
+        private bool _onBar;
 
         protected abstract bool HasBullishSignal();
         protected abstract bool HasBearishSignal();
@@ -89,6 +90,7 @@ namespace Powder.TradingLibrary
                 Symbol.TickSize, Symbol.Digits, Symbol.PipSize);
 
             AttachExistingPosition();
+            _onBar = false;
         }
 
         protected override void OnStop()
@@ -229,6 +231,7 @@ namespace Powder.TradingLibrary
             if (_currentPosition == null)
                 return;
 
+            _onBar = false;
             ManageExistingPosition();
         }
 
@@ -238,6 +241,8 @@ namespace Powder.TradingLibrary
             {
                 BarsSinceEntry++;
                 //Print("Bars since entry: {0}", BarsSinceEntry);
+
+                ModifyOppositeColourBarTrailingStop();
             }
 
             if (!_canOpenPosition || PendingOrders.Any())
@@ -253,6 +258,24 @@ namespace Powder.TradingLibrary
             else if (_takeShortsParameter && HasBearishSignal())
             {
                 EnterShortPosition();
+            }
+        }
+
+        private void ModifyOppositeColourBarTrailingStop()
+        {
+            if (_trailingStopLossRule != TrailingStopLossRuleValues.OppositeColourBar)
+                return;
+
+            _onBar = true;
+            switch (_currentPosition.TradeType)
+            {
+                case TradeType.Buy:
+                    ManageLongPosition();
+                    break;
+
+                case TradeType.Sell:
+                    ManageShortPosition();
+                    break;
             }
         }
 
@@ -300,7 +323,17 @@ namespace Powder.TradingLibrary
             }
 
             if (!ShouldTrail)
+                return true;
+
+            double? stop;
+            if (_trailingStopLossRule == TrailingStopLossRuleValues.OppositeColourBar)
             {
+                if (_onBar)
+                {
+                    stop = CalulateTrailingStopForLongPosition();
+                    AdjustStopLossForLongPosition(stop);
+                }
+
                 return true;
             }
 
@@ -316,11 +349,9 @@ namespace Powder.TradingLibrary
             }
 
             if (!madeNewHigh)
-            {
                 return true;
-            }
 
-            var stop = CalulateTrailingStopForLongPosition();
+            stop = CalulateTrailingStopForLongPosition();
             AdjustStopLossForLongPosition(stop);
 
             return true;
@@ -358,6 +389,10 @@ namespace Powder.TradingLibrary
 
                 case TrailingStopLossRuleValues.SmartProfitLocker:
                     stop = CalculateSmartTrailingStopForLong();
+                    break;
+
+                case TrailingStopLossRuleValues.OppositeColourBar:
+                    stop = CalculateOppositeColourBarTrailingStopForLong();
                     break;
             }
 
@@ -497,6 +532,18 @@ namespace Powder.TradingLibrary
 
             var stop = RecentHigh - ratio * Symbol.PipSize;
             return stop;
+        }
+
+        private double? CalculateOppositeColourBarTrailingStopForLong()
+        {
+            // This method is called on a new bar
+            if (Bars.ClosePrices.Last(1) >= Bars.OpenPrices.Last(1))
+                return null;
+
+            Print("Adjusting SL now we got a red candle");
+
+            // We closed lower - adjust the stop to the the low of the previous bar
+            return Bars.LowPrices.Minimum(2) - _trailingStopLossInPips * Symbol.PipSize;
         }
 
         private double? CalculateSmartTrailingStopForShort()

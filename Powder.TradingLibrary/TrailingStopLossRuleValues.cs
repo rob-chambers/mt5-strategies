@@ -7,6 +7,7 @@
         PreviousBarNPips,
         ShortTermHighLow,
         StaticPipsValue,
-        SmartProfitLocker
+        SmartProfitLocker,
+        OppositeColourBar
     };
 }

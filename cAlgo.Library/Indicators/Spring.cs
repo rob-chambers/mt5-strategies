@@ -1,4 +1,4 @@
-// Version 2020-05-16 13:50
+// Version 2020-05-17 15:10
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -66,7 +66,6 @@ namespace cAlgo.Library.Indicators
         public bool BigMoveFilter { get; set; }
 
         private MovingAverage _fastMA;
-        private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
         private SwingHighLow _swingHighLowIndicator;
         private AverageTrueRange _atr;
@@ -77,7 +76,6 @@ namespace cAlgo.Library.Indicators
         {
             // Initialize and create nested indicators
             _fastMA = Indicators.MovingAverage(Source, FastPeriodParameter, MovingAverageType.Exponential);
-            _mediumMA = Indicators.MovingAverage(Source, MediumPeriodParameter, MovingAverageType.Exponential);
             _slowMA = Indicators.MovingAverage(Source, SlowPeriodParameter, MovingAverageType.Exponential);
             _swingHighLowIndicator = Indicators.GetIndicator<SwingHighLow>(Bars.HighPrices, Bars.LowPrices, SwingHighStrength);
             _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
