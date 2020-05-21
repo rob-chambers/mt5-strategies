@@ -46,6 +46,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Indicators\MacdPlatinum.cs" />
+    <Compile Include="Indicators\MacdDivergence.cs" />
     <Compile Include="Indicators\Spring.cs" />
     <Compile Include="Indicators\QMPFilter.cs" />
     <Compile Include="Indicators\OverBoughtSold.cs" />
