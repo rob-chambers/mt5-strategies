@@ -1,8 +1,9 @@
-// Version 2020-05-21 15:32
+// Version 2020-05-21 18:01
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
 using Powder.TradingLibrary;
+using System;
 
 namespace cAlgo.Library.Indicators
 {
@@ -44,15 +45,22 @@ namespace cAlgo.Library.Indicators
 
         private MacdCrossOver _macdCrossOver;
         private int _latestSignalIndex;
+        private int _priorBullishCrossIndex;
+        private int _priorBearishCrossIndex;
 
         protected override void Initialize()
         {
             // Initialize and create nested indicators
             _macdCrossOver = Indicators.MacdCrossOver(Source, SlowPeriodParameter, FastPeriodParameter, SignalPeriods);
+            _priorBullishCrossIndex = 0;
+            _priorBearishCrossIndex = 0;
         }
 
         public override void Calculate(int index)
         {
+            // Ignore for real data for now
+            if (IsLastBar) return;
+
             // Calculate value at specified index
             Signal[index] = _macdCrossOver.Signal[index];
             MACD[index] = _macdCrossOver.MACD[index];
@@ -66,7 +74,17 @@ namespace cAlgo.Library.Indicators
                     return;
                 }
 
-                AddSignal(index);                
+                AddSignal(index, true);                
+            }
+            else if (IsBearishBar(index))
+            {
+                if (HasVeryRecentSignal(index))
+                {
+                    _latestSignalIndex = index;
+                    return;
+                }
+
+                AddSignal(index, false);
             }
         }
 
@@ -80,25 +98,100 @@ namespace cAlgo.Library.Indicators
 
         private bool IsBullishBar(int index)
         {
-            //if (Bars.ClosePrices[index] >= Bars.OpenPrices[index]) 
-            //    return false;
-
-            //if (Bars.ClosePrices[index] >= Bars.ClosePrices[index - 1]) 
-            //    return false;
-
-            if (_macdCrossOver.MACD.LastValue >= 0 || _macdCrossOver.Signal.LastValue >= 0)
-                return false;
-
             if (!_macdCrossOver.MACD.HasCrossedAbove(_macdCrossOver.Signal, 1))
                 return false;
-  
-            return true;
+
+            if (_macdCrossOver.MACD[index] >= 0 || _macdCrossOver.Signal[index] >= 0)
+                return false;
+
+            // We've had a cross - reset bearish flag
+            _priorBearishCrossIndex = 0;
+
+            // Ensure it's a decent cross - not just a touch
+            if (IsTouch(index))
+                return false;
+
+            var priorMacd = _macdCrossOver.MACD[_priorBullishCrossIndex];
+            var currentMacd = _macdCrossOver.MACD[index];
+            if (_priorBullishCrossIndex == 0)
+            {
+                _priorBullishCrossIndex = index;
+            }
+            else if (index > _priorBullishCrossIndex && currentMacd > priorMacd)
+            {
+                var priorPrice = Bars.ClosePrices[_priorBullishCrossIndex];
+                var currentPrice = Bars.ClosePrices[index];
+                if (priorPrice >= currentPrice)
+                {
+                    Print("At {0}, prior MACD={1}, current MACD={2}, prior price={3}, current price={4}",
+                        Bars.OpenTimes[index].ToLocalTime(), priorMacd, currentMacd, priorPrice, currentPrice);
+
+                    var lowest = -_macdCrossOver.MACD.Minimum(100);
+                    var ratio = lowest / -currentMacd;
+
+                    if (ratio < 1.2)
+                    {
+                        Print("At {0}, rejecting due to divergence not being strong enough.  Ratio={1}",
+                            Bars.OpenTimes[index].ToLocalTime(), ratio);
+
+                        return false;
+                    }
+
+                    Print("At {0}, index={1}, prior={2}",
+                        Bars.OpenTimes[index].ToLocalTime(), index, _priorBullishCrossIndex);
+
+                    return true;
+                }
+            }
+
+            return false;
         }
 
-        private void AddSignal(int index)
+        private bool IsTouch(int index)
+        {
+            var diff = Math.Abs(_macdCrossOver.MACD[index] - _macdCrossOver.Signal[index]);
+            return diff <= Symbol.PipSize;
+        }
+
+        private bool IsBearishBar(int index)
+        {
+            if (!_macdCrossOver.MACD.HasCrossedBelow(_macdCrossOver.Signal, 1))
+                return false;
+
+            if (_macdCrossOver.MACD[index] <= 0 || _macdCrossOver.Signal[index] <= 0)
+                return false;
+
+            // We've had a cross - reset bullish flag
+            Print("At {0}, resetting bullish cross index to 0",
+               Bars.OpenTimes[index].ToLocalTime());
+
+            // Ensure it's a decent cross - not just a touch
+            if (IsTouch(index))
+                return false;
+
+            if (_priorBearishCrossIndex == 0)
+            {
+                _priorBearishCrossIndex = index;
+            }
+            else if (index > _priorBearishCrossIndex && _macdCrossOver.MACD[index] < _macdCrossOver.MACD[_priorBearishCrossIndex])
+            {
+                if (Bars.ClosePrices[_priorBearishCrossIndex] <= Bars.ClosePrices[index])
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void AddSignal(int index, bool isBullish)
         {
             _latestSignalIndex = index;
-            DrawBullishPoint(index);
+            if (isBullish)
+                DrawBullishPoint(index);
+            else
+                DrawBearishPoint(index);
+
             HandleAlerts();
         }
 
@@ -106,7 +199,14 @@ namespace cAlgo.Library.Indicators
         {
             var diff = GetVerticalDrawingBuffer();
             var y = Bars.LowPrices[index] - diff;
-            Chart.DrawIcon("macddiverg" + index, ChartIconType.UpTriangle, index, y, Color.LightBlue);
+            Chart.DrawIcon("macddiverg-bull" + index, ChartIconType.UpTriangle, index, y, Color.LightBlue);
+        }
+
+        private void DrawBearishPoint(int index)
+        {
+            var diff = GetVerticalDrawingBuffer();
+            var y = Bars.HighPrices[index] + diff;
+            Chart.DrawIcon("macddiverg-bear" + index, ChartIconType.DownTriangle, index, y, Color.OrangeRed);
         }
 
         private double GetVerticalDrawingBuffer()
