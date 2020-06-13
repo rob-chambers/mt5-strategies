@@ -42,6 +42,8 @@ namespace Powder.TradingLibrary
         private double? _entryStopLossInPips;
         private bool _onBar;
 
+        protected virtual Weighting EntryWeighting { get; set; } = Weighting.Standard;
+
         protected abstract bool HasBullishSignal();
         protected abstract bool HasBearishSignal();
 
@@ -219,8 +221,8 @@ namespace Powder.TradingLibrary
             if (!moveToBreakEven && closeHalfAtBreakEven)
                 throw new ArgumentException("'Close half at breakeven?' is only valid when 'Move to breakeven?' is set");
 
-            if (lotSizingRule == LotSizingRuleValues.Dynamic && (dynamicRiskPercentage <= 0 || dynamicRiskPercentage >= 10))
-                throw new ArgumentOutOfRangeException("Dynamic Risk value is out of range - it is a percentage (e.g. 2)");
+            if (lotSizingRule == LotSizingRuleValues.Dynamic && (dynamicRiskPercentage <= 0 || dynamicRiskPercentage > 5))
+                throw new ArgumentOutOfRangeException("Dynamic Risk value is out of range - it is a percentage (e.g. 2) between 0 and 5");
 
             if (barsToAllowTradeToDevelop < 0 || barsToAllowTradeToDevelop > 99)
                 throw new ArgumentOutOfRangeException("BarsToAllowTradeToDevelop is out of range - must be between 0 and 99");
@@ -619,12 +621,28 @@ namespace Powder.TradingLibrary
 
         protected virtual double CalculatePositionQuantityInLots(double stopLossPips)
         {
-            if (_lotSizingRule == LotSizingRuleValues.Static)
+            double riskPercentage = 0;
+            switch (_lotSizingRule)
             {
-                return 3;
+                case LotSizingRuleValues.Static:
+                    return 3;
+
+                case LotSizingRuleValues.Dynamic:
+                    riskPercentage = _dynamicRiskPercentage;
+                    break;
+
+                case LotSizingRuleValues.Weighted:
+                    riskPercentage = _dynamicRiskPercentage * WeightingToRisk;
+                    break;
             }
 
-            var risk = Account.Equity * _dynamicRiskPercentage / 100;
+            // Safety check - we should never risk more than 5%!
+            if (riskPercentage > 5)
+            {
+                riskPercentage = 5;
+            }
+
+            var risk = Account.Equity * riskPercentage / 100;
             var oneLotRisk = Symbol.PipValue * stopLossPips * Symbol.LotSize;
             var quantity = Math.Round(risk / oneLotRisk, 1);
 
@@ -632,6 +650,32 @@ namespace Powder.TradingLibrary
                 Account.Equity, risk, stopLossPips, oneLotRisk, quantity);
 
             return quantity;
+        }
+
+        private double WeightingToRisk
+        {
+            get
+            {
+                if (EntryWeighting != Weighting.Standard)
+                    Print( "Non standard weighting of {0}, therefore risk adjusted", EntryWeighting);
+
+                switch (EntryWeighting)
+                {
+                    case Weighting.Standard:
+                        return 1;
+                    case Weighting.VeryWeak:
+                        return 0.33;
+                    case Weighting.Weak:
+                        return 0.66;
+                    case Weighting.Strong:
+                        return 1.5;
+                    case Weighting.VeryStrong:
+                        return 2.5;
+
+                    default:
+                        return 1;
+                }
+            }
         }
 
         protected virtual double? CalculateInitialStopLossInPipsForLongPosition()

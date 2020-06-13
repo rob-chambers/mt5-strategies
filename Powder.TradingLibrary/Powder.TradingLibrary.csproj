@@ -50,6 +50,7 @@
     <Compile Include="BaseRobot.cs" />
     <Compile Include="Common.cs" />
     <Compile Include="InitialStopLossRuleValues.cs" />
+    <Compile Include="Weighting.cs" />
     <Compile Include="LotSizingRuleValues.cs" />
     <Compile Include="MaCrossRuleValues.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

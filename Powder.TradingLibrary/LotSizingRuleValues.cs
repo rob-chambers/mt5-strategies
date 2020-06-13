@@ -3,6 +3,7 @@
     public enum LotSizingRuleValues
     {
         Static,
-        Dynamic
+        Dynamic,
+        Weighted
     };
 }
