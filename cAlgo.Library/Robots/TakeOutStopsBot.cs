@@ -1,4 +1,4 @@
-// Version 2020-05-17 20:24
+// Version 2020-12-19 16:13
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
