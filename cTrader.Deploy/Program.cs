@@ -39,13 +39,17 @@ internal class AttributeProgram
 
     private void ProcessFile(string fileName)
     {
-        const string BaseFolder = @"C:\Users\rob\Documents\cAlgo\Sources\";
+        const string BaseFolder = @"C:\Users\veryb\Documents\cAlgo\Sources\";
 
         UpdateFileVersion(fileName);
 
         var subFolder = Path.GetFileNameWithoutExtension(fileName);
         var destFileName = Path.Combine(BaseFolder, GetSubFolder());
+
+        // Solution level
         destFileName = Path.Combine(destFileName, subFolder);
+
+        // Go to code file level
         destFileName = Path.Combine(destFileName, subFolder);
         destFileName = Path.Combine(destFileName, subFolder + ".cs");
 
