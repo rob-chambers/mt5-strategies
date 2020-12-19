@@ -1,4 +1,4 @@
-// Version 2020-12-19 15:30
+// Version 2020-12-19 16:07
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -108,7 +108,9 @@ namespace cAlgo.Library.Indicators
             if (Bars.ClosePrices[index] <= Bars.ClosePrices[index - 1]) 
                 return false;
 
-            var highs = CheckForHighs(index);
+            var highsLows = GetSwingHighLows(index);
+            var highs = highsLows.Item1;
+            var lows = highsLows.Item2;
             if (highs.Count <= 4)
                 return false;
 
@@ -122,7 +124,6 @@ namespace cAlgo.Library.Indicators
             var currentPrice = _swingHighLowIndicator.SwingHighPlot[index - 1];
             var max = currentPrice + averageRange;
             var min = currentPrice - averageRange;
-
 
 
             int strength = 0;
@@ -142,7 +143,6 @@ namespace cAlgo.Library.Indicators
             }
 
             // Check for support at this level
-            var lows = CheckForLows(index);
             foreach (var lowIndex in lows)
             {
                 var low = _swingHighLowIndicator.SwingLowPlot[lowIndex];
@@ -169,20 +169,34 @@ namespace cAlgo.Library.Indicators
             Print("Date: {0}, Curr price: {1}, min: {2}, max: {3}, strength: {4}",
                 Bars.OpenTimes[index].ToLocalTime(), currentPrice, min, max, strength);
 
-
-
             return true;
         }
 
-        private List<int> CheckForLows(int index)
+        private bool DoublesEqual(double value1, double value2)
+        {
+            return Math.Abs(value1 - value2) < Symbol.PipSize;
+        }
+
+        private Tuple<List<int>, List<int>> GetSwingHighLows(int index)
         {
             var i = index;
+            var highs = new List<int>();
             var lows = new List<int>();
+            double priorSwingHigh = 0;
             double priorSwingLow = 0;
+
             i--;
             while (i > index - 150)
             {
+                var high = _swingHighLowIndicator.SwingHighPlot[i];
                 var low = _swingHighLowIndicator.SwingLowPlot[i];
+
+                if (!double.IsNaN(high) && priorSwingHigh != high)
+                {
+                    highs.Add(i);
+                    priorSwingHigh = high;
+                }
+
                 if (!double.IsNaN(low) && priorSwingLow != low)
                 {
                     lows.Add(i);
@@ -192,34 +206,7 @@ namespace cAlgo.Library.Indicators
                 i--;
             }
 
-            return lows;
-        }
-
-        private bool DoublesEqual(double value1, double value2)
-        {
-            return Math.Abs(value1 - value2) < Symbol.PipSize;
-        }
-
-        private List<int> CheckForHighs(int index)
-        {
-            var i = index;
-            var highs = new List<int>();
-            double priorSwingHigh = 0;
-            i--;
-            while (i > index - 150)
-            {
-                var high = _swingHighLowIndicator.SwingHighPlot[i];
-                if (!double.IsNaN(high) && priorSwingHigh != high)
-                {
-                    //Print("Adding high: {0},{1}", i, high);
-                    highs.Add(i);
-                    priorSwingHigh = high;
-                }
-
-                i--;
-            }
-
-            return highs;
+            return new Tuple<List<int>, List<int>>(highs, lows);
         }
 
         private void AddSignal(int index)
