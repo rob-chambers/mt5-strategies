@@ -1,4 +1,4 @@
-// Version 2020-12-20 15:48
+// Version 2020-12-20 17:18
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
@@ -22,6 +22,8 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
         private ResistenceBreak _resistenceBreak;
         private int _timeFrameInMinutes;
         private double _minimumBuffer;
+        private int _barCountSinceSignal;
+        private double _entryPrice, _stopLossPips;
 
         #region Risk Parameters
 
@@ -106,12 +108,30 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
                 SwingHighStrength);
             _minimumBuffer = Symbol.PipSize * 6;
             _timeFrameInMinutes = GetTimeFrameInMinutes();
+            _barCountSinceSignal = -1;
+
+            PendingOrders.Cancelled += OnPendingOrdersCancelled;
+        }
+
+        private void OnPendingOrdersCancelled(PendingOrderCancelledEventArgs args)
+        {
+            Print("Pending order cancelled: {0}", args.Reason);
+            _barCountSinceSignal = -1;
         }
 
         protected override bool HasBullishSignal()
         {
-            var hasSignal = !double.IsNaN(_resistenceBreak.UpSignal.Last(1));
-            return hasSignal;
+            /* This method gets called on every bar so we can use that fact
+             * to submit a pending order after x bars after we receive a signal
+             */ 
+
+            if (_barCountSinceSignal == -1)
+            {
+                var hasSignal = !double.IsNaN(_resistenceBreak.UpSignal.Last(1));
+                return hasSignal;
+            }
+
+            return false;
         }
 
         protected override bool HasBearishSignal()
@@ -121,9 +141,19 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
 
         protected override void EnterLongPosition()
         {
-            Print("Entering long position");
-            var entryPrice = _resistenceBreak.UpSignal.Last(1);
-            var stopLoss = CalculateInitialStopLossInPipsForLongPosition().Value;
+            // Don't enter here - instead wait until x bars have passed
+            // before placing a pending order
+            _entryPrice = _resistenceBreak.UpSignal.Last(1);
+            _stopLossPips = CalculateInitialStopLossInPipsForLongPosition().Value;
+
+            // Ensure we no longer search for a signal
+            _barCountSinceSignal = 0;
+        }
+        
+        private void SubmitPendingOrder()
+        {
+            var entryPrice = _entryPrice;
+            var stopLoss = _stopLossPips;
             Print("SL: {0}", stopLoss);
 
             var lots = CalculatePositionQuantityInLots(stopLoss);
@@ -189,9 +219,42 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
         protected override void OnBar()
         {
             if (PendingOrders.Any())
+            {
                 CheckToAdjustPendingOrder();
+            }
+            else if (!Positions.Any() && _barCountSinceSignal >= 0)
+            {
+                // We've had a signal - check if it's time to submit the order
+                _barCountSinceSignal++;
+                if (_barCountSinceSignal >= 10)
+                {
+                    if (ValidConditionsForOrder())
+                    {
+                        SubmitPendingOrder();
+                    }
+                    else
+                    {
+                        // A poor signal - Start looking for a new signal
+                        _barCountSinceSignal = -1;
+                    }
+                }
+            }
 
             base.OnBar();
+        }
+
+        private bool ValidConditionsForOrder()
+        {
+            // Check the lows over the last x bars.  They should be above the entry price
+            var low = Bars.LowPrices.Minimum(5);
+
+            return low > _entryPrice;
+        }
+
+        protected override void OnPositionClosed(PositionClosedEventArgs args)
+        {
+            _barCountSinceSignal = -1;
+            base.OnPositionClosed(args);
         }
 
         private void CheckToAdjustPendingOrder()
@@ -206,28 +269,6 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
 
         private void CheckToAdjustLongPendingOrder(PendingOrder order)
         {
-            // Are we making lower lows?
-            //var madeNewLow = false;
-
-            //if (Symbol.Ask < RecentLow)
-            //{
-            //    madeNewLow = true;
-            //    RecentLow = Math.Min(Symbol.Ask, Bars.LowPrices.Minimum(BarsSinceEntry + 1));
-            //    Print("Recent low set to {0}", RecentLow);
-            //}
-
-            //if (!madeNewLow) 
-            //    return;
-
-            //var newStop = CalculateStopLossInPips(order);
-
-            //// Safety check - is the new stop actually lower than the current stop?  i.e. Is the stop BIGGER in pips?
-            //if (order.StopLossPips.HasValue && newStop > order.StopLossPips.Value)
-            //{
-            //    Print("Moving initial stop loss on pending order lower - {0} pips from entry price", newStop);
-            //    order.ModifyStopLossPips(newStop);
-            //}
-
             return;
         }
 
