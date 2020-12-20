@@ -1,4 +1,4 @@
-// Version 2020-12-19 16:07
+// Version 2020-12-20 15:15
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -23,7 +23,6 @@ namespace cAlgo.Library.Indicators
         [Parameter("Source")]
         public DataSeries Source { get; set; }
 
-
         [Parameter("Send email alerts", DefaultValue = false, Group = NotificationsGroup)]
         public bool SendEmailAlerts { get; set; }
 
@@ -31,18 +30,14 @@ namespace cAlgo.Library.Indicators
         public bool PlayAlertSound { get; set; }
 
         [Parameter("Show alert message", DefaultValue = false, Group = NotificationsGroup)]
-        public bool ShowMessage { get; set; }
+        public bool ShowMessage { get; set; }       
+
+        [Parameter("Swing High Strength", DefaultValue = 5, MinValue = 1, Group = SignalGroup)]
+        public int SwingHighStrength { get; set; }
 
         [Output("Up Signal", LineColor = "Lime")]
         public IndicatorDataSeries UpSignal { get; set; }
 
-       
-
-        [Parameter("Min Bars For Lowest Low", DefaultValue = 60, MinValue = 10, MaxValue = 100, Step = 5, Group = SignalGroup)]
-        public int MinimumBarsForLowestLow { get; set; }
-
-        [Parameter("Swing High Strength", DefaultValue = 5, MinValue = 1, MaxValue = 5, Group = SignalGroup)]
-        public int SwingHighStrength { get; set; }
 
 
         private SwingHighLow _swingHighLowIndicator;
@@ -56,6 +51,7 @@ namespace cAlgo.Library.Indicators
 
             _swingHighLowIndicator = Indicators.GetIndicator<SwingHighLow>(Bars.ClosePrices, Bars.ClosePrices, SwingHighStrength);
             _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
+            _latestSignalIndex = 0;
 
             Print("Finished initializing");
 
@@ -88,7 +84,7 @@ namespace cAlgo.Library.Indicators
                     return;
                 }
 
-                AddSignal(index);                
+                AddSignal(index, _swingHighLowIndicator.SwingHighPlot[index - 1]);                
             }
         }
 
@@ -117,9 +113,9 @@ namespace cAlgo.Library.Indicators
             var averageRange = _atr.Result[index];
 
             // Get most recent swing high and compare previous swing highs with that
-            Print("cur sw high: {0}, prev swing high: {1}", 
-                _swingHighLowIndicator.SwingHighPlot[index],
-                _swingHighLowIndicator.SwingHighPlot[index - 1]);
+            //Print("cur sw high: {0}, prev swing high: {1}", 
+            //    _swingHighLowIndicator.SwingHighPlot[index],
+            //    _swingHighLowIndicator.SwingHighPlot[index - 1]);
 
             var currentPrice = _swingHighLowIndicator.SwingHighPlot[index - 1];
             var max = currentPrice + averageRange;
@@ -134,10 +130,10 @@ namespace cAlgo.Library.Indicators
                 if (high < max && high > min)
                 {
                     var date = Bars.OpenTimes[highIndex].ToLocalTime();
-                    Print("At {0} - SH on {1}: {2}", 
-                        Bars.OpenTimes[index].ToLocalTime(), 
-                        date,
-                        high);
+                    //Print("At {0} - SH on {1}: {2}", 
+                    //    Bars.OpenTimes[index].ToLocalTime(), 
+                    //    date,
+                    //    high);
                     strength++;
                 }
             }
@@ -150,10 +146,10 @@ namespace cAlgo.Library.Indicators
                 if (low < max && low > min)
                 {
                     var date = Bars.OpenTimes[lowIndex].ToLocalTime();
-                    Print("At {0} - SL on {1}: {2}",
-                        Bars.OpenTimes[index].ToLocalTime(),
-                        date,
-                        low);
+                    //Print("At {0} - SL on {1}: {2}",
+                    //    Bars.OpenTimes[index].ToLocalTime(),
+                    //    date,
+                    //    low);
                     strength++;
                 }
             }
@@ -166,8 +162,8 @@ namespace cAlgo.Library.Indicators
             if (thisBarPrice <= currentPrice)
                 return false;
 
-            Print("Date: {0}, Curr price: {1}, min: {2}, max: {3}, strength: {4}",
-                Bars.OpenTimes[index].ToLocalTime(), currentPrice, min, max, strength);
+            //Print("Date: {0}, Curr price: {1}, min: {2}, max: {3}, strength: {4}",
+            //    Bars.OpenTimes[index].ToLocalTime(), currentPrice, min, max, strength);
 
             return true;
         }
@@ -209,11 +205,11 @@ namespace cAlgo.Library.Indicators
             return new Tuple<List<int>, List<int>>(highs, lows);
         }
 
-        private void AddSignal(int index)
+        private void AddSignal(int index, double value)
         {
-            Print("adding signal");
+            Print("adding signal at index {0}:{1}", index, value);
             _latestSignalIndex = index;
-            UpSignal[index] = 1.0;
+            UpSignal[index] = value;
             DrawBullishPoint(index);
             HandleAlerts();
         }

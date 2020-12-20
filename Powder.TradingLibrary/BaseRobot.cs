@@ -625,7 +625,7 @@ namespace Powder.TradingLibrary
             switch (_lotSizingRule)
             {
                 case LotSizingRuleValues.Static:
-                    return 3;
+                    return 0.1;
 
                 case LotSizingRuleValues.Dynamic:
                     riskPercentage = _dynamicRiskPercentage;
