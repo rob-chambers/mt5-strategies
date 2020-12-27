@@ -1,4 +1,4 @@
-// Version 2020-12-20 15:15
+// Version 2020-12-27 18:44
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -55,7 +55,7 @@ namespace cAlgo.Library.Indicators
 
             Print("Finished initializing");
 
-            GoToTestDate();
+            //GoToTestDate();
         }
 
         private void GoToTestDate()
@@ -69,8 +69,8 @@ namespace cAlgo.Library.Indicators
 
         public override void Calculate(int index)
         {
-            // Ignore for real data for now
-            if (IsLastBar) return;
+            // Ignore when in real time for now
+            if (RunningMode == RunningMode.RealTime) return;
 
             // Calculate value at specified index
             UpSignal[index] = double.NaN;

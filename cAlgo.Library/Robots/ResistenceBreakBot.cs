@@ -1,4 +1,4 @@
-// Version 2020-12-20 17:18
+// Version 2020-12-27 15:44
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
@@ -8,6 +8,14 @@ using System.Linq;
 
 namespace cAlgo.Library.Robots.TakeOutStopsBot
 {
+    public enum MaCrossRule
+    {
+        None,
+        CloseOnFastMaCross,
+        CloseOnMediumMaCross,
+        CloseOnSlowMaCross
+    }
+
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FileSystem)]
     public class ResistenceBreakBot : BaseRobot
     {
@@ -20,20 +28,25 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
 
         private AverageTrueRange _atr;
         private ResistenceBreak _resistenceBreak;
-        private int _timeFrameInMinutes;
+        //private int _timeFrameInMinutes;
         private double _minimumBuffer;
-        private int _barCountSinceSignal;
         private double _entryPrice, _stopLossPips;
+        private MovingAverage _fastMA;
+        private MovingAverage _mediumMA;
+        private MovingAverage _slowMA;
 
         #region Risk Parameters
 
-        [Parameter("Lot Sizing Rule", Group = GroupNames.Risk, DefaultValue = LotSizingRuleValues.Static)]
+        [Parameter("Lot Sizing Rule", Group = GroupNames.Risk, DefaultValue = LotSizingRuleValues.Dynamic)]
         public LotSizingRuleValues LotSizingRule { get; set; }
 
         [Parameter("Dynamic Risk %age", Group = GroupNames.Risk, DefaultValue = 2)]
         public double DynamicRiskPercentage { get; set; }
 
-        [Parameter("Initial SL (pips)", DefaultValue = 9, MinValue = 0, MaxValue = 20, Group = GroupNames.Risk)]
+        [Parameter("Initial SL Rule", DefaultValue = InitialStopLossRuleValues.PreviousBarNPips)]
+        public InitialStopLossRuleValues InitialStopLossRule { get; set; }
+
+        [Parameter("Initial SL (pips)", DefaultValue = 5, MinValue = 0, MaxValue = 20, Group = GroupNames.Risk)]
         public int InitialStopLossInPips { get; set; }
 
         [Parameter("Trailing SL Rule", DefaultValue = TrailingStopLossRuleValues.None, Group = GroupNames.Risk)]
@@ -41,6 +54,9 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
 
         [Parameter("Trailing SL (pips)", DefaultValue = 7, MinValue = 0, MaxValue = 20, Group = GroupNames.Risk)]
         public int TrailingStopLossInPips { get; set; }
+
+        [Parameter("Take Profit Rule", DefaultValue = TakeProfitRuleValues.None, Group = GroupNames.Risk)]
+        public TakeProfitRuleValues TakeProfitRule { get; set; }
 
         #endregion
 
@@ -54,6 +70,12 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
 
         [Parameter("Bars To Expire Order", DefaultValue = 4 * 12, MinValue = 3, MaxValue = 24 * 4, Group = GroupNames.Signal)]
         public int BarsToExpireOrder { get; set; }
+
+        [Parameter("MA Cross Rule", DefaultValue = MaCrossRule.CloseOnFastMaCross)]
+        public MaCrossRule MaCrossRule { get; set; }
+
+        [Parameter("MAs Stacked Filter", DefaultValue = false, Group = GroupNames.Signal)]
+        public bool MovingAveragesStackedFilter { get; set; }
 
         #endregion
 
@@ -90,12 +112,12 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
 
             Init(true,
                 false,
-                InitialStopLossRuleValues.None,
+                InitialStopLossRule,
                 InitialStopLossInPips,
                 TrailingStopLossRule,
                 TrailingStopLossInPips,
                 LotSizingRule,
-                TakeProfitRuleValues.DoubleRisk,
+                TakeProfitRule,
                 0,
                 0,
                 false,
@@ -107,31 +129,29 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
             _resistenceBreak = Indicators.GetIndicator<ResistenceBreak>(SourceSeries, SendEmailAlerts, PlayAlertSound, ShowMessage,
                 SwingHighStrength);
             _minimumBuffer = Symbol.PipSize * 6;
-            _timeFrameInMinutes = GetTimeFrameInMinutes();
-            _barCountSinceSignal = -1;
-
+            //_timeFrameInMinutes = GetTimeFrameInMinutes();
             PendingOrders.Cancelled += OnPendingOrdersCancelled;
+
+            _fastMA = Indicators.MovingAverage(SourceSeries, 21, MovingAverageType.Exponential);
+            _mediumMA = Indicators.MovingAverage(SourceSeries, 55, MovingAverageType.Exponential);
+            _slowMA = Indicators.MovingAverage(SourceSeries, 89, MovingAverageType.Simple);
         }
 
         private void OnPendingOrdersCancelled(PendingOrderCancelledEventArgs args)
         {
             Print("Pending order cancelled: {0}", args.Reason);
-            _barCountSinceSignal = -1;
         }
 
         protected override bool HasBullishSignal()
         {
-            /* This method gets called on every bar so we can use that fact
-             * to submit a pending order after x bars after we receive a signal
-             */ 
+            var hasSignal = !double.IsNaN(_resistenceBreak.UpSignal.Last(1));
+            return hasSignal && (!MovingAveragesStackedFilter || AreMovingAveragesStackedBullishly());
+        }
 
-            if (_barCountSinceSignal == -1)
-            {
-                var hasSignal = !double.IsNaN(_resistenceBreak.UpSignal.Last(1));
-                return hasSignal;
-            }
-
-            return false;
+        private bool AreMovingAveragesStackedBullishly()
+        {
+            return _fastMA.Result.LastValue > _mediumMA.Result.LastValue &&
+                _mediumMA.Result.LastValue > _slowMA.Result.LastValue;
         }
 
         protected override bool HasBearishSignal()
@@ -145,58 +165,56 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
             // before placing a pending order
             _entryPrice = _resistenceBreak.UpSignal.Last(1);
             _stopLossPips = CalculateInitialStopLossInPipsForLongPosition().Value;
-
-            // Ensure we no longer search for a signal
-            _barCountSinceSignal = 0;
+            SubmitMarketOrder();
         }
         
-        private void SubmitPendingOrder()
+        private void SubmitMarketOrder()
         {
-            var entryPrice = _entryPrice;
+            //var entryPrice = _entryPrice;
             var stopLoss = _stopLossPips;
             Print("SL: {0}", stopLoss);
 
             var lots = CalculatePositionQuantityInLots(stopLoss);
             var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
 
-            var expiry = Server.Time.AddMinutes(BarsToExpireOrder * _timeFrameInMinutes);
+            //var expiry = Server.Time.AddMinutes(BarsToExpireOrder * _timeFrameInMinutes);
 
-            Print("Placing BUY LIMIT order at {0} with a {1} pip stop", entryPrice, stopLoss);
+            Print("Executing market order with a {0} pip stop", stopLoss);
             var takeProfitPips = CalculateTakeProfit(stopLoss);
             var label = string.Format("BUY {0}", Symbol);
 
-            PlaceLimitOrder(TradeType.Buy, Symbol.Name, volumeInUnits, entryPrice, label, stopLoss, takeProfitPips, expiry);
+            ExecuteMarketOrder(TradeType.Buy, Symbol.Name, volumeInUnits, label, stopLoss, takeProfitPips);
 
             // Reset recent low
             RecentLow = InitialRecentLow;
         }
 
-        protected override double? CalculateInitialStopLossInPipsForLongPosition()
-        {
-            Print("Calculating initial SL");
-            Print("Last value: {0}, last 1: {1}", _atr.Result.LastValue, _atr.Result.Last(1));
+        //protected override double? CalculateInitialStopLossInPipsForLongPosition()
+        //{
+        //    Print("Calculating initial SL");
+        //    Print("Last value: {0}, last 1: {1}", _atr.Result.LastValue, _atr.Result.Last(1));
 
-            var stop = _atr.Result.LastValue / Symbol.PipSize;
-            Print("Stop in pips: {0}", stop);
+        //    var stop = _atr.Result.LastValue / Symbol.PipSize * 2;
+        //    Print("Stop in pips: {0}", stop);
 
-            // Min 4 pip stop.  The stop should be the bigger value between the min and the calculated stop.
-            stop = Math.Max(stop, 4);
-            return Math.Round(stop, 1);
-        }
+        //    // Min 6 pip stop.  The stop should be the bigger value between the min and the calculated stop.
+        //    stop = Math.Max(stop, 6);
+        //    return Math.Round(stop, 1);
+        //}
 
-        private int GetTimeFrameInMinutes()
-        {
-            if (Bars.TimeFrame == TimeFrame.Minute)
-                return 1;
-            else if (Bars.TimeFrame == TimeFrame.Minute5)
-                return 5;
-            else if (Bars.TimeFrame == TimeFrame.Minute15)
-                return 15;
-            else if (Bars.TimeFrame == TimeFrame.Hour)
-                return 60;
+        //private int GetTimeFrameInMinutes()
+        //{
+        //    if (Bars.TimeFrame == TimeFrame.Minute)
+        //        return 1;
+        //    else if (Bars.TimeFrame == TimeFrame.Minute5)
+        //        return 5;
+        //    else if (Bars.TimeFrame == TimeFrame.Minute15)
+        //        return 15;
+        //    else if (Bars.TimeFrame == TimeFrame.Hour)
+        //        return 60;
 
-            throw new ArgumentOutOfRangeException("Unsupported timeframe");
-        }
+        //    throw new ArgumentOutOfRangeException("Unsupported timeframe");
+        //}
 
         protected override void OnPositionOpened(PositionOpenedEventArgs args)
         {            
@@ -213,7 +231,39 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
             }
 
             // Important - call base functionality to trail stop higher
-            return base.ManageLongPosition();
+            if (!base.ManageLongPosition()) return false;
+
+            double value;
+            string maType;
+
+            switch (MaCrossRule)
+            {
+                case MaCrossRule.CloseOnSlowMaCross:
+                    value = _slowMA.Result.LastValue;
+                    maType = "slow";
+                    break;
+
+                case MaCrossRule.CloseOnMediumMaCross:
+                    value = _mediumMA.Result.LastValue;
+                    maType = "medium";
+                    break;
+
+                case MaCrossRule.CloseOnFastMaCross:
+                    value = _fastMA.Result.LastValue;
+                    maType = "fast";
+                    break;
+
+                default:
+                    return true;
+            }
+
+            if (Bars.ClosePrices.Last(1) < value - 2 * Symbol.PipSize)
+            {
+                Print("Closing position now that we closed below the {0} MA", maType);
+                _currentPosition.Close();
+            }
+
+            return true;
         }
 
         protected override void OnBar()
@@ -222,39 +272,8 @@ namespace cAlgo.Library.Robots.TakeOutStopsBot
             {
                 CheckToAdjustPendingOrder();
             }
-            else if (!Positions.Any() && _barCountSinceSignal >= 0)
-            {
-                // We've had a signal - check if it's time to submit the order
-                _barCountSinceSignal++;
-                if (_barCountSinceSignal >= 10)
-                {
-                    if (ValidConditionsForOrder())
-                    {
-                        SubmitPendingOrder();
-                    }
-                    else
-                    {
-                        // A poor signal - Start looking for a new signal
-                        _barCountSinceSignal = -1;
-                    }
-                }
-            }
 
             base.OnBar();
-        }
-
-        private bool ValidConditionsForOrder()
-        {
-            // Check the lows over the last x bars.  They should be above the entry price
-            var low = Bars.LowPrices.Minimum(5);
-
-            return low > _entryPrice;
-        }
-
-        protected override void OnPositionClosed(PositionClosedEventArgs args)
-        {
-            _barCountSinceSignal = -1;
-            base.OnPositionClosed(args);
         }
 
         private void CheckToAdjustPendingOrder()
