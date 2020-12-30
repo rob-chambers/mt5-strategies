@@ -1,9 +1,11 @@
-// Version 2020-12-30 15:20
+// Version 2020-12-30 17:02
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
 using Powder.TradingLibrary;
 using System;
+using System.IO;
+using System.Text;
 
 namespace cAlgo.Library.Robots.ZonePullBackBot
 {
@@ -18,6 +20,8 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FileSystem)]
     public class ZonePullBackBot : BaseRobot
     {
+        private const string LogFilePath = @"Z:\Documents\Trading\cTrader";
+
         private static class GroupNames
         {
             public const string Signal = "Signal";
@@ -30,6 +34,7 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
         private int _timeFrameInMinutes;
+        private string _logFileName;
 
         #region Risk Parameters
 
@@ -123,6 +128,17 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
             _slowMA = Indicators.MovingAverage(SourceSeries, 89, MovingAverageType.Simple);
 
             _timeFrameInMinutes = GetTimeFrameInMinutes();
+
+            var fileName = string.Format("{0}_M{1}.csv", Symbol.Name, _timeFrameInMinutes);
+            _logFileName = Path.Combine(LogFilePath, fileName);
+            WriteLogFileHeader();
+        }
+
+        private void WriteLogFileHeader()
+        {
+            var header = "Entry Time,Entry,Stop,Volume,O,H,L,C,21EMA,55EMA,89MA";
+            header += Environment.NewLine;
+            File.WriteAllText(_logFileName, header);
         }
 
         private int GetTimeFrameInMinutes()
@@ -163,7 +179,7 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
             var stopLossPips = CalculateInitialStopLossInPipsForLongPosition().Value;
             SubmitBuyStopOrder(entryPrice, stopLossPips);
         }
-        
+
         private void SubmitBuyStopOrder(double entryPrice, double stopLoss)
         {
             Print("SL: {0}", stopLoss);
@@ -177,18 +193,20 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
             var takeProfitPips = CalculateTakeProfit(stopLoss);
             var label = string.Format("BUY STOP {0}", Symbol);
 
-            PlaceStopOrder(TradeType.Buy, Symbol.Name, volumeInUnits, entryPrice, label, stopLoss, takeProfitPips);
+            PlaceStopOrder(TradeType.Buy, Symbol.Name, volumeInUnits, entryPrice, label, stopLoss, takeProfitPips, expiry);
 
             // Reset recent low
             RecentLow = InitialRecentLow;
         }
 
         protected override void OnPositionOpened(PositionOpenedEventArgs args)
-        {            
+        {
             base.OnPositionOpened(args);
             ShouldTrail = false;
 
-            PrintLatestValues();
+            //PrintLatestValues();
+
+            LogSignalData(args);
         }
 
         private void PrintLatestValues()
@@ -214,7 +232,7 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
         }
 
         protected override bool ManageLongPosition()
-        {            
+        {
             if (!ShouldTrail && Symbol.Ask > TrailingInitiationPrice)
             {
                 ShouldTrail = true;
@@ -255,6 +273,36 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
             }
 
             return true;
+        }
+
+        private void LogSignalData(PositionOpenedEventArgs args)
+        {
+            var position = args.Position;
+
+            var contents = new StringBuilder();
+            WriteColumn(contents, position.EntryTime.ToLocalTime().ToString("dd/MMM/yyyy HH:mm"));
+            WriteColumn(contents, position.EntryPrice);
+            WriteColumn(contents, position.StopLoss.GetValueOrDefault());
+            WriteColumn(contents, position.VolumeInUnits);
+
+            WriteColumn(contents, Bars.OpenPrices.Last(1));
+            WriteColumn(contents, Bars.HighPrices.Last(1));
+            WriteColumn(contents, Bars.LowPrices.Last(1));
+            WriteColumn(contents, Bars.ClosePrices.Last(1));
+            WriteColumn(contents, _fastMA.Result.Last(1));
+            WriteColumn(contents, _mediumMA.Result.Last(1));
+            
+            contents.Append(_slowMA.Result.Last(1));
+
+            contents.AppendLine();
+
+            File.AppendAllText(_logFileName, contents.ToString());
+        }
+
+        private static void WriteColumn(StringBuilder contents, object value)
+        {
+            contents.Append(value);
+            contents.Append(",");
         }
     }
 }
