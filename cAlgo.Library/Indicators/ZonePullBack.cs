@@ -1,4 +1,4 @@
-// Version 2020-12-30 14:11
+// Version 2020-12-30 15:38
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -16,7 +16,6 @@ namespace cAlgo.Library.Indicators
     [Indicator(IsOverlay = true, TimeZone = TimeZones.UTC, AutoRescale = false, AccessRights = AccessRights.None)]
     public class ZonePullBack : Indicator
     {
-        private const string SignalGroup = "Signal";
         private const string NotificationsGroup = "Notifications";
 
         [Parameter("Source")]
@@ -29,10 +28,10 @@ namespace cAlgo.Library.Indicators
         public bool PlayAlertSound { get; set; }
 
         [Parameter("Show alert message", DefaultValue = false, Group = NotificationsGroup)]
-        public bool ShowMessage { get; set; }       
+        public bool ShowMessage { get; set; }
 
-        //[Output("Up Signal", LineColor = "Lime")]
-        //public IndicatorDataSeries UpSignal { get; set; }
+        [Output("Up Signal", LineColor = "Lime")]
+        public IndicatorDataSeries UpSignal { get; set; }
 
 
         private int _latestSignalIndex;
@@ -56,8 +55,6 @@ namespace cAlgo.Library.Indicators
                 _latestSignalIndex = 0;
 
                 Print("Finished initializing");
-
-                GoToTestDate();
             }
             catch (Exception ex)
             {
@@ -77,8 +74,7 @@ namespace cAlgo.Library.Indicators
 
         public override void Calculate(int index)
         {
-            // Calculate value at specified index
-            //UpSignal[index] = double.NaN;
+            UpSignal[index] = double.NaN;
 
             if (IsBullishBar(index))
             {
@@ -129,7 +125,7 @@ namespace cAlgo.Library.Indicators
 
         private bool HasJustEnteredZone(int index)
         {
-            for (int i = 1; i <= 3; i++)
+            for (var i = 1; i <= 3; i++)
             {
                 if (Bars.ClosePrices[index - i] >= _fastMA.Result[index - i])
                     return true;
@@ -138,16 +134,11 @@ namespace cAlgo.Library.Indicators
             return false;
         }
 
-        private bool DoublesEqual(double value1, double value2)
-        {
-            return Math.Abs(value1 - value2) < Symbol.PipSize;
-        }
-
         private void AddSignal(int index, double value)
         {
             Print("Adding signal at index {0}:{1}", index, value);
             _latestSignalIndex = index;
-            //UpSignal[index] = value;
+            UpSignal[index] = value;
             DrawBullishPoint(index);
             HandleAlerts();
         }

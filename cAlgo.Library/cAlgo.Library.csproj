@@ -59,6 +59,7 @@
     <Compile Include="Indicators\SwingHighLow.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Robots\BollingerBandBot.cs" />
+    <Compile Include="Robots\ZonePullBackBot.cs" />
     <Compile Include="Robots\ResistenceBreakBot.cs" />
     <Compile Include="Robots\TakeOutStopsBot.cs" />
     <Compile Include="Robots\QmpFilterBot.cs" />
