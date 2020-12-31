@@ -1,10 +1,11 @@
-// Version 2020-12-31 16:17
+// Version 2020-12-31 17:28
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
 using Powder.TradingLibrary;
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace cAlgo.Library.Robots.ZonePullBackBot
@@ -84,6 +85,9 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
         [Parameter("Long term trend Filter", DefaultValue = false, Group = GroupNames.Signal)]
         public bool LongTermTrendFilter { get; set; }
 
+        [Parameter("Adjust pending order", DefaultValue = true, Group = GroupNames.Signal)]
+        public bool AdjustPendingOrder { get; set; }
+
         #endregion
 
         #region Notification Parameters
@@ -147,6 +151,53 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
             var fileName = string.Format("{0}_M{1}.csv", Symbol.Name, _timeFrameInMinutes);
             _logFileName = Path.Combine(LogFilePath, fileName);
             WriteLogFileHeader();
+        }
+
+        protected override void OnBar()
+        {
+            if (AdjustPendingOrder && PendingOrders.Any())
+                CheckToAdjustPendingOrder();
+
+            base.OnBar();
+        }
+
+        private void CheckToAdjustPendingOrder()
+        {
+            var pendingOrder = PendingOrders.SingleOrDefault();
+            if (pendingOrder == null)
+                return;
+
+            if (pendingOrder.TradeType == TradeType.Buy)
+                CheckToAdjustLongPendingOrder(pendingOrder);
+        }
+
+        private void CheckToAdjustLongPendingOrder(PendingOrder order)
+        {
+            var low = Math.Min(Bars.LowPrices.Last(1), Bars.LowPrices.Last(0));
+            var stopLossPips = Math.Round(InitialStopLossInPips + (order.TargetPrice - low) / Symbol.PipSize, 1);
+
+            if (stopLossPips > order.StopLossPips)
+            {
+                AdjustBuyStopOrder(order, stopLossPips);
+            }
+        }
+
+        private void AdjustBuyStopOrder(PendingOrder order, double stopLoss)
+        {
+            var lots = CalculatePositionQuantityInLots(stopLoss);
+            var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
+
+            var expiry = Server.Time.AddMinutes(BarsToExpireOrder * _timeFrameInMinutes);
+
+            Print("Adjusting Buy Stop order to {0} pip stop loss and {1} volume",
+                stopLoss, volumeInUnits);
+            var takeProfitPips = CalculateTakeProfit(stopLoss);
+            var label = string.Format("BUY STOP {0}", Symbol);
+
+            ModifyPendingOrder(order, order.TargetPrice, stopLoss, takeProfitPips, expiry, volumeInUnits);
+
+            // Reset recent low
+            RecentLow = InitialRecentLow;
         }
 
         private void WriteLogFileHeader()
