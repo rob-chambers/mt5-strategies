@@ -1,4 +1,4 @@
-// Version 2020-12-31 13:19
+// Version 2020-12-31 13:49
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -33,6 +33,9 @@ namespace cAlgo.Library.Indicators
 
         [Parameter("MAs Range Filter", DefaultValue = false, Group = SignalGroup)]
         public bool MaRangeFilter { get; set; }
+
+        [Parameter("Stacked MAs Filter", DefaultValue = false, Group = SignalGroup)]
+        public bool StackedMasFilter { get; set; }
 
         [Output("Up Signal", LineColor = "Lime")]
         public IndicatorDataSeries UpSignal { get; set; }
@@ -121,6 +124,31 @@ namespace cAlgo.Library.Indicators
 
             if (!InMaRange(index))
                 return false;
+
+            if (!IsStackedMasFilter(index))
+                return false;
+
+            return true;
+        }
+
+        private bool IsStackedMasFilter(int index)
+        {
+            if (!StackedMasFilter)
+                return true;
+
+            // Ensure the signal was proceeded by an up-trend, and this is just a pull-back
+            var bars = new int[] { 30, 60 };
+
+            foreach (var barIndex in bars)
+            {
+                var i = index - barIndex;
+                if (!AreMovingAveragesStackedBullishlyAtIndex(i))
+                {
+                    Print("StackedMasFilter: Setup rejected as MAs not stacked at {0}",
+                        Bars.OpenTimes[i].ToLocalTime());
+                    return false;
+                }
+            }
 
             return true;
         }

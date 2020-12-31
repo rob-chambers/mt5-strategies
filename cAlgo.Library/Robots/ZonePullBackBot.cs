@@ -1,4 +1,4 @@
-// Version 2020-12-31 13:29
+// Version 2020-12-31 14:12
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
@@ -75,6 +75,9 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
         [Parameter("MAs Range Filter", DefaultValue = false, Group = GroupNames.Signal)]
         public bool MaRangeFilter { get; set; }
 
+        [Parameter("Stacked MAs Filter", DefaultValue = false, Group = GroupNames.Signal)]
+        public bool StackedMasFilter { get; set; }
+
         #endregion
 
         #region Notification Parameters
@@ -123,7 +126,7 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
                 DynamicRiskPercentage,
                 0);
 
-            _zonePullBack = Indicators.GetIndicator<ZonePullBack>(SourceSeries, SendEmailAlerts, PlayAlertSound, ShowMessage, MaRangeFilter);
+            _zonePullBack = Indicators.GetIndicator<ZonePullBack>(SourceSeries, SendEmailAlerts, PlayAlertSound, ShowMessage, MaRangeFilter, StackedMasFilter);
             PendingOrders.Cancelled += OnPendingOrdersCancelled;
 
             _fastMA = Indicators.MovingAverage(SourceSeries, 21, MovingAverageType.Exponential);
