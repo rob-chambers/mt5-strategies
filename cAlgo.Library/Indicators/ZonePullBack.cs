@@ -1,4 +1,4 @@
-// Version 2020-12-31 13:49
+// Version 2020-12-31 15:21
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -37,6 +37,9 @@ namespace cAlgo.Library.Indicators
         [Parameter("Stacked MAs Filter", DefaultValue = false, Group = SignalGroup)]
         public bool StackedMasFilter { get; set; }
 
+        [Parameter("Long term trend Filter", DefaultValue = false, Group = SignalGroup)]
+        public bool LongTermTrendFilter { get; set; }
+
         [Output("Up Signal", LineColor = "Lime")]
         public IndicatorDataSeries UpSignal { get; set; }
 
@@ -46,6 +49,8 @@ namespace cAlgo.Library.Indicators
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
         private double _maRangeBuffer;
+        private ExponentialMovingAverage _dailyFastMA;
+        private ExponentialMovingAverage _dailyMediumMA;
 
         protected override void Initialize()
         {
@@ -62,6 +67,13 @@ namespace cAlgo.Library.Indicators
                 _slowMA = Indicators.MovingAverage(Source, 89, MovingAverageType.Simple);
                 _latestSignalIndex = 0;
                 _maRangeBuffer = Symbol.PipSize * 4;
+                var dailySeries = MarketData.GetBars(TimeFrame.Daily);
+
+                if (LongTermTrendFilter)
+                {
+                    _dailyFastMA = Indicators.ExponentialMovingAverage(dailySeries.ClosePrices, 21);
+                    _dailyMediumMA = Indicators.ExponentialMovingAverage(dailySeries.ClosePrices, 55);
+                }
 
                 Print("Finished initializing");
             }
@@ -128,7 +140,18 @@ namespace cAlgo.Library.Indicators
             if (!IsStackedMasFilter(index))
                 return false;
 
+            if (!InLongTermTrend(index))
+                return false;
+
             return true;
+        }
+
+        private bool InLongTermTrend(int index)
+        {
+            if (!LongTermTrendFilter)
+                return true;
+
+            return _dailyFastMA.Result.LastValue >= _dailyMediumMA.Result.LastValue;
         }
 
         private bool IsStackedMasFilter(int index)

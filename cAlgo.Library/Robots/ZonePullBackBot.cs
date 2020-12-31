@@ -1,4 +1,4 @@
-// Version 2020-12-31 14:12
+// Version 2020-12-31 16:17
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
@@ -59,6 +59,9 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
         [Parameter("Take Profit Rule", DefaultValue = TakeProfitRuleValues.None, Group = GroupNames.Risk)]
         public TakeProfitRuleValues TakeProfitRule { get; set; }
 
+        [Parameter("Bars for trade development", DefaultValue = 20, Group = GroupNames.Risk)]
+        public int BarsToAllowTradeToDevelop { get; set; }
+
         #endregion
 
         #region Signal Parameters
@@ -77,6 +80,9 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
 
         [Parameter("Stacked MAs Filter", DefaultValue = false, Group = GroupNames.Signal)]
         public bool StackedMasFilter { get; set; }
+
+        [Parameter("Long term trend Filter", DefaultValue = false, Group = GroupNames.Signal)]
+        public bool LongTermTrendFilter { get; set; }
 
         #endregion
 
@@ -124,9 +130,12 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
                 false,
                 false,
                 DynamicRiskPercentage,
-                0);
+                BarsToAllowTradeToDevelop);
 
-            _zonePullBack = Indicators.GetIndicator<ZonePullBack>(SourceSeries, SendEmailAlerts, PlayAlertSound, ShowMessage, MaRangeFilter, StackedMasFilter);
+            _zonePullBack = Indicators.GetIndicator<ZonePullBack>(
+                SourceSeries, SendEmailAlerts, PlayAlertSound, ShowMessage, 
+                MaRangeFilter, StackedMasFilter, LongTermTrendFilter);
+            
             PendingOrders.Cancelled += OnPendingOrdersCancelled;
 
             _fastMA = Indicators.MovingAverage(SourceSeries, 21, MovingAverageType.Exponential);
