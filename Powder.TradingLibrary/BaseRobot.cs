@@ -692,11 +692,12 @@ namespace Powder.TradingLibrary
                     break;
 
                 case InitialStopLossRuleValues.CurrentBarNPips:
-                    stopLossPips = _initialStopLossInPips + (Symbol.Ask - Bars.LowPrices.Last(1)) / Symbol.PipSize;
+                    var low = Math.Min(Bars.LowPrices.Last(1), Bars.LowPrices.Last(0));
+                    stopLossPips = _initialStopLossInPips + (Symbol.Ask - low) / Symbol.PipSize;
                     break;
 
                 case InitialStopLossRuleValues.PreviousBarNPips:
-                    var low = Bars.LowPrices.Last(1);
+                    low = Math.Min(Bars.LowPrices.Last(1), Bars.LowPrices.Last(0));
                     if (Bars.LowPrices.Last(2) < low)
                     {
                         low = Bars.LowPrices.Last(2);
@@ -773,11 +774,12 @@ namespace Powder.TradingLibrary
                     break;
 
                 case InitialStopLossRuleValues.CurrentBarNPips:
-                    stopLossPips = _initialStopLossInPips + (Bars.HighPrices.Last(1) - Symbol.Bid) / Symbol.PipSize;
+                    var high = Math.Max(Bars.HighPrices.Last(1), Bars.HighPrices.Last(0));
+                    stopLossPips = _initialStopLossInPips + (high - Symbol.Bid) / Symbol.PipSize;
                     break;
 
                 case InitialStopLossRuleValues.PreviousBarNPips:
-                    var high = Bars.HighPrices.Last(1);
+                    high = Math.Max(Bars.HighPrices.Last(1), Bars.HighPrices.Last(0));
                     if (Bars.HighPrices.Last(2) > high)
                     {
                         high = Bars.HighPrices.Last(2);

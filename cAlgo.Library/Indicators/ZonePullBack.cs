@@ -1,4 +1,4 @@
-// Version 2020-12-30 15:38
+// Version 2020-12-31 13:19
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.API.Internals;
@@ -16,6 +16,7 @@ namespace cAlgo.Library.Indicators
     [Indicator(IsOverlay = true, TimeZone = TimeZones.UTC, AutoRescale = false, AccessRights = AccessRights.None)]
     public class ZonePullBack : Indicator
     {
+        private const string SignalGroup = "Signal";
         private const string NotificationsGroup = "Notifications";
 
         [Parameter("Source")]
@@ -30,6 +31,9 @@ namespace cAlgo.Library.Indicators
         [Parameter("Show alert message", DefaultValue = false, Group = NotificationsGroup)]
         public bool ShowMessage { get; set; }
 
+        [Parameter("MAs Range Filter", DefaultValue = false, Group = SignalGroup)]
+        public bool MaRangeFilter { get; set; }
+
         [Output("Up Signal", LineColor = "Lime")]
         public IndicatorDataSeries UpSignal { get; set; }
 
@@ -38,6 +42,7 @@ namespace cAlgo.Library.Indicators
         private MovingAverage _fastMA;
         private MovingAverage _mediumMA;
         private MovingAverage _slowMA;
+        private double _maRangeBuffer;
 
         protected override void Initialize()
         {
@@ -53,6 +58,7 @@ namespace cAlgo.Library.Indicators
                 _mediumMA = Indicators.MovingAverage(Source, 55, MovingAverageType.Exponential);
                 _slowMA = Indicators.MovingAverage(Source, 89, MovingAverageType.Simple);
                 _latestSignalIndex = 0;
+                _maRangeBuffer = Symbol.PipSize * 4;
 
                 Print("Finished initializing");
             }
@@ -112,6 +118,28 @@ namespace cAlgo.Library.Indicators
 
             if (HasJustEnteredZone(index))
                 return false;
+
+            if (!InMaRange(index))
+                return false;
+
+            return true;
+        }
+
+        private bool InMaRange(int index)
+        {
+            if (!MaRangeFilter) return true;
+
+            for (var i = 3; i <= 10; i++)
+            {
+                var j = index - i;
+                if (Bars.HighPrices[j] > _fastMA.Result[j] + _maRangeBuffer || 
+                    Bars.LowPrices[j] < _mediumMA.Result[j] - _maRangeBuffer)
+                {
+                    Print("MA Range filter: Rejected setup ({0},{1},{2},{3},{4})",
+                        i, Bars.HighPrices[j], Bars.LowPrices[j], _fastMA.Result[j], _mediumMA.Result[j]);
+                    return false;
+                }
+            }
 
             return true;
         }

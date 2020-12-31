@@ -1,4 +1,4 @@
-// Version 2020-12-30 17:02
+// Version 2020-12-31 13:29
 using cAlgo.API;
 using cAlgo.API.Indicators;
 using cAlgo.Library.Indicators;
@@ -72,6 +72,9 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
         [Parameter("MA Cross Rule", DefaultValue = MaCrossRule.CloseOnFastMaCross)]
         public MaCrossRule MaCrossRule { get; set; }
 
+        [Parameter("MAs Range Filter", DefaultValue = false, Group = GroupNames.Signal)]
+        public bool MaRangeFilter { get; set; }
+
         #endregion
 
         #region Notification Parameters
@@ -120,7 +123,7 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
                 DynamicRiskPercentage,
                 0);
 
-            _zonePullBack = Indicators.GetIndicator<ZonePullBack>(SourceSeries, SendEmailAlerts, PlayAlertSound, ShowMessage);
+            _zonePullBack = Indicators.GetIndicator<ZonePullBack>(SourceSeries, SendEmailAlerts, PlayAlertSound, ShowMessage, MaRangeFilter);
             PendingOrders.Cancelled += OnPendingOrdersCancelled;
 
             _fastMA = Indicators.MovingAverage(SourceSeries, 21, MovingAverageType.Exponential);
@@ -176,14 +179,15 @@ namespace cAlgo.Library.Robots.ZonePullBackBot
             var buffer = 2 * Symbol.PipSize;
 
             var entryPrice = Bars.HighPrices.Last(1) + buffer;
-            var stopLossPips = CalculateInitialStopLossInPipsForLongPosition().Value;
+            //var stopLossPips = CalculateInitialStopLossInPipsForLongPosition().Value;
+
+            var low = Math.Min(Bars.LowPrices.Last(1), Bars.LowPrices.Last(0));
+            var stopLossPips = Math.Round(InitialStopLossInPips + (entryPrice - low) / Symbol.PipSize, 1);
             SubmitBuyStopOrder(entryPrice, stopLossPips);
         }
 
         private void SubmitBuyStopOrder(double entryPrice, double stopLoss)
         {
-            Print("SL: {0}", stopLoss);
-
             var lots = CalculatePositionQuantityInLots(stopLoss);
             var volumeInUnits = Symbol.QuantityToVolumeInUnits(lots);
 
